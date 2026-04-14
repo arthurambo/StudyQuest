@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(timeout 10 node server.js)",
+      "Bash(node server.js)",
+      "Bash(curl -s http://localhost:3001/api/health)",
+      "Bash(curl -s -X POST http://localhost:3001/api/register -H 'Content-Type: application/json' -d '{\"email\":\"teste@teste.com\",\"password\":\"123456\"}')",
+      "Bash(curl -s -X POST http://localhost:3001/api/login -H 'Content-Type: application/json' -d '{\"email\":\"teste@teste.com\",\"password\":\"123456\"}')",
+      "Bash(curl -s -X OPTIONS http://localhost:3001/api/login -H 'Origin: file://' -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: Content-Type,Authorization' -I)",
+      "Bash(curl -s -X POST http://localhost:3001/api/login -H 'Content-Type: application/json' -H 'Origin: null' -d '{\"email\":\"teste@teste.com\",\"password\":\"123456\"}' -I)",
+      "Bash(cmd.exe /c \"netstat -ano | findstr :3001\")",
+      "Bash(netstat -ano)"
+    ]
+  }
+}
