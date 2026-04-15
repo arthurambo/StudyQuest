@@ -4,11 +4,11 @@
   "description": "Backend API para o StudyQuest",
   "main": "server.js",
   "scripts": {
-  "start": "node backend/server.js",
+    "start": "node backend/server.js",
     "dev": "nodemon server.js"
   },
   "dependencies": {
-    "bcrypt": "^5.1.1",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.19.2",
