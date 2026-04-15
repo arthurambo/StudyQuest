@@ -3450,19 +3450,33 @@ function updateStrengthBar(password) {
 }
 
 // ── Login logic ───────────────────────────────────────────
+// Flag que impede múltiplas chamadas simultâneas (evita loop por clique duplo)
+let _loginInProgress = false;
+
 async function handleLogin() {
+  // Proteção contra duplo clique / Enter + clique simultâneo
+  if (_loginInProgress) {
+    console.warn('[Login] Requisição já em andamento, ignorando chamada duplicada.');
+    return;
+  }
+
   const email    = (document.getElementById('login-email').value    || '').trim();
   const password =  document.getElementById('login-password').value || '';
 
   clearAuthErrors();
 
-  if (!email)              return showAuthError('login-error', '⚠️ Digite seu e-mail.');
+  // Validações locais — não chega no servidor se inválido
+  if (!email)               return showAuthError('login-error', '⚠️ Digite seu e-mail.');
   if (!email.includes('@')) return showAuthError('login-error', '⚠️ E-mail inválido.');
-  if (!password)           return showAuthError('login-error', '⚠️ Digite sua senha.');
+  if (!password)            return showAuthError('login-error', '⚠️ Digite sua senha.');
 
+  // Bloqueia novas chamadas e desabilita o botão visualmente
+  _loginInProgress = true;
   const btn = document.getElementById('login-btn');
-  btn.classList.add('btn-loading');
+  btn.disabled    = true;
   btn.textContent = 'Entrando...';
+
+  console.log('[Login] Tentando login para:', email);
 
   try {
     const res  = await fetch(`${API_URL}/login`, {
@@ -3470,54 +3484,73 @@ async function handleLogin() {
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ email, password }),
     });
-    const json = await res.json();
 
-    btn.classList.remove('btn-loading');
-    btn.textContent = '🚀 Entrar';
-
-    if (!res.ok) {
-      return showAuthError('login-error', '❌ ' + (json.error || 'E-mail ou senha incorretos.'));
+    // Tenta parsear JSON; se o servidor retornar HTML (ex: erro 404 de rota errada), captura o texto
+    let json;
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      json = await res.json();
+    } else {
+      const text = await res.text();
+      console.error('[Login] Resposta não-JSON do servidor:', text.slice(0, 200));
+      throw new Error('Servidor retornou resposta inesperada (não é JSON). Verifique se o backend está rodando corretamente.');
     }
 
-    // Sucesso: salva token e dados do usuário
+    if (!res.ok) {
+      // Credenciais erradas ou outro erro HTTP — apenas mostra a mensagem, NÃO tenta registrar
+      console.warn('[Login] Falha HTTP', res.status, ':', json.error);
+      showAuthError('login-error', '❌ ' + (json.error || 'E-mail ou senha incorretos.'));
+      return; // <-- para aqui, sem nenhuma outra ação
+    }
+
+    // ── Sucesso ──────────────────────────────────────────────
+    console.log('[Login] ✅ Login bem-sucedido para:', json.user?.email);
     setToken(json.token);
     setAuthUser({ email: json.user.email, id: json.user.id, createdAt: Date.now() });
-    localStorage.setItem('sq_loggedIn', 'true');
     await launchApp();
 
   } catch (err) {
-    // Backend indisponível → tenta login offline (localStorage)
-    btn.classList.remove('btn-loading');
-    btn.textContent = '🚀 Entrar';
+    // Erro de rede (servidor desligado, CORS, etc.) — mostra mensagem clara, NÃO tenta registrar
+    console.error('[Login] ❌ Erro de conexão:', err.message);
+    showAuthError('login-error', '⚠️ Não foi possível conectar ao servidor. Verifique se o backend está rodando e tente novamente.');
 
-    const stored = getAuthUser();
-    if (stored && stored.email === email && stored.password && stored.password === btoa(password)) {
-      showNotification('⚠️ Servidor offline. Entrando no modo local.', 'warning');
-      localStorage.setItem('sq_loggedIn', 'true');
-      await launchApp();
-    } else {
-      showAuthError('login-error', '⚠️ Sem conexão com o servidor. Verifique se o backend está rodando.');
-    }
+  } finally {
+    // SEMPRE reabilita o botão ao terminar, independente do resultado
+    _loginInProgress = false;
+    btn.disabled    = false;
+    btn.textContent = '🚀 Entrar';
   }
 }
 
 // ── Register logic ────────────────────────────────────────
+// Flag que impede múltiplas chamadas simultâneas
+let _registerInProgress = false;
+
 async function handleRegister() {
+  if (_registerInProgress) {
+    console.warn('[Register] Requisição já em andamento, ignorando chamada duplicada.');
+    return;
+  }
+
   const email    = (document.getElementById('reg-email').value    || '').trim();
   const password =  document.getElementById('reg-password').value || '';
   const confirm  =  document.getElementById('reg-confirm').value  || '';
 
   clearAuthErrors();
 
-  if (!email)              return showAuthError('reg-error', '⚠️ Digite seu e-mail.');
+  // Validações locais — não chega no servidor se inválido
+  if (!email)               return showAuthError('reg-error', '⚠️ Digite seu e-mail.');
   if (!email.includes('@')) return showAuthError('reg-error', '⚠️ E-mail inválido.');
-  if (!password)           return showAuthError('reg-error', '⚠️ Crie uma senha.');
-  if (password.length < 6) return showAuthError('reg-error', '⚠️ Senha deve ter ao menos 6 caracteres.');
-  if (password !== confirm) return showAuthError('reg-error', '❌ As senhas não coincidem.');
+  if (!password)            return showAuthError('reg-error', '⚠️ Crie uma senha.');
+  if (password.length < 6)  return showAuthError('reg-error', '⚠️ Senha deve ter ao menos 6 caracteres.');
+  if (password !== confirm)  return showAuthError('reg-error', '❌ As senhas não coincidem.');
 
+  _registerInProgress = true;
   const btn = document.getElementById('register-btn');
-  btn.classList.add('btn-loading');
+  btn.disabled    = true;
   btn.textContent = 'Criando conta...';
+
+  console.log('[Register] Tentando criar conta para:', email);
 
   try {
     const res  = await fetch(`${API_URL}/register`, {
@@ -3525,25 +3558,38 @@ async function handleRegister() {
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ email, password }),
     });
-    const json = await res.json();
 
-    btn.classList.remove('btn-loading');
-    btn.textContent = '⚔️ Criar Conta';
-
-    if (!res.ok) {
-      return showAuthError('reg-error', '❌ ' + (json.error || 'Erro ao criar conta.'));
+    let json;
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      json = await res.json();
+    } else {
+      const text = await res.text();
+      console.error('[Register] Resposta não-JSON:', text.slice(0, 200));
+      throw new Error('Servidor retornou resposta inesperada. Verifique se o backend está rodando corretamente.');
     }
 
-    // Sucesso: mostra mensagem e redireciona para login
+    if (!res.ok) {
+      console.warn('[Register] Falha HTTP', res.status, ':', json.error);
+      showAuthError('reg-error', '❌ ' + (json.error || 'Erro ao criar conta.'));
+      return;
+    }
+
+    // ── Sucesso ──────────────────────────────────────────────
+    console.log('[Register] ✅ Conta criada para:', email);
     showNotification('✅ Conta criada com sucesso! Faça login para continuar.', 'success');
     const loginEmail = document.getElementById('login-email');
     if (loginEmail) loginEmail.value = email;
     showAuthPanel('login');
 
   } catch (err) {
-    btn.classList.remove('btn-loading');
+    console.error('[Register] ❌ Erro de conexão:', err.message);
+    showAuthError('reg-error', '⚠️ Não foi possível conectar ao servidor. Verifique se o backend está rodando e tente novamente.');
+
+  } finally {
+    _registerInProgress = false;
+    btn.disabled    = false;
     btn.textContent = '⚔️ Criar Conta';
-    showAuthError('reg-error', '⚠️ Sem conexão com o servidor. Verifique se o backend está rodando.');
   }
 }
 
