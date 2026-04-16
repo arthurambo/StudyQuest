@@ -293,13 +293,22 @@ function saveState() {
 
 function loadState() {
   const raw = localStorage.getItem('studyquest_v3');
-  if (raw) {
-    try {
-      state = { ...state, ...JSON.parse(raw) };
-      return true;
-    } catch (e) { return false; }
+  if (!raw) {
+    console.log('[Data] Nenhum dado encontrado no localStorage (novo usuário).');
+    return false;
   }
-  return false;
+  try {
+    const parsed = JSON.parse(raw);
+    state = { ...state, ...parsed };
+    console.log('[Data] Dados carregados do localStorage:', {
+      xp: state.xp, level: state.level, coins: state.coins,
+      streak: state.streak, name: state.name, setup: state.setup,
+    });
+    return true;
+  } catch (e) {
+    console.error('[Data] Erro ao parsear localStorage:', e);
+    return false;
+  }
 }
 
 // ============================================================
@@ -363,7 +372,10 @@ function showApp() {
   const setup = document.getElementById('setup-screen');
   const app   = document.getElementById('app');
   if (setup) { setup.classList.remove('active'); setup.style.display = 'none'; }
-  if (app)   { app.classList.add('active'); }
+  if (app)   {
+    app.classList.add('active');
+    app.style.display = ''; // limpa qualquer display:none inline (definido por showAuthScreen/logout)
+  }
   initShop();
   navigateTo('dashboard');
 }
@@ -2081,52 +2093,70 @@ function setTheme(theme) {
 // ============================================================
 
 function updateAllUI() {
-  if (!state.taskHistory) state.taskHistory = [];
-  if (!state.dynamicMissions) state.dynamicMissions = [];
+  // Garante que todas as chaves necessárias existem (compatibilidade com saves antigos)
+  if (!state.taskHistory)    state.taskHistory    = [];
+  if (!state.dynamicMissions)state.dynamicMissions= [];
   if (!state.weeklyMissions) state.weeklyMissions = {};
-  if (!state.dailyMissions)   state.dailyMissions  = {};
+  if (!state.dailyMissions)  state.dailyMissions  = {};
   if (!state.gradeTypes)     state.gradeTypes     = {};
   if (!state.gradeEntries)   state.gradeEntries   = {};
   if (!state.studyItems)     state.studyItems     = [];
   if (!state.totalStudied)   state.totalStudied   = 0;
-  if (!state.settings)       state.settings       = { schoolAverage: 7, notificationsEnabled: true, soundsEnabled: true, confirmDeletes: true, theme: 'dark', focusMode: false };
-  // Ensure all keys exist (for older saves)
-  state.settings = Object.assign({ schoolAverage: 7, notificationsEnabled: true, soundsEnabled: true, confirmDeletes: true, theme: 'dark', focusMode: false }, state.settings);
+  if (!state.settings)       state.settings       = {};
+  state.settings = Object.assign(
+    { schoolAverage: 7, notificationsEnabled: true, soundsEnabled: true,
+      confirmDeletes: true, theme: 'dark', focusMode: false },
+    state.settings
+  );
+
+  console.log('[Data] Aplicando dados na interface — XP:', state.xp, '| Nível:', state.level, '| Moedas:', state.coins);
   generateDynamicMissions();
   updateDashboard();
   updateBoostsBar();
 }
 
+// Helper: atualiza textContent/style de um elemento se ele existir
+function _setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+  else console.warn('[UI] Elemento não encontrado:', id);
+}
+function _setStyle(id, prop, value) {
+  const el = document.getElementById(id);
+  if (el) el.style[prop] = value;
+  else console.warn('[UI] Elemento não encontrado:', id);
+}
+
 function updateDashboard() {
   // Nome e avatar
-  document.getElementById('dash-name').textContent = state.name;
-  document.getElementById('nav-name').textContent = state.name;
-  document.getElementById('nav-avatar').textContent = state.avatar;
-  document.getElementById('nav-level').textContent = `Nível ${state.level}`;
+  _setText('dash-name',  state.name);
+  _setText('nav-name',   state.name);
+  _setText('nav-avatar', state.avatar);
+  _setText('nav-level',  `Nível ${state.level}`);
 
   // Stats
-  document.getElementById('stat-xp').textContent = state.xp;
-  document.getElementById('stat-coins').textContent = state.coins;
-  document.getElementById('stat-streak').textContent = `${state.streak} ${state.streak === 1 ? 'dia' : 'dias'}`;
-  document.getElementById('stat-level').textContent = state.level;
+  _setText('stat-xp',     state.xp);
+  _setText('stat-coins',  state.coins);
+  _setText('stat-streak', `${state.streak} ${state.streak === 1 ? 'dia' : 'dias'}`);
+  _setText('stat-level',  state.level);
 
   // Top bar mobile
-  document.getElementById('top-streak').textContent = state.streak;
-  document.getElementById('top-coins').textContent = state.coins;
+  _setText('top-streak', state.streak);
+  _setText('top-coins',  state.coins);
 
   // XP Bar
   const xpNeeded = xpForLevel(state.level);
   const pct = Math.min(100, Math.round((state.xp / xpNeeded) * 100));
-  document.getElementById('xp-bar-fill').style.width = pct + '%';
-  document.getElementById('xp-current').textContent = state.xp;
-  document.getElementById('xp-needed').textContent = xpNeeded;
-  document.getElementById('xp-curr-level').textContent = state.level;
-  document.getElementById('xp-next-level').textContent = state.level + 1;
+  _setStyle('xp-bar-fill', 'width', pct + '%');
+  _setText('xp-current',    state.xp);
+  _setText('xp-needed',     xpNeeded);
+  _setText('xp-curr-level', state.level);
+  _setText('xp-next-level', state.level + 1);
 
   // Meta diária
   const goalPct = state.dailyGoal > 0 ? Math.min(100, Math.round((state.dailyXp / state.dailyGoal) * 100)) : 0;
-  document.getElementById('goal-bar-fill').style.width = goalPct + '%';
-  document.getElementById('goal-text').textContent = `${state.dailyXp} / ${state.dailyGoal} XP hoje (${goalPct}%)`;
+  _setStyle('goal-bar-fill', 'width', goalPct + '%');
+  _setText('goal-text', `${state.dailyXp} / ${state.dailyGoal} XP hoje (${goalPct}%)`);
 
   // Feedback inteligente
   updateFeedback();
@@ -3942,21 +3972,26 @@ async function launchApp() {
   if (state.setup) {
     // Usuário já criou herói → vai para o app
     const setup = document.getElementById('setup-screen');
+    const app   = document.getElementById('app');
     setup.classList.remove('active');
     setup.style.display = 'none';
-    document.getElementById('app').classList.add('active');
+    app.classList.add('active');
+    app.style.display = ''; // ← limpa display:none inline (definido por showAuthScreen/logout)
+
+    console.log('[Data] Aplicando dados na interface...');
     initShop();
     checkDailyReset();
     checkStreakIntegrity();
     autoArchiveTasks();
     updateAllUI();
     navigateTo('dashboard');
-    console.log('[App] App iniciado para:', state.name || '(sem nome)');
+    console.log('[App] App iniciado para:', state.name, '| XP:', state.xp, '| Nível:', state.level);
   } else {
-    // Primeiro acesso → criação de herói (só chega aqui se estiver autenticado)
+    // Primeiro acesso → criação de herói
     console.log('[App] Novo usuário → tela de criação de herói.');
-    document.getElementById('setup-screen').classList.add('active');
-    document.getElementById('setup-screen').style.display = '';
+    const setup = document.getElementById('setup-screen');
+    setup.classList.add('active');
+    setup.style.display = '';
   }
 }
 
