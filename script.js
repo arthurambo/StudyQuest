@@ -3460,8 +3460,10 @@ async function flushOfflineQueue() {
 
   if (failedAt === -1) {
     setOfflineQueue([]);
-    console.log('[Offline] ✅ Sincronização concluída! Fila limpa.');
+    setAuthMode('online'); // retorna ao modo online após sincronização bem-sucedida
+    console.log('[Offline] ✅ Sincronização concluída! Fila limpa. Modo: online.');
     showNotification('✅ Dados sincronizados com sucesso!', 'success');
+    _renderOfflineIndicator(); // atualiza o indicador para 🟢 Online
   } else {
     setOfflineQueue(queue.slice(failedAt)); // mantém o que não foi enviado
     console.warn('[Offline] Sincronização parcial.', queue.slice(failedAt).length, 'item(s) restante(s).');
@@ -3488,55 +3490,88 @@ function initOfflineStatus() {
 
   _renderOfflineIndicator();
 
-  // Reage a mudanças de conectividade
+  // Reage à restauração da conexão
   window.addEventListener('online', () => {
     console.log('[Offline] Conexão restaurada.');
-    _renderOfflineIndicator();
-    if (isGuestMode() && !getToken()) {
-      // Convidado voltou a ter conexão — sugere login em vez de tentar sync
-      showNotification('🌐 Conexão restaurada! Faça login para salvar seu progresso na nuvem.', 'info');
+
+    if (isGuestMode()) {
+      // Convidado: sugere criar conta, não sincroniza
+      _renderOfflineIndicator();
+      showNotification('🌐 Conexão restaurada! Crie uma conta para salvar seu progresso.', 'info');
+
+    } else if (isOfflineUser()) {
+      // Usuário real voltando online: sincroniza e atualiza modo
+      console.log('[Auth] Sincronizando dados...');
+      showNotification('🔄 Sincronizando dados...', 'info');
+      flushOfflineQueue(); // internamente chama setAuthMode('online') e _renderOfflineIndicator()
+
     } else {
-      flushOfflineQueue(); // envia tudo que ficou na fila
+      // Modo online comum: garante fila vazia
+      _renderOfflineIndicator();
+      flushOfflineQueue();
     }
   });
 
+  // Reage à perda de conexão
   window.addEventListener('offline', () => {
-    console.log('[Offline] Conexão perdida — modo offline ativado.');
+    console.log('[Offline] Conexão perdida.');
+
+    if (isGuestMode()) {
+      // Convidado: já estava isolado, apenas atualiza indicador
+      _renderOfflineIndicator();
+      return;
+    }
+
+    if (isOnlineMode()) {
+      // Usuário online perde conexão → transita para offline_user
+      setAuthMode('offline_user');
+      console.log('[Auth] Modo offline ativado (usuário existente)');
+    }
+
     _renderOfflineIndicator();
     showNotification('📶 Você está offline. Alterações serão salvas e enviadas quando voltar.', 'warning');
   });
 }
 
-// Atualiza visual do indicador conforme o estado de conexão atual
+// Atualiza visual do indicador conforme o modo de autenticação atual
 function _renderOfflineIndicator() {
   const el = document.getElementById('offline-indicator');
   if (!el) return;
+  clearTimeout(el._hideTimer);
 
-  // Modo convidado: indicador âmbar fixo (sem token real)
-  const guest = isGuestMode() && !getToken();
-  if (guest) {
-    el.innerHTML        = '👤 Modo offline';
+  // ── Modo convidado (sem conta) — âmbar permanente ──────
+  if (isGuestMode()) {
+    el.innerHTML        = '👤 Convidado';
     el.style.color      = '#f59e0b';
     el.style.background = 'rgba(245,158,11,0.12)';
     el.style.border     = '1px solid rgba(245,158,11,0.4)';
     el.style.opacity    = '1';
     el.style.transform  = 'translateY(0)';
-    clearTimeout(el._hideTimer); // sempre visível no modo convidado
-    return;
+    return; // permanente — não some
   }
 
-  const online = navigator.onLine;
+  // ── Modo offline_user (conta real sem conexão) — vermelho permanente ──
+  if (isOfflineUser()) {
+    el.innerHTML        = '🔴 Offline';
+    el.style.color      = '#ef4444';
+    el.style.background = 'rgba(239,68,68,0.12)';
+    el.style.border     = '1px solid rgba(239,68,68,0.4)';
+    el.style.opacity    = '1';
+    el.style.transform  = 'translateY(0)';
+    return; // permanente — não some
+  }
 
-  el.innerHTML   = online ? '🟢 Online' : '🔴 Offline';
-  el.style.color      = online ? '#10b981' : '#ef4444';
-  el.style.background = online ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)';
-  el.style.border     = `1px solid ${online ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'}`;
+  // ── Modo online (conta real, conectado) ───────────────
+  const connected = navigator.onLine;
+  el.innerHTML        = connected ? '🟢 Online' : '🔴 Offline';
+  el.style.color      = connected ? '#10b981' : '#ef4444';
+  el.style.background = connected ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)';
+  el.style.border     = `1px solid ${connected ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'}`;
   el.style.opacity    = '1';
   el.style.transform  = 'translateY(0)';
 
-  // Quando online: some após 3s (não polui a tela)
-  clearTimeout(el._hideTimer);
-  if (online) {
+  // 🟢 Online: some após 3s para não poluir a tela
+  if (connected) {
     el._hideTimer = setTimeout(() => {
       el.style.opacity   = '0';
       el.style.transform = 'translateY(6px)';
@@ -3550,7 +3585,7 @@ function setToken(t)       { localStorage.setItem('sq_token', t); }
 function clearToken()      { localStorage.removeItem('sq_token'); }
 
 // ── Estado de autenticação persistido ─────────────────────
-// Formato: { mode: "online" | "offline", updatedAt: timestamp }
+// Formato: { mode: "online" | "offline_user" | "guest", updatedAt: timestamp }
 const AUTH_MODE_KEY = 'sq_authMode';
 
 function getAuthMode() {
@@ -3564,34 +3599,79 @@ function clearAuthMode() {
   localStorage.removeItem(AUTH_MODE_KEY);
 }
 
-// ── Modo convidado (offline_guest) ────────────────────────
-// Retorna true quando o usuário está usando o app SEM conta real no servidor.
+// ╔══════════════════════════════════════════════════════════════╗
+// ║   MODOS DE AUTENTICAÇÃO                                      ║
+// ║                                                              ║
+// ║   "online"       → conta real, conectado ao backend         ║
+// ║   "offline_user" → conta real, temporariamente sem conexão  ║
+// ║   "guest"        → sem conta, dados temporários (demo)      ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+function getCurrentMode()  { return (getAuthMode().mode) || null; }
+function isOnlineMode()    { return getCurrentMode() === 'online'; }
+function isOfflineUser()   { return getCurrentMode() === 'offline_user'; }
+
+// isGuestMode: apenas modo convidado real (sem conta)
 function isGuestMode() {
-  const m = getAuthMode();
-  if (m.mode === 'offline') return true;
-  // Compatibilidade com flag legada do demo
+  if (getCurrentMode() === 'guest') return true;
+  // Compatibilidade com flag legada (demo via handleDemo)
   try {
     const u = JSON.parse(localStorage.getItem('sq_authUser') || 'null');
-    return !!(u && u.demo);
+    return !!(u && u.demo && !u.id); // demo=true mas sem id de conta real
   } catch (e) { return false; }
 }
 
-// Ativa o modo convidado: entra no app usando apenas localStorage,
-// sem servidor e sem conta real. Dados NÃO são sincronizados.
-function activateGuestMode() {
-  console.log('[Offline] Modo offline ativado.');
-  setAuthUser({ email: 'guest', demo: true, offline: true, createdAt: Date.now() });
-  setAuthMode('offline');
+// Usuário autenticado = tem conta real (online OU offline temporário)
+function isAuthenticated() { return !!getToken(); }
+
+// ── Ativar modo offline para usuário com conta ────────────
+// Pré-requisito: deve existir sq_token + sq_authUser salvos.
+// Usa os dados locais existentes. Sincroniza quando voltar online.
+function activateOfflineUserMode() {
+  const savedUser = getAuthUser();
+  if (!savedUser || !getToken()) {
+    // Sem dados salvos → não é possível modo offline de usuário real
+    console.warn('[Auth] Sem dados locais para modo offline. Redirecionando para convidado.');
+    activateGuestMode();
+    return;
+  }
+  console.log('[Auth] Modo offline ativado (usuário existente):', savedUser.email);
+  setAuthMode('offline_user');
   localStorage.setItem('sq_loggedIn', 'true');
-  _renderOfflineIndicator();        // atualiza indicador para 👤
-  launchApp();                      // entra no app (async, sem await)
+  _renderOfflineIndicator();
+  launchApp();
+}
+
+// ── Ativar modo convidado (demo, sem conta) ───────────────
+// Dados existem APENAS no localStorage. Não sincroniza com backend.
+function activateGuestMode() {
+  console.log('[Auth] Modo convidado ativado.');
+  setAuthUser({ email: 'convidado', demo: true, createdAt: Date.now() });
+  setAuthMode('guest');
+  localStorage.setItem('sq_loggedIn', 'true');
+  _renderOfflineIndicator();
+  launchApp();
 }
 
 // Exibe o painel de oferta de modo offline abaixo do botão de login.
 // Chamado após X segundos de espera sem resposta do servidor.
+// — Se o usuário já tem dados salvos → oferece "Continuar offline" (offline_user)
+// — Caso contrário              → oferece "Continuar como convidado" (guest)
 function _showOfflineModeOffer(loginAbortCtrl) {
   if (document.getElementById('offline-offer')) return; // já visível
-  console.log('[Login] Servidor demorando... oferecendo modo offline.');
+  console.log('[Login] Servidor demorando... avaliando opção offline.');
+
+  // Determina qual modo oferecer com base nos dados locais existentes
+  const savedUser  = getAuthUser();
+  const savedState = localStorage.getItem('studyquest_v3');
+  const hasOfflineData = !!(savedUser && savedUser.id && savedState);
+
+  const btnLabel = hasOfflineData
+    ? `📴 Continuar offline (${savedUser.email})`
+    : '👤 Continuar como convidado';
+  const description = hasOfflineData
+    ? '🐢 Servidor demorando... seus dados locais estão disponíveis.'
+    : '🐢 Servidor demorando... você pode entrar sem conta.';
 
   const el = document.createElement('div');
   el.id = 'offline-offer';
@@ -3601,14 +3681,12 @@ function _showOfflineModeOffer(loginAbortCtrl) {
     'text-align:center', 'animation:fadeIn .3s ease',
   ].join(';');
   el.innerHTML =
-    '<p style="margin:0 0 8px;font-size:0.8rem;color:var(--text-secondary,#aaa)">' +
-      '🐢 Servidor demorando para responder...' +
-    '</p>' +
-    '<button id="offline-offer-btn" style="' +
-      'cursor:pointer;border:none;border-radius:8px;padding:8px 18px;' +
-      'background:#f59e0b;color:#fff;font-weight:700;font-size:0.85rem;' +
-      'width:100%;transition:opacity .2s' +
-    '">⚡ Usar modo offline</button>';
+    `<p style="margin:0 0 8px;font-size:0.8rem;color:var(--text-secondary,#aaa)">${description}</p>` +
+    `<button id="offline-offer-btn" style="` +
+      `cursor:pointer;border:none;border-radius:8px;padding:8px 18px;` +
+      `background:#f59e0b;color:#fff;font-weight:700;font-size:0.85rem;` +
+      `width:100%;transition:opacity .2s` +
+    `">${btnLabel}</button>`;
 
   const loginBtn = document.getElementById('login-btn');
   if (loginBtn && loginBtn.parentNode) {
@@ -3616,8 +3694,12 @@ function _showOfflineModeOffer(loginAbortCtrl) {
   }
 
   document.getElementById('offline-offer-btn').addEventListener('click', () => {
-    loginAbortCtrl.abort();   // cancela o fetch em andamento
-    activateGuestMode();      // entra no app como convidado
+    loginAbortCtrl.abort(); // cancela o fetch em andamento
+    if (hasOfflineData) {
+      activateOfflineUserMode(); // usuário real → continua com dados locais
+    } else {
+      activateGuestMode();       // sem conta → modo convidado
+    }
   });
 }
 
@@ -3627,17 +3709,16 @@ function _removeOfflineModeOffer() {
   if (el) el.remove();
 }
 
-// Retorna true se o usuário estiver no modo demonstração (sem conta real)
-function isDemoMode() {
-  return isGuestMode();
-}
+// isDemoMode: true apenas no modo convidado (sem conta real)
+function isDemoMode() { return isGuestMode(); }
 
 // ── Auth state helpers ────────────────────────────────────
 function isLoggedIn() {
-  // Aceita: token JWT real (conta online) OU modo convidado (offline_guest)
+  // Aceita: token real (online ou offline_user) OU modo convidado
   const hasToken = !!getToken();
   const asGuest  = isGuestMode();
-  console.log('[Auth] isLoggedIn → token:', hasToken, '| guest:', asGuest);
+  const mode     = getCurrentMode();
+  console.log('[Auth] isLoggedIn → token:', hasToken, '| mode:', mode);
   return hasToken || asGuest;
 }
 
@@ -3667,9 +3748,9 @@ function showAuthScreen() {
   authScreen.classList.add('active');
   authScreen.style.display = '';
 
-  // Pre-fill email if known
+  // Pre-fill email if known (ignora contas temporárias/convidado)
   const user = getAuthUser();
-  if (user && user.email) {
+  if (user && user.email && !user.demo) {
     const loginEmail = document.getElementById('login-email');
     if (loginEmail) loginEmail.value = user.email;
   }
@@ -3789,11 +3870,12 @@ async function handleLogin() {
 
   } catch (err) {
     if (err.name === 'AbortError') {
-      // Cancelado pelo usuário via "Usar modo offline" — activateGuestMode() já foi chamado
-      if (!isGuestMode()) {
-        // Cancelado pelo timeout de 60s (não pelo usuário)
-        showAuthError('login-error', '⚠️ Servidor não respondeu. Tente novamente ou use o modo offline abaixo.');
+      // Cancelado manualmente pelo usuário via botão offline → modo já ativado
+      if (isOfflineUser() || isGuestMode()) {
+        return; // launchApp() já foi chamado por activateOfflineUserMode / activateGuestMode
       }
+      // Cancelado pelo timeout interno de 60s (sem ação do usuário)
+      showAuthError('login-error', '⚠️ Servidor não respondeu. Tente novamente ou use o modo offline abaixo.');
     } else {
       console.error('[Login] ❌ Erro de conexão:', err.message);
       showAuthError('login-error', '⚠️ Não foi possível conectar. Verifique se o backend está rodando.');
@@ -3881,9 +3963,8 @@ async function handleRegister() {
 
 // ── Demo mode ─────────────────────────────────────────────
 function handleDemo() {
-  console.log('[StudyQuest] Demo mode activated');
-  setAuthUser({ email: 'demo@studyquest.app', password: '', demo: true, createdAt: Date.now() });
-  launchApp();
+  console.log('[Auth] Modo convidado ativado (demo).');
+  activateGuestMode();
 }
 
 // ── Launch / Hide helpers ─────────────────────────────────
@@ -3897,23 +3978,34 @@ async function launchApp() {
   hideAuthScreen();
   _showAppLoading(true);
 
-  // 1. localStorage como base (fallback garantido)
+  // 1. localStorage como base (fallback garantido para todos os modos)
   loadState();
-  console.log('[App] State local carregado. Setup:', state.setup);
+  console.log('[App] State local carregado. Setup:', state.setup, '| Modo:', getCurrentMode());
 
-  // 2. Se tiver token JWT, busca dados atualizados do backend
-  if (getToken() && !isDemoMode()) {
-    await loadUserDataFromAPI();
+  // 2. Sincronização com o backend (apenas usuários com conta real)
+  if (getToken() && !isGuestMode()) {
+    if (isOfflineUser()) {
+      // Modo offline_user: usa apenas localStorage, não chama API
+      console.log('[Auth] Modo offline_user → usando dados locais, sem chamada à API.');
+      showNotification('📴 Modo offline: dados locais carregados. Sincronização pendente.', 'info');
+    } else {
+      // Modo online (ou sem modo definido): tenta buscar dados do backend
+      await loadUserDataFromAPI();
 
-    // Se 401 dentro de loadUserDataFromAPI, o token foi limpo
-    if (!getToken()) {
-      _showAppLoading(false);
-      showAuthScreen();
-      showNotification('Sessão expirada. Faça login novamente.', 'warning');
-      return;
+      // Se 401 dentro de loadUserDataFromAPI, o token foi limpo → volta p/ login
+      if (!getToken()) {
+        _showAppLoading(false);
+        showAuthScreen();
+        showNotification('Sessão expirada. Faça login novamente.', 'warning');
+        return;
+      }
+
+      // Após carga bem-sucedida, garante modo online
+      if (!isOfflineUser()) setAuthMode('online');
     }
   }
 
+  _renderOfflineIndicator(); // atualiza indicador com o modo atual
   _showAppLoading(false);
 
   if (state.setup) {
@@ -4022,17 +4114,24 @@ async function loadUserDataFromAPI() {
     }
   } catch (err) {
     console.warn('[API] Backend indisponível. Usando localStorage:', err.message);
+    // Se o usuário tem conta mas o servidor não respondeu → modo offline_user
+    if (getToken() && !isGuestMode()) {
+      setAuthMode('offline_user');
+      console.log('[Auth] Modo offline ativado (usuário existente) — servidor indisponível.');
+    }
   }
 }
 
 // ── API: salvar dados do usuário (offline-aware) ──────────
 async function syncStateToAPI() {
   const token = getToken();
-  if (!token || isDemoMode()) return;
 
-  // ── Offline: enfileira e sai ──────────────────────────
-  if (!navigator.onLine) {
-    console.log('[Offline] Salvando ação na fila (sem conexão).');
+  // Convidado nunca sincroniza (sem conta real)
+  if (!token || isGuestMode()) return;
+
+  // ── Sem conexão (online_user ou offline_user): enfileira ─
+  if (!navigator.onLine || isOfflineUser()) {
+    console.log('[Offline] Salvando ação na fila (sem conexão ou modo offline_user).');
     addToOfflineQueue('/data', {
       method:  'POST',
       headers: {
@@ -4092,7 +4191,8 @@ async function syncStateToAPI() {
  */
 let _syncDebounceTimer = null;
 function scheduleSyncToAPI() {
-  if (!getToken() || isDemoMode()) return;
+  // Convidado nunca sincroniza. offline_user pode (será enfileirado).
+  if (!getToken() || isGuestMode()) return;
   clearTimeout(_syncDebounceTimer);
   _syncDebounceTimer = setTimeout(syncStateToAPI, 2000);
 }
