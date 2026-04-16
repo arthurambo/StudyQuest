@@ -3352,7 +3352,7 @@ console.log('[API] URL base:', API_URL);
 // O Render free tier hiberna; o primeiro request pode levar ~30s.
 // Usamos AbortController para cancelar se demorar demais, e
 // um timer de 5s para avisar o usuário que o servidor está acordando.
-const API_TIMEOUT_MS   = 25000; // 25 segundos para cold start do Render
+const API_TIMEOUT_MS   = 60000; // 60 segundos para cold start do Render
 const API_WARMUP_MS    =  5000; // avisa após 5s
 
 async function apiFetch(path, options = {}) {
