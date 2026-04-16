@@ -3342,11 +3342,47 @@ function renderStudySuggestion() {
 // ============================================================
 
 // ── Configuração da API ───────────────────────────────────
-// Usa caminho relativo quando servido pelo backend (local OU produção no Render)
-// Cai para localhost explícito apenas se aberto via file://
-const API_URL = "https://studyquest-4ylx.onrender.com";
+const API_URL = "https://studyquest-4ylx.onrender.com/api";
+// ↑ IMPORTANTE: sempre termina com /api
+// Rotas ficam: /api/login, /api/register, /api/data, /api/health
 
 console.log('[API] URL base:', API_URL);
+
+// ── apiFetch: fetch com timeout e aviso de cold start ─────
+// O Render free tier hiberna; o primeiro request pode levar ~30s.
+// Usamos AbortController para cancelar se demorar demais, e
+// um timer de 5s para avisar o usuário que o servidor está acordando.
+const API_TIMEOUT_MS   = 25000; // 25 segundos para cold start do Render
+const API_WARMUP_MS    =  5000; // avisa após 5s
+
+async function apiFetch(path, options = {}) {
+  const controller = new AbortController();
+  const url        = `${API_URL}${path}`;
+
+  // Timer de aviso: se demorar mais de 5s, mostra toast
+  let warmupTimer = setTimeout(() => {
+    console.warn('[API] Servidor demorando — pode estar acordando (cold start Render)...');
+    showNotification('⏳ Servidor acordando, aguarde alguns segundos…', 'info');
+  }, API_WARMUP_MS);
+
+  // Timer de timeout: cancela após 25s
+  let timeoutTimer = setTimeout(() => {
+    controller.abort();
+  }, API_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    return res;
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('A requisição demorou demais. O servidor pode estar offline ou iniciando. Tente novamente em instantes.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(warmupTimer);
+    clearTimeout(timeoutTimer);
+  }
+}
 
 // ── Helpers de token JWT ──────────────────────────────────
 function getToken()        { return localStorage.getItem('sq_token'); }
@@ -3479,7 +3515,7 @@ async function handleLogin() {
   console.log('[Login] Tentando login para:', email);
 
   try {
-    const res  = await fetch(`${API_URL}/login`, {
+    const res  = await apiFetch('/login', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ email, password }),
@@ -3553,7 +3589,7 @@ async function handleRegister() {
   console.log('[Register] Tentando criar conta para:', email);
 
   try {
-    const res  = await fetch(`${API_URL}/register`, {
+    const res  = await apiFetch('/register', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ email, password }),
@@ -3706,7 +3742,7 @@ async function loadUserDataFromAPI() {
   console.log('[API] Carregando dados do backend...');
 
   try {
-    const res = await fetch(`${API_URL}/data`, {
+    const res = await apiFetch('/data', {
       headers: { 'Authorization': 'Bearer ' + token },
     });
 
@@ -3750,7 +3786,7 @@ async function syncStateToAPI() {
   console.log('[API] Salvando dados no backend...');
 
   try {
-    const res  = await fetch(`${API_URL}/data`, {
+    const res  = await apiFetch('/data', {
       method:  'POST',
       headers: {
         'Content-Type':  'application/json',
