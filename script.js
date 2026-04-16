@@ -317,7 +317,8 @@ window.addEventListener('DOMContentLoaded', () => {
   initExportImport();
   initEditDelete();
   initEditProfile();
-  initAuth(); // NEW: auth screens
+  initAuth();          // telas de login/cadastro
+  initOfflineStatus(); // indicador online/offline + listeners de rede
 
   // ── Auth gate ──────────────────────────────────────────
   if (isLoggedIn()) {
@@ -3348,34 +3349,46 @@ const API_URL = "https://studyquest-4ylx.onrender.com/api";
 
 console.log('[API] URL base:', API_URL);
 
-// ── apiFetch: fetch com timeout e aviso de cold start ─────
-// O Render free tier hiberna; o primeiro request pode levar ~30s.
-// Usamos AbortController para cancelar se demorar demais, e
-// um timer de 5s para avisar o usuário que o servidor está acordando.
-const API_TIMEOUT_MS   = 60000; // 60 segundos para cold start do Render
-const API_WARMUP_MS    =  5000; // avisa após 5s
+// ╔══════════════════════════════════════════════════════════════╗
+// ║            SISTEMA OFFLINE-FIRST — StudyQuest               ║
+// ╚══════════════════════════════════════════════════════════════╝
 
-async function apiFetch(path, options = {}) {
+const API_TIMEOUT_MS = 60000; // 60s — comporta cold start do Render free tier
+const API_WARMUP_MS  =  5000; // avisa o usuário após 5s de espera
+
+// ── 1. apiFetch — fetch central com timeout e cold-start warning ──────────────
+// Toda chamada à API passa por aqui.
+// Login e register usam diretamente (nunca entram em fila offline).
+// syncStateToAPI verifica navigator.onLine antes de chamar apiFetch.
+// externalSignal → passado por handleLogin para permitir cancelamento pelo usuário
+async function apiFetch(path, options = {}, { signal: externalSignal } = {}) {
   const controller = new AbortController();
   const url        = `${API_URL}${path}`;
 
-  // Timer de aviso: se demorar mais de 5s, mostra toast
-  let warmupTimer = setTimeout(() => {
-    console.warn('[API] Servidor demorando — pode estar acordando (cold start Render)...');
+  // Propaga cancelamento externo (ex: usuário clica "Usar modo offline")
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      controller.abort();
+    } else {
+      externalSignal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+  }
+
+  // Avisa se demorar mais de 5s (Render cold start)
+  const warmupTimer  = setTimeout(() => {
+    console.warn('[API] Servidor demorando — cold start do Render...');
     showNotification('⏳ Servidor acordando, aguarde alguns segundos…', 'info');
   }, API_WARMUP_MS);
 
-  // Timer de timeout: cancela após 25s
-  let timeoutTimer = setTimeout(() => {
-    controller.abort();
-  }, API_TIMEOUT_MS);
+  // Cancela após 60s para não travar a UI infinitamente
+  const timeoutTimer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
   try {
     const res = await fetch(url, { ...options, signal: controller.signal });
     return res;
   } catch (err) {
     if (err.name === 'AbortError') {
-      throw new Error('A requisição demorou demais. O servidor pode estar offline ou iniciando. Tente novamente em instantes.');
+      throw new Error('Tempo esgotado. O servidor pode estar iniciando. Tente novamente em instantes.');
     }
     throw err;
   } finally {
@@ -3384,27 +3397,248 @@ async function apiFetch(path, options = {}) {
   }
 }
 
+// ── 2. Fila offline — persiste no localStorage ────────────────────────────────
+const OFFLINE_QUEUE_KEY = 'sq_offlineQueue';
+
+function getOfflineQueue() {
+  try { return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]'); }
+  catch (e) { return []; }
+}
+
+function setOfflineQueue(queue) {
+  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+}
+
+// Adiciona uma ação à fila.
+// Para POST /data faz deduplicação: mantém apenas a versão mais recente
+// (evita enviar estados desatualizados quando voltar online).
+function addToOfflineQueue(path, options) {
+  const queue    = getOfflineQueue();
+  const isData   = path === '/data' && options.method === 'POST';
+
+  // Remove entradas anteriores do mesmo tipo para guardar só a última
+  const filtered = isData
+    ? queue.filter(item => !(item.path === '/data' && item.options.method === 'POST'))
+    : queue;
+
+  filtered.push({ path, options, timestamp: Date.now() });
+  setOfflineQueue(filtered);
+  console.log('[Offline] Ação salva na fila. Total na fila:', filtered.length);
+}
+
+// ── 3. Sincronização da fila quando voltar online ─────────────────────────────
+async function flushOfflineQueue() {
+  const queue = getOfflineQueue();
+  if (!queue.length) return;
+
+  console.log('[Offline] Sincronizando dados...', queue.length, 'ação(ões) na fila.');
+  showNotification('🔄 Sincronizando dados salvos offline…', 'info');
+
+  let failedAt = -1;
+
+  for (let i = 0; i < queue.length; i++) {
+    const token = getToken();
+    if (!token) { failedAt = i; break; } // usuário deslogou
+
+    // Recria options injetando o token atual (pode ter expirado antes)
+    const opts = JSON.parse(JSON.stringify(queue[i].options));
+    if (opts.headers) opts.headers['Authorization'] = 'Bearer ' + token;
+
+    try {
+      const res = await apiFetch(queue[i].path, opts);
+      if (!res.ok) {
+        console.warn('[Offline] Falha ao sincronizar item', i, '— status:', res.status);
+        failedAt = i;
+        break;
+      }
+    } catch (err) {
+      console.warn('[Offline] Erro ao sincronizar item', i, ':', err.message);
+      failedAt = i;
+      break;
+    }
+  }
+
+  if (failedAt === -1) {
+    setOfflineQueue([]);
+    console.log('[Offline] ✅ Sincronização concluída! Fila limpa.');
+    showNotification('✅ Dados sincronizados com sucesso!', 'success');
+  } else {
+    setOfflineQueue(queue.slice(failedAt)); // mantém o que não foi enviado
+    console.warn('[Offline] Sincronização parcial.', queue.slice(failedAt).length, 'item(s) restante(s).');
+  }
+}
+
+// ── 4. Indicador visual de status online/offline ──────────────────────────────
+function initOfflineStatus() {
+  // Cria o elemento de status (injetado uma única vez no body)
+  if (document.getElementById('offline-indicator')) return;
+
+  const el = document.createElement('div');
+  el.id = 'offline-indicator';
+  el.style.cssText = [
+    'position:fixed', 'bottom:18px', 'right:18px', 'z-index:9998',
+    'padding:5px 12px', 'border-radius:20px',
+    'font-size:0.72rem', 'font-weight:700', 'letter-spacing:0.02em',
+    'display:flex', 'align-items:center', 'gap:5px',
+    'pointer-events:none', 'user-select:none',
+    'transition:opacity 0.4s ease, transform 0.4s ease',
+    'box-shadow:0 2px 10px rgba(0,0,0,0.25)',
+  ].join(';');
+  document.body.appendChild(el);
+
+  _renderOfflineIndicator();
+
+  // Reage a mudanças de conectividade
+  window.addEventListener('online', () => {
+    console.log('[Offline] Conexão restaurada.');
+    _renderOfflineIndicator();
+    if (isGuestMode() && !getToken()) {
+      // Convidado voltou a ter conexão — sugere login em vez de tentar sync
+      showNotification('🌐 Conexão restaurada! Faça login para salvar seu progresso na nuvem.', 'info');
+    } else {
+      flushOfflineQueue(); // envia tudo que ficou na fila
+    }
+  });
+
+  window.addEventListener('offline', () => {
+    console.log('[Offline] Conexão perdida — modo offline ativado.');
+    _renderOfflineIndicator();
+    showNotification('📶 Você está offline. Alterações serão salvas e enviadas quando voltar.', 'warning');
+  });
+}
+
+// Atualiza visual do indicador conforme o estado de conexão atual
+function _renderOfflineIndicator() {
+  const el = document.getElementById('offline-indicator');
+  if (!el) return;
+
+  // Modo convidado: indicador âmbar fixo (sem token real)
+  const guest = isGuestMode() && !getToken();
+  if (guest) {
+    el.innerHTML        = '👤 Modo offline';
+    el.style.color      = '#f59e0b';
+    el.style.background = 'rgba(245,158,11,0.12)';
+    el.style.border     = '1px solid rgba(245,158,11,0.4)';
+    el.style.opacity    = '1';
+    el.style.transform  = 'translateY(0)';
+    clearTimeout(el._hideTimer); // sempre visível no modo convidado
+    return;
+  }
+
+  const online = navigator.onLine;
+
+  el.innerHTML   = online ? '🟢 Online' : '🔴 Offline';
+  el.style.color      = online ? '#10b981' : '#ef4444';
+  el.style.background = online ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)';
+  el.style.border     = `1px solid ${online ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'}`;
+  el.style.opacity    = '1';
+  el.style.transform  = 'translateY(0)';
+
+  // Quando online: some após 3s (não polui a tela)
+  clearTimeout(el._hideTimer);
+  if (online) {
+    el._hideTimer = setTimeout(() => {
+      el.style.opacity   = '0';
+      el.style.transform = 'translateY(6px)';
+    }, 3000);
+  }
+}
+
 // ── Helpers de token JWT ──────────────────────────────────
 function getToken()        { return localStorage.getItem('sq_token'); }
 function setToken(t)       { localStorage.setItem('sq_token', t); }
 function clearToken()      { localStorage.removeItem('sq_token'); }
 
-// Retorna true se o usuário estiver no modo demonstração (sem conta real)
-function isDemoMode() {
+// ── Estado de autenticação persistido ─────────────────────
+// Formato: { mode: "online" | "offline", updatedAt: timestamp }
+const AUTH_MODE_KEY = 'sq_authMode';
+
+function getAuthMode() {
+  try { return JSON.parse(localStorage.getItem(AUTH_MODE_KEY) || '{}'); }
+  catch (e) { return {}; }
+}
+function setAuthMode(mode) {
+  localStorage.setItem(AUTH_MODE_KEY, JSON.stringify({ mode, updatedAt: Date.now() }));
+}
+function clearAuthMode() {
+  localStorage.removeItem(AUTH_MODE_KEY);
+}
+
+// ── Modo convidado (offline_guest) ────────────────────────
+// Retorna true quando o usuário está usando o app SEM conta real no servidor.
+function isGuestMode() {
+  const m = getAuthMode();
+  if (m.mode === 'offline') return true;
+  // Compatibilidade com flag legada do demo
   try {
     const u = JSON.parse(localStorage.getItem('sq_authUser') || 'null');
     return !!(u && u.demo);
-  } catch(e) { return false; }
+  } catch (e) { return false; }
+}
+
+// Ativa o modo convidado: entra no app usando apenas localStorage,
+// sem servidor e sem conta real. Dados NÃO são sincronizados.
+function activateGuestMode() {
+  console.log('[Offline] Modo offline ativado.');
+  setAuthUser({ email: 'guest', demo: true, offline: true, createdAt: Date.now() });
+  setAuthMode('offline');
+  localStorage.setItem('sq_loggedIn', 'true');
+  _renderOfflineIndicator();        // atualiza indicador para 👤
+  launchApp();                      // entra no app (async, sem await)
+}
+
+// Exibe o painel de oferta de modo offline abaixo do botão de login.
+// Chamado após X segundos de espera sem resposta do servidor.
+function _showOfflineModeOffer(loginAbortCtrl) {
+  if (document.getElementById('offline-offer')) return; // já visível
+  console.log('[Login] Servidor demorando... oferecendo modo offline.');
+
+  const el = document.createElement('div');
+  el.id = 'offline-offer';
+  el.style.cssText = [
+    'margin-top:12px', 'padding:12px 14px', 'border-radius:10px',
+    'background:rgba(245,158,11,0.08)', 'border:1px solid rgba(245,158,11,0.3)',
+    'text-align:center', 'animation:fadeIn .3s ease',
+  ].join(';');
+  el.innerHTML =
+    '<p style="margin:0 0 8px;font-size:0.8rem;color:var(--text-secondary,#aaa)">' +
+      '🐢 Servidor demorando para responder...' +
+    '</p>' +
+    '<button id="offline-offer-btn" style="' +
+      'cursor:pointer;border:none;border-radius:8px;padding:8px 18px;' +
+      'background:#f59e0b;color:#fff;font-weight:700;font-size:0.85rem;' +
+      'width:100%;transition:opacity .2s' +
+    '">⚡ Usar modo offline</button>';
+
+  const loginBtn = document.getElementById('login-btn');
+  if (loginBtn && loginBtn.parentNode) {
+    loginBtn.parentNode.insertBefore(el, loginBtn.nextSibling);
+  }
+
+  document.getElementById('offline-offer-btn').addEventListener('click', () => {
+    loginAbortCtrl.abort();   // cancela o fetch em andamento
+    activateGuestMode();      // entra no app como convidado
+  });
+}
+
+// Remove o painel de oferta de modo offline
+function _removeOfflineModeOffer() {
+  const el = document.getElementById('offline-offer');
+  if (el) el.remove();
+}
+
+// Retorna true se o usuário estiver no modo demonstração (sem conta real)
+function isDemoMode() {
+  return isGuestMode();
 }
 
 // ── Auth state helpers ────────────────────────────────────
 function isLoggedIn() {
-  // Só considera logado se tiver token JWT real OU estiver em modo demo
-  // A flag sq_loggedIn sozinha NÃO basta (evita entrar no app sem autenticação real)
+  // Aceita: token JWT real (conta online) OU modo convidado (offline_guest)
   const hasToken = !!getToken();
-  const inDemo   = isDemoMode();
-  console.log('[Auth] isLoggedIn → token:', hasToken, '| demo:', inDemo);
-  return hasToken || inDemo;
+  const asGuest  = isGuestMode();
+  console.log('[Auth] isLoggedIn → token:', hasToken, '| guest:', asGuest);
+  return hasToken || asGuest;
 }
 
 function getAuthUser() {
@@ -3512,46 +3746,62 @@ async function handleLogin() {
   btn.disabled    = true;
   btn.textContent = 'Entrando...';
 
-  console.log('[Login] Tentando login para:', email);
+  console.log('[Login] Iniciado para:', email);
+
+  // Controller externo: permite que o botão "Usar modo offline" cancele o fetch
+  const loginAbortCtrl = new AbortController();
+
+  // Após 12s sem resposta, mostra opção de entrar no modo offline
+  const offlineOfferTimer = setTimeout(() => {
+    _showOfflineModeOffer(loginAbortCtrl);
+  }, 12000);
 
   try {
-    const res  = await apiFetch('/login', {
+    const res = await apiFetch('/login', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ email, password }),
-    });
+    }, { signal: loginAbortCtrl.signal });
 
-    // Tenta parsear JSON; se o servidor retornar HTML (ex: erro 404 de rota errada), captura o texto
+    // Garante resposta JSON (servidor pode retornar HTML se rota errada)
     let json;
     const contentType = res.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
       json = await res.json();
     } else {
       const text = await res.text();
-      console.error('[Login] Resposta não-JSON do servidor:', text.slice(0, 200));
-      throw new Error('Servidor retornou resposta inesperada (não é JSON). Verifique se o backend está rodando corretamente.');
+      console.error('[Login] Resposta não-JSON:', text.slice(0, 200));
+      throw new Error('Servidor retornou resposta inesperada. Verifique se o backend está rodando.');
     }
 
     if (!res.ok) {
-      // Credenciais erradas ou outro erro HTTP — apenas mostra a mensagem, NÃO tenta registrar
-      console.warn('[Login] Falha HTTP', res.status, ':', json.error);
+      console.warn('[Login] Erro ❌', res.status, ':', json.error);
       showAuthError('login-error', '❌ ' + (json.error || 'E-mail ou senha incorretos.'));
-      return; // <-- para aqui, sem nenhuma outra ação
+      return;
     }
 
     // ── Sucesso ──────────────────────────────────────────────
-    console.log('[Login] ✅ Login bem-sucedido para:', json.user?.email);
+    console.log('[Login] ✅ Login sucesso:', json.user?.email);
     setToken(json.token);
     setAuthUser({ email: json.user.email, id: json.user.id, createdAt: Date.now() });
+    setAuthMode('online');
     await launchApp();
 
   } catch (err) {
-    // Erro de rede (servidor desligado, CORS, etc.) — mostra mensagem clara, NÃO tenta registrar
-    console.error('[Login] ❌ Erro de conexão:', err.message);
-    showAuthError('login-error', '⚠️ Não foi possível conectar ao servidor. Verifique se o backend está rodando e tente novamente.');
+    if (err.name === 'AbortError') {
+      // Cancelado pelo usuário via "Usar modo offline" — activateGuestMode() já foi chamado
+      if (!isGuestMode()) {
+        // Cancelado pelo timeout de 60s (não pelo usuário)
+        showAuthError('login-error', '⚠️ Servidor não respondeu. Tente novamente ou use o modo offline abaixo.');
+      }
+    } else {
+      console.error('[Login] ❌ Erro de conexão:', err.message);
+      showAuthError('login-error', '⚠️ Não foi possível conectar. Verifique se o backend está rodando.');
+    }
 
   } finally {
-    // SEMPRE reabilita o botão ao terminar, independente do resultado
+    clearTimeout(offlineOfferTimer);
+    _removeOfflineModeOffer();
     _loginInProgress = false;
     btn.disabled    = false;
     btn.textContent = '🚀 Entrar';
@@ -3715,8 +3965,9 @@ function _showAppLoading(show) {
 // ── Logout ────────────────────────────────────────────────
 function logout() {
   console.log('[Auth] Logout efetuado.');
-  // Limpa TODOS os dados de autenticação (token, demo flag, user info)
+  // Limpa TODOS os dados de autenticação (token, demo flag, user info, modo)
   clearToken();
+  clearAuthMode();
   localStorage.removeItem('sq_loggedIn');
   localStorage.removeItem('sq_authUser');
   // Limpa o state local para não vazar dados entre contas
@@ -3774,17 +4025,27 @@ async function loadUserDataFromAPI() {
   }
 }
 
-// ── API: salvar dados do usuário ──────────────────────────
-/**
- * Faz POST /api/data com o state atual.
- * Chamada silenciosa: falhas não quebram o app.
- */
+// ── API: salvar dados do usuário (offline-aware) ──────────
 async function syncStateToAPI() {
   const token = getToken();
   if (!token || isDemoMode()) return;
 
-  console.log('[API] Salvando dados no backend...');
+  // ── Offline: enfileira e sai ──────────────────────────
+  if (!navigator.onLine) {
+    console.log('[Offline] Salvando ação na fila (sem conexão).');
+    addToOfflineQueue('/data', {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': 'Bearer ' + token,
+      },
+      body: JSON.stringify({ data: state }),
+    });
+    return;
+  }
 
+  // ── Online: envia direto ──────────────────────────────
+  console.log('[API] Salvando dados no backend...');
   try {
     const res  = await apiFetch('/data', {
       method:  'POST',
@@ -3799,10 +4060,28 @@ async function syncStateToAPI() {
     if (res.ok) {
       console.log('[API] Dados salvos no backend com sucesso!');
     } else {
-      console.warn('[API] Erro ao salvar dados:', json.error || res.status);
+      // Falha HTTP → enfileira para tentar novamente
+      console.warn('[API] Erro ao salvar dados:', json.error || res.status, '— enfileirando.');
+      addToOfflineQueue('/data', {
+        method: 'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': 'Bearer ' + token,
+        },
+        body: JSON.stringify({ data: state }),
+      });
     }
   } catch (err) {
-    console.warn('[API] Falha ao salvar (offline). Dados mantidos no localStorage:', err.message);
+    // Erro de rede → também enfileira
+    console.warn('[API] Falha de rede ao salvar — enfileirando:', err.message);
+    addToOfflineQueue('/data', {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': 'Bearer ' + token,
+      },
+      body: JSON.stringify({ data: state }),
+    });
   }
 }
 
