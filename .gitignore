@@ -7,8 +7,6 @@ backend/node_modules/
 backend/.env
 
 # Banco de dados local (contém senhas hasheadas)
-backend/data.json
-backend/data.backup.json
 
 # Logs
 *.log
