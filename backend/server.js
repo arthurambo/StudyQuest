@@ -1,6 +1,7 @@
+'use strict';
+
 require('dotenv').config();
 const express = require('express');
-const mongoose = require('mongoose');
 const cors    = require('cors');
 const path    = require('path');
 
@@ -10,7 +11,7 @@ const dataRoutes = require('./routes/data');
 const app = express();
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
-// Aceita qualquer origin: localhost, file://, Render, etc.
+// Aceita qualquer origin: localhost, file://, etc.
 const corsOptions = {
   origin: function (origin, callback) {
     callback(null, true);
@@ -31,9 +32,9 @@ app.use((req, _res, next) => {
   next();
 });
 
-// ─── Health-check (ANTES dos demais routers) ──────────────────────────────────
+// ─── Health-check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, message: 'StudyQuest API rodando!' });
+  res.json({ ok: true, message: 'StudyQuest API rodando! (modo arquivo local)' });
 });
 
 // ─── Rotas de autenticação e dados ────────────────────────────────────────────
@@ -46,39 +47,25 @@ app.use('/api', (_req, res) => {
 });
 
 // ─── Servir frontend como arquivos estáticos ──────────────────────────────────
-// Permite acessar o app em http://localhost:3001 sem problemas de CORS
-// Serve apenas os arquivos raiz (index.html, style.css, script.js)
 const frontendPath = path.join(__dirname, '..');
-app.use(express.static(frontendPath, {
-  // Não expõe a pasta backend como estática
-  index: 'index.html',
-}));
+app.use(express.static(frontendPath, { index: 'index.html' }));
 
 // Fallback SPA: qualquer rota não-API → index.html
 app.get('*', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
-// ─── Conexão com MongoDB ──────────────────────────────────────────────────────
-const MONGO_URI = process.env.MONGO_URI;
-const PORT      = process.env.PORT || 3001;
+// ─── Inicialização do servidor ────────────────────────────────────────────────
+const PORT = process.env.PORT || 3001;
 
-if (!MONGO_URI) {
-  console.error('❌  MONGO_URI não definida no .env');
+if (!process.env.JWT_SECRET) {
+  console.error('❌  JWT_SECRET não definida no .env');
   process.exit(1);
 }
 
-mongoose
-  .connect(MONGO_URI)
-  .then(() => {
-    console.log('✅  MongoDB conectado');
-    app.listen(PORT, () => {
-      console.log(`🚀  Servidor rodando em http://localhost:${PORT}`);
-      console.log(`🌐  Abra o app em:  http://localhost:${PORT}`);
-      console.log(`📡  API em:         http://localhost:${PORT}/api`);
-    });
-  })
-  .catch((err) => {
-    console.error('❌  Erro ao conectar no MongoDB:', err.message);
-    process.exit(1);
-  });
+app.listen(PORT, () => {
+  console.log(`🚀  Servidor rodando em http://localhost:${PORT}`);
+  console.log(`🌐  Abra o app em:  http://localhost:${PORT}`);
+  console.log(`📡  API em:         http://localhost:${PORT}/api`);
+  console.log(`💾  Banco de dados: ${require('path').join(__dirname, 'data.json')}`);
+});

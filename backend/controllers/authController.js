@@ -1,8 +1,10 @@
-const bcrypt = require("bcryptjs");
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+'use strict';
 
-const SALT_ROUNDS = 12; // custo do bcrypt (mais alto = mais seguro, porém mais lento)
+const bcrypt = require('bcryptjs');
+const jwt    = require('jsonwebtoken');
+const { findUser, createUser } = require('../dataService');
+
+const SALT_ROUNDS = 12;   // custo do bcrypt (mais alto = mais seguro, porém mais lento)
 const TOKEN_EXPIRY = '7d'; // token válido por 7 dias
 
 // ─── Registro ─────────────────────────────────────────────────────────────────
@@ -23,7 +25,7 @@ async function register(req, res) {
     }
 
     // Verifica se o e-mail já está cadastrado
-    const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
+    const existingUser = findUser(email);
     if (existingUser) {
       return res.status(409).json({ error: 'E-mail já cadastrado.' });
     }
@@ -31,22 +33,18 @@ async function register(req, res) {
     // Criptografa a senha
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
-    // Cria o usuário com data inicial vazia (o frontend irá preencher)
-    const user = await User.create({
-      email: email.toLowerCase().trim(),
-      password: hashedPassword,
-      data: {},
-    });
+    // Cria o usuário no data.json
+    const user = createUser({ email, password: hashedPassword });
 
     // Gera o token JWT
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
       expiresIn: TOKEN_EXPIRY,
     });
 
     return res.status(201).json({
       message: 'Conta criada com sucesso!',
       token,
-      user: { id: user._id, email: user.email },
+      user: { id: user.id, email: user.email },
     });
   } catch (err) {
     console.error('[register]', err.message);
@@ -68,8 +66,8 @@ async function login(req, res) {
       return res.status(400).json({ error: 'E-mail e senha são obrigatórios.' });
     }
 
-    // Busca o usuário (inclui password para comparação)
-    const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+password');
+    // Busca o usuário no data.json
+    const user = findUser(email);
     if (!user) {
       // Mensagem genérica para não revelar se o e-mail existe
       return res.status(401).json({ error: 'E-mail ou senha incorretos.' });
@@ -82,14 +80,14 @@ async function login(req, res) {
     }
 
     // Gera o token JWT
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
       expiresIn: TOKEN_EXPIRY,
     });
 
     return res.status(200).json({
       message: 'Login realizado com sucesso!',
       token,
-      user: { id: user._id, email: user.email },
+      user: { id: user.id, email: user.email },
     });
   } catch (err) {
     console.error('[login]', err.message);

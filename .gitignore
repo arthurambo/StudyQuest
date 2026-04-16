@@ -1,0 +1,15 @@
+# Dependências
+node_modules/
+backend/node_modules/
+
+# Variáveis de ambiente
+.env
+backend/.env
+
+# Banco de dados local (contém senhas hasheadas)
+backend/data.json
+backend/data.backup.json
+
+# Logs
+*.log
+npm-debug.log*
