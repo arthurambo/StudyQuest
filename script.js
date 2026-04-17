@@ -14,15 +14,17 @@ const userId = localStorage.getItem('user_id') || crypto.randomUUID();
 localStorage.setItem('user_id', userId);
 
 // Cliente Supabase inicializado imediatamente (CDN carregado antes deste script)
-const supabase = (window.supabase && window.supabase.createClient)
+// Nota: "window.supabase" é o namespace da biblioteca; "sb" é o nosso cliente.
+// Não podemos usar "const supabase" porque o CDN já declara "var supabase" globalmente.
+const sb = (window.supabase && window.supabase.createClient)
   ? window.supabase.createClient(
       'https://gwenrlqhxzcnwlmvwszj.supabase.co',
       'sb_publishable_e2WmFQsUAZKsA-BmdOMshw_a8m-lQCG'
     )
   : null;
 
-if (supabase) console.log('[Supabase] Cliente pronto. userId:', userId);
-else          console.warn('[Supabase] SDK não disponível — apenas localStorage.');
+if (sb) console.log('[Supabase] Cliente pronto. userId:', userId);
+else    console.warn('[Supabase] SDK não disponível — apenas localStorage.');
 
 // ============================================================
 // CONSTANTES & CONFIGURAÇÕES
@@ -411,9 +413,9 @@ function loadState() {
  * Retorna { xp: 0, level: 1 } como fallback se não houver dados ou falhar.
  */
 async function loadUserData() {
-  if (!supabase) return { xp: 0, level: 1 };
+  if (!sb) return { xp: 0, level: 1 };
   try {
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('users')
       .select('xp, level')
       .eq('id', userId)
@@ -438,9 +440,9 @@ async function loadUserData() {
  * Silencia erros — localStorage já garantiu a persistência local.
  */
 async function saveUserData(xp, level) {
-  if (!supabase) return;
+  if (!sb) return;
   try {
-    const { error } = await supabase
+    const { error } = await sb
       .from('users')
       .upsert({ id: userId, xp: xp, level: level });
     if (error) console.warn('[Supabase] Erro ao salvar:', error.message);
