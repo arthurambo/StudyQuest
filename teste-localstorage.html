@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Teste localStorage</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      background: #0f0f1a;
+      color: #fff;
+      gap: 20px;
+    }
+    h1 { font-size: 1.2rem; opacity: 0.6; margin: 0; }
+    #xp { font-size: 3rem; font-weight: bold; color: #a78bfa; }
+    button {
+      padding: 12px 28px;
+      font-size: 1rem;
+      font-weight: bold;
+      background: #7c3aed;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover { background: #6d28d9; }
+    #status { font-size: 0.8rem; opacity: 0.45; }
+  </style>
+</head>
+<body>
+
+  <h1>XP acumulado</h1>
+  <div id="xp">0</div>
+  <button onclick="addXP()">+ 10 XP</button>
+  <div id="status">carregando...</div>
+
+  <script>
+    const KEY = 'teste_xp';
+
+    // Lê o XP salvo. Retorna 0 se não existir.
+    function load() {
+      const raw = localStorage.getItem(KEY);
+      if (!raw) return 0;
+      try {
+        return JSON.parse(raw).xp ?? 0;
+      } catch (e) {
+        return 0;
+      }
+    }
+
+    // Salva o XP no localStorage.
+    function save(xp) {
+      localStorage.setItem(KEY, JSON.stringify({ xp: xp }));
+    }
+
+    // Soma +10, salva e atualiza a tela.
+    function addXP() {
+      const current = load();
+      const next = current + 10;
+      save(next);
+      render(next);
+    }
+
+    // Atualiza os elementos na tela.
+    function render(xp) {
+      document.getElementById('xp').textContent = xp;
+      document.getElementById('status').textContent =
+        'Salvo em: ' + new Date().toLocaleTimeString();
+    }
+
+    // Ao carregar a página: lê o localStorage e exibe.
+    window.onload = function () {
+      const xp = load();
+      render(xp);
+    };
+  </script>
+
+</body>
+</html>
