@@ -332,11 +332,30 @@ function applyDataToUI(data) {
   updateAllUI();
 }
 
+// ── API pública — nomes exatos usados no projeto ──────────
+// Estas são as funções canônicas que todo o código deve usar.
+// saveLocalData / loadLocalData / applyDataToUI são os internos.
+
+const STORAGE_KEY = LS_SAVE_KEY; // "studyquest_save"
+
+function saveData(data)  { saveLocalData(data); }
+function loadData()      { return loadLocalData(); }
+function applyData(data) {
+  if (!data) return;
+  // Garante que o XP salvo aparece no elemento correto do HTML
+  // (o projeto usa id="stat-xp", não id="xp")
+  const el = document.getElementById('stat-xp')
+          || document.getElementById('xp');
+  if (el) el.textContent = data.xp ?? 0;
+  // Aplica todos os outros campos na interface completa
+  applyDataToUI(data);
+}
+
 // ── saveState() ───────────────────────────────────────────
 // Salva SEMPRE no localStorage (modo online e offline).
 // Em modo online: agenda sincronização com o backend (debounced).
 function saveState() {
-  saveLocalData(state);             // localStorage primeiro — nunca perde dado
+  saveData(state);                  // localStorage primeiro — nunca perde dado
   scheduleSyncToAPI();              // backend: só envia se tiver token e conexão
 }
 
