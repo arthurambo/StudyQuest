@@ -283,32 +283,83 @@ function sortArray(arr, type) {
 
 
 // ============================================================
-// PERSISTÊNCIA
+// PERSISTÊNCIA — localStorage
 // ============================================================
 
-function saveState() {
-  localStorage.setItem('studyquest_v3', JSON.stringify(state));
-  scheduleSyncToAPI(); // envia para o backend (debounced 2s)
+// Chave única e canônica. Usada em TODAS as leituras e escritas.
+// Nunca use a string 'studyquest_v3' ou 'studyquest_save' diretamente.
+const LS_SAVE_KEY = 'studyquest_save';
+
+// ── saveLocalData(data) ───────────────────────────────────
+// Serializa `data` e persiste na chave canônica.
+// Chamado por saveState() e por loadUserDataFromAPI() após sync.
+function saveLocalData(data) {
+  try {
+    localStorage.setItem(LS_SAVE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.error('[Data] Erro ao salvar no localStorage:', e);
+  }
 }
 
+// ── loadLocalData() ───────────────────────────────────────
+// Lê e parseia os dados salvos.
+// Inclui migração automática da chave legada 'studyquest_v3'.
+// Retorna o objeto parseado, ou null se não houver dados.
+function loadLocalData() {
+  // Tenta a chave nova primeiro; se vazia, tenta a legada (migração)
+  const raw = localStorage.getItem(LS_SAVE_KEY)
+           || localStorage.getItem('studyquest_v3');
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error('[Data] Erro ao parsear localStorage:', e);
+    return null;
+  }
+}
+
+// ── applyDataToUI(data) ───────────────────────────────────
+// Mescla `data` no state global e renderiza toda a interface.
+// Chamado sempre que os dados locais são carregados.
+function applyDataToUI(data) {
+  if (!data || typeof data !== 'object') {
+    console.warn('[Data] applyDataToUI: sem dados para aplicar.');
+    return;
+  }
+  state = { ...state, ...data };
+  console.log('[Data] Aplicando dados na interface — XP:', state.xp,
+    '| Nível:', state.level, '| Moedas:', state.coins);
+  updateAllUI();
+}
+
+// ── saveState() ───────────────────────────────────────────
+// Salva SEMPRE no localStorage (modo online e offline).
+// Em modo online: agenda sincronização com o backend (debounced).
+function saveState() {
+  saveLocalData(state);             // localStorage primeiro — nunca perde dado
+  scheduleSyncToAPI();              // backend: só envia se tiver token e conexão
+}
+
+// ── loadState() ───────────────────────────────────────────
+// Carrega dados do localStorage e mescla no state global.
+// NÃO chama updateAllUI — quem chama loadState() decide quando renderizar.
 function loadState() {
-  const raw = localStorage.getItem('studyquest_v3');
-  if (!raw) {
+  const parsed = loadLocalData();
+  if (!parsed) {
     console.log('[Data] Nenhum dado encontrado no localStorage (novo usuário).');
     return false;
   }
-  try {
-    const parsed = JSON.parse(raw);
-    state = { ...state, ...parsed };
-    console.log('[Data] Dados carregados do localStorage:', {
-      xp: state.xp, level: state.level, coins: state.coins,
-      streak: state.streak, name: state.name, setup: state.setup,
-    });
-    return true;
-  } catch (e) {
-    console.error('[Data] Erro ao parsear localStorage:', e);
-    return false;
+  state = { ...state, ...parsed };
+  console.log('[Data] Dados carregados do localStorage:', {
+    xp: state.xp, level: state.level, coins: state.coins,
+    streak: state.streak, name: state.name, setup: state.setup,
+  });
+  // Migração: se os dados estavam na chave legada, grava na nova chave agora
+  if (!localStorage.getItem(LS_SAVE_KEY) && localStorage.getItem('studyquest_v3')) {
+    saveLocalData(state);
+    console.log('[Data] Migração studyquest_v3 → studyquest_save concluída.');
   }
+  return true;
 }
 
 // ============================================================
@@ -3632,7 +3683,7 @@ function _showOfflineModeOffer(loginAbortCtrl) {
   console.log('[Auth] Servidor não respondeu — oferecendo modo offline.');
 
   const savedUser  = getAuthUser();
-  const savedState = localStorage.getItem('studyquest_v3');
+  const savedState = loadLocalData(); // usa função canônica (inclui migração)
   const subtitle   = (savedUser && savedUser.id && savedState)
     ? `Dados de <b>${savedUser.email}</b> salvos localmente serão carregados.`
     : 'Seus dados locais serão carregados (ou um novo perfil será criado).';
@@ -4023,13 +4074,24 @@ function _showAppLoading(show) {
 // ── Logout ────────────────────────────────────────────────
 function logout() {
   console.log('[Auth] Logout efetuado.');
-  // Limpa TODOS os dados de autenticação (token, demo flag, user info, modo)
+  const wasOffline = isOfflineMode(); // captura antes de limpar o modo
+
+  // Limpa credenciais e modo
   clearToken();
   clearAuthMode();
   localStorage.removeItem('sq_loggedIn');
   localStorage.removeItem('sq_authUser');
-  // Limpa o state local para não vazar dados entre contas
-  localStorage.removeItem('studyquest_v3');
+
+  if (wasOffline) {
+    // Modo offline: preserva os dados de jogo no localStorage.
+    // O usuário pode retomar o progresso na próxima vez que entrar offline.
+    console.log('[Data] Modo offline — dados locais preservados para próxima sessão.');
+  } else {
+    // Modo online: limpa dados de jogo para não vazar entre contas diferentes.
+    localStorage.removeItem(LS_SAVE_KEY);
+    localStorage.removeItem('studyquest_v3'); // limpa chave legada também
+    console.log('[Data] Dados de jogo removidos (logout online).');
+  }
 
   const app   = document.getElementById('app');
   const setup = document.getElementById('setup-screen');
@@ -4072,8 +4134,8 @@ async function loadUserDataFromAPI() {
     if (json.data && typeof json.data === 'object' && Object.keys(json.data).length > 0) {
       // Sobrepõe o state local com os dados do backend
       state = { ...state, ...json.data };
-      // Mantém localStorage sincronizado (fallback offline)
-      localStorage.setItem('studyquest_v3', JSON.stringify(state));
+      // Espelha no localStorage como backup offline (via função canônica)
+      saveLocalData(state);
       console.log('[API] Dados carregados do backend com sucesso. Setup:', state.setup, '| XP:', state.xp);
     } else {
       console.log('[API] Backend sem dados salvos ainda. Usando localStorage como base.');
