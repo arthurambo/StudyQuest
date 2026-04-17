@@ -6,6 +6,25 @@
 'use strict';
 
 // ============================================================
+// SUPABASE — ID único do usuário + cliente (topo do script)
+// ============================================================
+
+// ID persistido no localStorage — cada dispositivo/usuário tem o seu
+const userId = localStorage.getItem('user_id') || crypto.randomUUID();
+localStorage.setItem('user_id', userId);
+
+// Cliente Supabase inicializado imediatamente (CDN carregado antes deste script)
+const supabase = (window.supabase && window.supabase.createClient)
+  ? window.supabase.createClient(
+      'https://gwenrlqhxzcnwlmvwszj.supabase.co',
+      'sb_publishable_e2WmFQsUAZKsA-BmdOMshw_a8m-lQCG'
+    )
+  : null;
+
+if (supabase) console.log('[Supabase] Cliente pronto. userId:', userId);
+else          console.warn('[Supabase] SDK não disponível — apenas localStorage.');
+
+// ============================================================
 // CONSTANTES & CONFIGURAÇÕES
 // ============================================================
 
@@ -387,92 +406,55 @@ function loadState() {
 // PERSISTÊNCIA — Supabase (XP + level, sem login obrigatório)
 // ============================================================
 
-const SUPABASE_URL = 'https://gwenrlqhxzcnwlmvwszj.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_e2WmFQsUAZKsA-BmdOMshw_a8m-lQCG';
-const USER_ID_KEY  = 'sq_user_id';
-
-let supabaseClient = null;
-
-/** Inicializa o cliente Supabase. Chame após DOMContentLoaded. */
-function initSupabase() {
-  try {
-    if (window.supabase && window.supabase.createClient) {
-      supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-      console.log('[Supabase] Cliente inicializado.');
-    } else {
-      console.warn('[Supabase] SDK não disponível — usando apenas localStorage.');
-    }
-  } catch (e) {
-    console.warn('[Supabase] Falha ao inicializar:', e);
-  }
-}
-
 /**
- * Retorna o UUID persistido do usuário anônimo.
- * Gera um novo na primeira vez e salva no localStorage.
- */
-function getUserId() {
-  let id = localStorage.getItem(USER_ID_KEY);
-  if (!id) {
-    id = (crypto && crypto.randomUUID)
-      ? crypto.randomUUID()
-      : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-          const r = Math.random() * 16 | 0;
-          return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-        });
-    localStorage.setItem(USER_ID_KEY, id);
-    console.log('[Supabase] Novo UUID gerado:', id);
-  }
-  return id;
-}
-
-/**
- * Salva XP e level na tabela `users` do Supabase (upsert).
- * Silencia erros — localStorage já garantiu a persistência.
- */
-async function saveUserData(data) {
-  if (!supabaseClient) return;
-  try {
-    const { error } = await supabaseClient
-      .from('users')
-      .upsert({ id: getUserId(), xp: data.xp || 0, level: data.level || 1 });
-    if (error) console.warn('[Supabase] Erro ao salvar:', error.message);
-    else       console.log('[Supabase] XP/level salvos — XP:', data.xp, '| Nível:', data.level);
-  } catch (e) {
-    console.warn('[Supabase] Exceção ao salvar:', e);
-  }
-}
-
-/**
- * Carrega XP e level do Supabase para este usuário.
- * Retorna { xp, level } ou null se falhar / sem dados.
+ * Carrega XP e level do Supabase para este userId.
+ * Retorna { xp: 0, level: 1 } como fallback se não houver dados ou falhar.
  */
 async function loadUserData() {
-  if (!supabaseClient) return null;
+  if (!supabase) return { xp: 0, level: 1 };
   try {
-    const { data, error } = await supabaseClient
+    const { data, error } = await supabase
       .from('users')
       .select('xp, level')
-      .eq('id', getUserId())
+      .eq('id', userId)
       .single();
     if (error) {
-      if (error.code !== 'PGRST116') // PGRST116 = nenhum registro encontrado (normal)
+      // PGRST116 = nenhum registro ainda (primeiro acesso) — silencioso
+      if (error.code !== 'PGRST116')
         console.warn('[Supabase] Erro ao carregar:', error.message);
-      return null;
+      return { xp: 0, level: 1 };
     }
     console.log('[Supabase] Dados carregados — XP:', data.xp, '| Nível:', data.level);
     return data;
   } catch (e) {
     console.warn('[Supabase] Exceção ao carregar:', e);
-    return null;
+    return { xp: 0, level: 1 };
   }
 }
 
-/** Debounce: sincroniza com Supabase 3s após o último saveState(). */
+/**
+ * Salva XP e level na tabela `users` (upsert por userId).
+ * Assinatura direta: saveUserData(xp, level)
+ * Silencia erros — localStorage já garantiu a persistência local.
+ */
+async function saveUserData(xp, level) {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase
+      .from('users')
+      .upsert({ id: userId, xp: xp, level: level });
+    if (error) console.warn('[Supabase] Erro ao salvar:', error.message);
+    else       console.log('[Supabase] Salvo — XP:', xp, '| Nível:', level);
+  } catch (e) {
+    console.warn('[Supabase] Exceção ao salvar:', e);
+  }
+}
+
+/** Debounce: sincroniza com Supabase 3s após o último saveState() ou addXp(). */
 let _supabaseSyncTimer = null;
 function scheduleSyncToSupabase() {
   clearTimeout(_supabaseSyncTimer);
-  _supabaseSyncTimer = setTimeout(() => saveUserData(state), 3000);
+  _supabaseSyncTimer = setTimeout(() => saveUserData(state.xp, state.level), 3000);
 }
 
 // ============================================================
@@ -490,7 +472,6 @@ window.addEventListener('DOMContentLoaded', () => {
   initExportImport();
   initEditDelete();
   initEditProfile();
-  initSupabase();      // cliente Supabase (antes de qualquer acesso à rede)
   initAuth();          // telas de login/cadastro
   initOfflineStatus(); // indicador online/offline + listeners de rede
 
@@ -1336,6 +1317,7 @@ function addXp(amount, bonusMsg = null) {
 
   updateDashboard();
   checkMissionGoals();
+  scheduleSyncToSupabase(); // → Supabase: XP + level em 3s (debounced)
 }
 
 function addCoins(amount) {
@@ -4108,18 +4090,18 @@ async function launchApp() {
   loadState();
   console.log('[App] State local carregado. Setup:', state.setup, '| Modo:', getCurrentMode());
 
-  // 2. Supabase: tenta carregar XP/level se houver conexão (modo online ou offline)
+  // 2. Supabase: carrega XP/level da nuvem se houver conexão
   if (navigator.onLine) {
-    const cloudData = await loadUserData();
-    if (cloudData) {
-      // Usa os dados da nuvem só se forem "maiores" (evita sobrescrever progresso local)
-      const cloudXP = cloudData.xp    || 0;
-      const cloudLv = cloudData.level || 1;
-      if (cloudXP > (state.xp || 0)) {
-        state.xp    = cloudXP;
-        state.level = cloudLv;
-        console.log('[Supabase] XP da nuvem aplicado:', cloudXP, '| Nível:', cloudLv);
-      }
+    const cloudData = await loadUserData();         // nunca retorna null — fallback é { xp:0, level:1 }
+    const cloudXP   = cloudData.xp    || 0;
+    const cloudLv   = cloudData.level || 1;
+    // Aplica dados da nuvem apenas se forem maiores que o local
+    // (evita sobrescrever progresso feito offline)
+    if (cloudXP > (state.xp || 0)) {
+      state.xp    = cloudXP;
+      state.level = cloudLv;
+      saveLocalData(state); // persiste no localStorage também
+      console.log('[Supabase] XP da nuvem aplicado:', cloudXP, '| Nível:', cloudLv);
     }
   }
 
