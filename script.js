@@ -405,58 +405,76 @@ function loadState() {
 }
 
 // ============================================================
-// PERSISTÊNCIA — Supabase (XP + level, sem login obrigatório)
+// PERSISTÊNCIA — Supabase (state completo, sem login obrigatório)
 // ============================================================
 
 /**
- * Carrega XP e level do Supabase para este userId.
- * Retorna { xp: 0, level: 1 } como fallback se não houver dados ou falhar.
+ * Carrega o state completo do Supabase para este userId.
+ * Retorna o objeto state salvo, ou null se não houver dados / falhar.
+ *
+ * A coluna `data` (jsonb) contém o state completo.
+ * As colunas `xp`, `level`, `name`, `coins` são cópias superficiais
+ * para facilitar consultas futuras no painel do Supabase.
  */
 async function loadUserData() {
-  if (!sb) return { xp: 0, level: 1 };
+  if (!sb) return null;
   try {
     const { data, error } = await sb
       .from('users')
-      .select('xp, level')
+      .select('*')
       .eq('id', userId)
       .single();
+
     if (error) {
-      // PGRST116 = nenhum registro ainda (primeiro acesso) — silencioso
+      // PGRST116 = nenhum registro ainda (primeiro acesso) — completamente normal
       if (error.code !== 'PGRST116')
         console.warn('[Supabase] Erro ao carregar:', error.message);
-      return { xp: 0, level: 1 };
+      return null;
     }
-    console.log('[Supabase] Dados carregados — XP:', data.xp, '| Nível:', data.level);
-    return data;
+
+    // `data.data` é a coluna JSONB com o state completo
+    // Fallback para o próprio row caso a coluna `data` não exista ainda
+    const savedState = (data.data && typeof data.data === 'object') ? data.data : data;
+    console.log('[Supabase] State carregado — XP:', savedState.xp, '| Nível:', savedState.level, '| Nome:', savedState.name);
+    return savedState;
   } catch (e) {
     console.warn('[Supabase] Exceção ao carregar:', e);
-    return { xp: 0, level: 1 };
+    return null;
   }
 }
 
 /**
- * Salva XP e level na tabela `users` (upsert por userId).
- * Assinatura direta: saveUserData(xp, level)
+ * Salva o state completo na tabela `users` (upsert por userId).
+ * - Colunas top-level (xp, level, name, coins): fáceis de consultar no painel
+ * - Coluna `data` (jsonb): state inteiro para restore completo
+ *
  * Silencia erros — localStorage já garantiu a persistência local.
  */
-async function saveUserData(xp, level) {
+async function saveUserData(data) {
   if (!sb) return;
   try {
     const { error } = await sb
       .from('users')
-      .upsert({ id: userId, xp: xp, level: level });
+      .upsert({
+        id:    userId,
+        name:  data.name  || '',
+        xp:    data.xp    || 0,
+        level: data.level || 1,
+        coins: data.coins || 0,
+        data:  data,          // state completo como JSONB
+      });
     if (error) console.warn('[Supabase] Erro ao salvar:', error.message);
-    else       console.log('[Supabase] Salvo — XP:', xp, '| Nível:', level);
+    else       console.log('[Supabase] State salvo — XP:', data.xp, '| Nível:', data.level, '| Nome:', data.name);
   } catch (e) {
     console.warn('[Supabase] Exceção ao salvar:', e);
   }
 }
 
-/** Debounce: sincroniza com Supabase 3s após o último saveState() ou addXp(). */
+/** Debounce: sincroniza state completo com Supabase 3s após qualquer mudança. */
 let _supabaseSyncTimer = null;
 function scheduleSyncToSupabase() {
   clearTimeout(_supabaseSyncTimer);
-  _supabaseSyncTimer = setTimeout(() => saveUserData(state.xp, state.level), 3000);
+  _supabaseSyncTimer = setTimeout(() => saveUserData(state), 3000);
 }
 
 // ============================================================
@@ -4115,20 +4133,25 @@ async function launchApp() {
     console.log('[Auth] Modo online ativo.');
   }
 
-  // 3. Supabase: aplica XP/level da nuvem SE for maior que o state atual
-  //    Feito APÓS o backend para garantir que o Supabase tem a palavra final
-  //    (o backend pode devolver xp:0 e sobrescrever — o Supabase corrige isso)
+  // 3. Supabase: aplica state completo da nuvem se o XP da nuvem for ≥ local
+  //    Feito APÓS o backend para ter a palavra final sobre qualquer xp:0 do backend
   if (navigator.onLine) {
-    const cloudData = await loadUserData(); // fallback: { xp:0, level:1 }
-    const cloudXP   = cloudData.xp    || 0;
-    const cloudLv   = cloudData.level || 1;
-    if (cloudXP > (state.xp || 0)) {
-      state.xp    = cloudXP;
-      state.level = cloudLv;
-      saveLocalData(state); // espelha no localStorage
-      console.log('[Supabase] XP aplicado:', cloudXP, '| Nível:', cloudLv);
+    const cloudState = await loadUserData(); // null = sem dados na nuvem (primeiro acesso)
+    if (cloudState) {
+      const cloudXP = cloudState.xp || 0;
+      const localXP = state.xp      || 0;
+      if (cloudXP >= localXP) {
+        // Nuvem tem progresso igual ou maior → usa state da nuvem, preserva userId local
+        state = { ...state, ...cloudState };
+        saveLocalData(state); // espelha no localStorage para acesso offline
+        console.log('[Supabase] State da nuvem aplicado — XP:', state.xp, '| Nível:', state.level, '| Nome:', state.name);
+      } else {
+        // Local tem mais XP (progresso feito offline) → mantém local e sobe para nuvem
+        console.log('[Supabase] State local mais recente — mantendo. Local XP:', localXP, '| Nuvem XP:', cloudXP);
+        saveUserData(state); // sincroniza o progresso local com a nuvem agora
+      }
     } else {
-      console.log('[Supabase] XP local já é maior ou igual — mantendo. Local:', state.xp, '| Nuvem:', cloudXP);
+      console.log('[Supabase] Sem dados na nuvem ainda — usando state local.');
     }
   }
 
