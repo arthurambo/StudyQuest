@@ -363,22 +363,25 @@ function saveState() {
 // Carrega dados do localStorage e mescla no state global.
 // NÃO chama updateAllUI — quem chama loadState() decide quando renderizar.
 function loadState() {
-  const parsed = loadLocalData();
-  if (!parsed) {
-    console.log('[Data] Nenhum dado encontrado no localStorage (novo usuário).');
+  const raw = localStorage.getItem("studyquest_save");
+
+  if (!raw) {
+    console.log("❌ Nenhum save encontrado");
     return false;
   }
-  state = { ...state, ...parsed };
-  console.log('[Data] Dados carregados do localStorage:', {
-    xp: state.xp, level: state.level, coins: state.coins,
-    streak: state.streak, name: state.name, setup: state.setup,
-  });
-  // Migração: se os dados estavam na chave legada, grava na nova chave agora
-  if (!localStorage.getItem(LS_SAVE_KEY) && localStorage.getItem('studyquest_v3')) {
-    saveLocalData(state);
-    console.log('[Data] Migração studyquest_v3 → studyquest_save concluída.');
+
+  try {
+    const parsed = JSON.parse(raw);
+
+    state = parsed;
+
+    console.log("✅ Dados carregados:", parsed);
+    return true;
+
+  } catch (e) {
+    console.error("Erro ao carregar:", e);
+    return false;
   }
-  return true;
 }
 
 // ============================================================
