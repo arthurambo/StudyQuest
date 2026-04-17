@@ -4092,22 +4092,7 @@ async function launchApp() {
   loadState();
   console.log('[App] State local carregado. Setup:', state.setup, '| Modo:', getCurrentMode());
 
-  // 2. Supabase: carrega XP/level da nuvem se houver conexão
-  if (navigator.onLine) {
-    const cloudData = await loadUserData();         // nunca retorna null — fallback é { xp:0, level:1 }
-    const cloudXP   = cloudData.xp    || 0;
-    const cloudLv   = cloudData.level || 1;
-    // Aplica dados da nuvem apenas se forem maiores que o local
-    // (evita sobrescrever progresso feito offline)
-    if (cloudXP > (state.xp || 0)) {
-      state.xp    = cloudXP;
-      state.level = cloudLv;
-      saveLocalData(state); // persiste no localStorage também
-      console.log('[Supabase] XP da nuvem aplicado:', cloudXP, '| Nível:', cloudLv);
-    }
-  }
-
-  // 3. Decidir entre modo online e offline
+  // 2. Decidir entre modo online e offline
   if (isOfflineMode()) {
     // ── OFFLINE: usa apenas localStorage ─────────────────
     console.log('[Auth] Modo offline ativado. Carregando dados locais.');
@@ -4128,6 +4113,23 @@ async function launchApp() {
     // Garante modo online após carga bem-sucedida
     setAuthMode('online');
     console.log('[Auth] Modo online ativo.');
+  }
+
+  // 3. Supabase: aplica XP/level da nuvem SE for maior que o state atual
+  //    Feito APÓS o backend para garantir que o Supabase tem a palavra final
+  //    (o backend pode devolver xp:0 e sobrescrever — o Supabase corrige isso)
+  if (navigator.onLine) {
+    const cloudData = await loadUserData(); // fallback: { xp:0, level:1 }
+    const cloudXP   = cloudData.xp    || 0;
+    const cloudLv   = cloudData.level || 1;
+    if (cloudXP > (state.xp || 0)) {
+      state.xp    = cloudXP;
+      state.level = cloudLv;
+      saveLocalData(state); // espelha no localStorage
+      console.log('[Supabase] XP aplicado:', cloudXP, '| Nível:', cloudLv);
+    } else {
+      console.log('[Supabase] XP local já é maior ou igual — mantendo. Local:', state.xp, '| Nuvem:', cloudXP);
+    }
   }
 
   _renderOfflineIndicator(); // atualiza indicador com o modo atual
