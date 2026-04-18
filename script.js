@@ -508,33 +508,56 @@ window.addEventListener('DOMContentLoaded', async () => {
   initAuth();          // telas de login/cadastro (inclui botões Google)
   initOfflineStatus(); // indicador online/offline + listeners de rede
 
-  // ── Supabase Google Auth: verifica sessão ativa ────────
-  // Cobre dois casos:
-  //   A) Retorno do redirect OAuth (URL tem ?code=...)
-  //   B) Sessão já existente (usuário recarregou a página)
+  // ── Supabase Google Auth ───────────────────────────────
   if (sb) {
+    // Flag para evitar chamar launchApp() duas vezes caso tanto
+    // getSession() quanto onAuthStateChange detectem a mesma sessão.
+    let _googleSessionHandled = false;
+
+    // ① Registrar ANTES de qualquer await.
+    //    onAuthStateChange captura SIGNED_IN (fim do code exchange do OAuth)
+    //    e INITIAL_SESSION (sessão existente ao recarregar a página).
+    sb.auth.onAuthStateChange(async (event, session) => {
+      console.log('[Supabase Auth] evento:', event, '| sessão:', !!session);
+
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+        if (_googleSessionHandled) return; // já tratado por getSession() abaixo
+        _googleSessionHandled = true;
+        await handleSupabaseSession(session);
+
+      } else if (event === 'SIGNED_OUT') {
+        authUserId = null;
+      }
+    });
+
+    // ② Detectar retorno do OAuth (URL tem ?code= ou #access_token).
+    //    Supabase troca o code por tokens de forma assíncrona;
+    //    onAuthStateChange dispara SIGNED_IN quando termina.
+    //    Mostramos loading em vez de tela de login para não confundir o usuário.
+    const isOAuthCallback = window.location.search.includes('code=')
+                         || window.location.hash.includes('access_token');
+    if (isOAuthCallback) {
+      console.log('[Google Auth] Retorno do OAuth detectado — aguardando troca de tokens...');
+      _showAppLoading(true);
+      return; // onAuthStateChange vai chamar handleSupabaseSession() quando pronto
+    }
+
+    // ③ Verificar sessão existente (recarregamento de página normal).
+    //    Se getSession() retornar sessão válida, lançamos o app imediatamente.
     try {
       const { data: { session } } = await sb.auth.getSession();
-      if (session && session.user) {
-        // Sessão Google ativa → lança o app direto, sem precisar logar novamente
+      if (session && session.user && !_googleSessionHandled) {
+        _googleSessionHandled = true;
         await handleSupabaseSession(session);
-        return; // Não prosseguir para o auth gate abaixo
+        return; // App lançado — não precisa do auth gate abaixo
       }
     } catch (e) {
       console.warn('[Google Auth] Falha ao verificar sessão:', e.message);
     }
-
-    // Monitora mudanças futuras de estado (sign-in/sign-out/token refresh)
-    sb.auth.onAuthStateChange(async (event, session) => {
-      console.log('[Supabase Auth]', event);
-      if (event === 'SIGNED_OUT') {
-        authUserId = null;
-      }
-      // SIGNED_IN disparado após callback OAuth já é tratado pelo getSession() acima
-    });
   }
 
-  // ── Auth gate (e-mail+senha / modo offline) ────────────
+  // ── Auth gate normal (e-mail+senha / modo offline) ─────
+  // Só chega aqui se não há sessão Google ativa.
   if (isLoggedIn()) {
     launchApp();
   } else {
