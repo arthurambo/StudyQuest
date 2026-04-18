@@ -9,9 +9,22 @@
 // SUPABASE — ID único do usuário + cliente (topo do script)
 // ============================================================
 
-// ID persistido no localStorage — cada dispositivo/usuário tem o seu
+// ID persistido no localStorage — fallback para quando não há login Google
 const userId = localStorage.getItem('user_id') || crypto.randomUUID();
 localStorage.setItem('user_id', userId);
+
+// ID do usuário autenticado via Google (Supabase Auth). Null = não logado com Google.
+// Definido em handleSupabaseSession() após login/restauração de sessão.
+let authUserId = null;
+
+/**
+ * Retorna o ID correto para operações no banco:
+ *   • login Google → user.id do Supabase Auth  (dados sincronizados entre dispositivos)
+ *   • sem login    → UUID do localStorage       (dados locais, não requerem login)
+ */
+function getEffectiveUserId() {
+  return authUserId || userId;
+}
 
 // Cliente Supabase inicializado imediatamente (CDN carregado antes deste script)
 // Nota: "window.supabase" é o namespace da biblioteca; "sb" é o nosso cliente.
@@ -422,7 +435,7 @@ async function loadUserData() {
     const { data, error } = await sb
       .from('users')
       .select('*')
-      .eq('id', userId)
+      .eq('id', getEffectiveUserId())
       .single();
 
     if (error) {
@@ -456,7 +469,7 @@ async function saveUserData(data) {
     const { error } = await sb
       .from('users')
       .upsert({
-        id:    userId,
+        id:    getEffectiveUserId(),
         name:  data.name  || '',
         xp:    data.xp    || 0,
         level: data.level || 1,
@@ -481,7 +494,7 @@ function scheduleSyncToSupabase() {
 // INICIALIZAÇÃO
 // ============================================================
 
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   // Always init UI components first
   initSetup();
   initNavigation();
@@ -492,15 +505,39 @@ window.addEventListener('DOMContentLoaded', () => {
   initExportImport();
   initEditDelete();
   initEditProfile();
-  initAuth();          // telas de login/cadastro
+  initAuth();          // telas de login/cadastro (inclui botões Google)
   initOfflineStatus(); // indicador online/offline + listeners de rede
 
-  // ── Auth gate ──────────────────────────────────────────
+  // ── Supabase Google Auth: verifica sessão ativa ────────
+  // Cobre dois casos:
+  //   A) Retorno do redirect OAuth (URL tem ?code=...)
+  //   B) Sessão já existente (usuário recarregou a página)
+  if (sb) {
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (session && session.user) {
+        // Sessão Google ativa → lança o app direto, sem precisar logar novamente
+        await handleSupabaseSession(session);
+        return; // Não prosseguir para o auth gate abaixo
+      }
+    } catch (e) {
+      console.warn('[Google Auth] Falha ao verificar sessão:', e.message);
+    }
+
+    // Monitora mudanças futuras de estado (sign-in/sign-out/token refresh)
+    sb.auth.onAuthStateChange(async (event, session) => {
+      console.log('[Supabase Auth]', event);
+      if (event === 'SIGNED_OUT') {
+        authUserId = null;
+      }
+      // SIGNED_IN disparado após callback OAuth já é tratado pelo getSession() acima
+    });
+  }
+
+  // ── Auth gate (e-mail+senha / modo offline) ────────────
   if (isLoggedIn()) {
-    // Already authenticated → go to app or setup
     launchApp();
   } else {
-    // Not logged in → show auth screen
     showAuthScreen();
   }
 });
@@ -4210,9 +4247,20 @@ function _showAppLoading(show) {
 }
 
 // ── Logout ────────────────────────────────────────────────
-function logout() {
+async function logout() {
   console.log('[Auth] Logout efetuado.');
   const wasOffline = isOfflineMode(); // captura antes de limpar o modo
+
+  // Se logado via Google, encerra a sessão no Supabase
+  if (sb && authUserId) {
+    try {
+      await sb.auth.signOut();
+      console.log('[Google Auth] Sessão Supabase encerrada.');
+    } catch (e) {
+      console.warn('[Google Auth] Erro ao fazer signOut:', e.message);
+    }
+    authUserId = null;
+  }
 
   // Limpa credenciais e modo
   clearToken();
@@ -4363,6 +4411,57 @@ function scheduleSyncToAPI() {
   _syncDebounceTimer = setTimeout(syncStateToAPI, 2000);
 }
 
+// ── Google / Supabase Auth ────────────────────────────────
+
+/**
+ * Abre o fluxo OAuth do Google via Supabase.
+ * O usuário é redirecionado para o Google e volta ao site após autorizar.
+ */
+async function handleGoogleLogin() {
+  if (!sb) {
+    showAuthError('login-error', '⚠️ Supabase não disponível.');
+    return;
+  }
+  const btn = document.getElementById('google-btn');
+  const btnReg = document.getElementById('google-btn-register');
+  if (btn)    { btn.disabled    = true; btn.textContent    = 'Redirecionando...'; }
+  if (btnReg) { btnReg.disabled = true; btnReg.textContent = 'Redirecionando...'; }
+
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      // Redireciona de volta para esta mesma página após o login
+      redirectTo: window.location.origin + window.location.pathname,
+    },
+  });
+
+  if (error) {
+    console.error('[Google Auth] Erro ao iniciar OAuth:', error.message);
+    showAuthError('login-error', '❌ ' + error.message);
+    if (btn)    { btn.disabled    = false; btn.textContent    = 'Entrar com Google'; }
+    if (btnReg) { btnReg.disabled = false; btnReg.textContent = 'Criar conta com Google'; }
+  }
+  // Se não houver erro, a página será redirecionada — não é preciso fazer mais nada aqui.
+}
+
+/**
+ * Processa uma sessão Supabase ativa (login novo ou restauração ao recarregar).
+ * Define authUserId, armazena user info e chama launchApp().
+ */
+async function handleSupabaseSession(session) {
+  if (!session || !session.user) return;
+  const user = session.user;
+
+  authUserId = user.id;
+  console.log('[Google Auth] Sessão ativa:', user.email, '| ID:', user.id);
+
+  // Guarda e-mail + ID para pré-preencher tela de login em sessões futuras
+  setAuthUser({ email: user.email, id: user.id, createdAt: Date.now(), provider: 'google' });
+  setAuthMode('online');
+
+  await launchApp();
+}
+
 // ── Init auth UI ──────────────────────────────────────────
 function initAuth() {
   // Panel switchers
@@ -4370,9 +4469,11 @@ function initAuth() {
   document.getElementById('go-login').addEventListener('click',    () => showAuthPanel('login'));
 
   // Submit buttons
-  document.getElementById('login-btn').addEventListener('click',    handleLogin);
-  document.getElementById('register-btn').addEventListener('click', handleRegister);
-  document.getElementById('demo-btn').addEventListener('click',     handleDemo);
+  document.getElementById('login-btn').addEventListener('click',          handleLogin);
+  document.getElementById('register-btn').addEventListener('click',       handleRegister);
+  document.getElementById('demo-btn').addEventListener('click',           handleDemo);
+  document.getElementById('google-btn').addEventListener('click',         handleGoogleLogin);
+  document.getElementById('google-btn-register').addEventListener('click',handleGoogleLogin);
 
   // Enter key submits
   document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
