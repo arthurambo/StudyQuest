@@ -508,52 +508,24 @@ window.addEventListener('DOMContentLoaded', async () => {
   initAuth();          // telas de login/cadastro (inclui botões Google)
   initOfflineStatus(); // indicador online/offline + listeners de rede
 
-  // ── Supabase Google Auth ───────────────────────────────
   if (sb) {
-    // Flag: impede launchApp() ser chamado duas vezes se onAuthStateChange
-    // e getSession() detectarem a mesma sessão quase simultaneamente.
-    let _googleSessionHandled = false;
-
-    // ① Registrar onAuthStateChange ANTES de qualquer await.
-    //    Captura: SIGNED_IN após code exchange, TOKEN_REFRESHED, SIGNED_OUT.
+    // Monitora mudanças futuras: novo login Google (SIGNED_IN) e logout (SIGNED_OUT).
+    // startApp() cuida do estado INICIAL via getSession() — não depende deste listener.
     sb.auth.onAuthStateChange(async (event, session) => {
       console.log('[Supabase Auth]', event, '|', session?.user?.email ?? '—');
-      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
-        if (_googleSessionHandled) return;
-        _googleSessionHandled = true;
+      if (event === 'SIGNED_IN' && session && !authUserId) {
+        // OAuth redirect concluído APÓS startApp() ter rodado sem sessão
         await handleSupabaseSession(session);
       } else if (event === 'SIGNED_OUT') {
         authUserId = null;
       }
     });
 
-    // ② Mostrar loading ANTES de chamar getSession().
-    //    Evita que a tela de login apareça enquanto a sessão é restaurada.
-    _showAppLoading(true);
-
-    // ③ getSession() lida com AMBOS os casos em uma única chamada:
-    //    • Retorno do OAuth (URL tem ?code=) → troca o code por tokens
-    //    • Reload normal                    → lê tokens do localStorage
-    //    SEM essa chamada, o code NUNCA é trocado e o loading trava para sempre.
-    try {
-      const { data: { session }, error } = await sb.auth.getSession();
-      if (error) console.warn('[Google Auth] getSession erro:', error.message);
-
-      if (session && session.user && !_googleSessionHandled) {
-        _googleSessionHandled = true;
-        await handleSupabaseSession(session);
-        return; // app foi lançado — não prosseguir para o auth gate
-      }
-    } catch (e) {
-      console.warn('[Google Auth] Exceção em getSession:', e.message);
-    }
-
-    // ④ Sem sessão Google → esconder loading e deixar o auth gate decidir
-    _showAppLoading(false);
+    await startApp(); // ← decide tudo: sessão Google, JWT, offline ou tela de login
+    return;
   }
 
-  // ── Auth gate normal (e-mail+senha / modo offline) ─────
-  // Só chega aqui se não há sessão Google ativa.
+  // ── Sem Supabase: fluxo normal (JWT / modo offline) ────
   if (isLoggedIn()) {
     launchApp();
   } else {
@@ -4461,6 +4433,48 @@ async function handleGoogleLogin() {
     if (btnReg) { btnReg.disabled = false; btnReg.textContent = 'Criar conta com Google'; }
   }
   // Se não houver erro, a página será redirecionada — não é preciso fazer mais nada aqui.
+}
+
+/**
+ * Ponto de entrada do app quando Supabase está disponível.
+ *
+ * Chama getSession() PRIMEIRO — sem nenhuma verificação antes.
+ * getSession() resolve os dois casos em uma única chamada await:
+ *   • Reload normal com sessão existente → retorna a sessão salva
+ *   • Redirect OAuth (?code= na URL)     → troca o code e retorna a nova sessão
+ *
+ * Com sessão  → handleSupabaseSession() → launchApp()
+ * Sem sessão  → fluxo normal (JWT / modo offline / tela de login)
+ */
+async function startApp() {
+  try {
+    const { data, error } = await sb.auth.getSession();
+
+    if (error) {
+      console.warn('[startApp] getSession erro:', error.message);
+    }
+
+    const session = data?.session;
+
+    if (session && session.user) {
+      // ── Sessão Google ativa ───────────────────────────
+      console.log('[startApp] Sessão encontrada:', session.user.email);
+      await handleSupabaseSession(session);
+      return;
+    }
+
+    // ── Sem sessão Google ─────────────────────────────
+    console.log('[startApp] Sem sessão Google — verificando JWT / modo offline.');
+  } catch (e) {
+    console.warn('[startApp] Exceção em getSession:', e.message);
+  }
+
+  // Nenhuma sessão Google (ou erro) → fluxo normal
+  if (isLoggedIn()) {
+    await launchApp();
+  } else {
+    showAuthScreen();
+  }
 }
 
 /**
