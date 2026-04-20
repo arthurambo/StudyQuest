@@ -4133,53 +4133,72 @@ async function launchApp() {
   hideAuthScreen();
   _showAppLoading(true);
 
-  // 1. localStorage como base (fallback garantido para todos os modos)
-  console.log('[Auth] Carregando dados locais...');
-  loadState();
-  console.log('[App] State local carregado. Setup:', state.setup, '| Modo:', getCurrentMode());
+  if (authUserId) {
+    // ════════════════════════════════════════════════════
+    // CAMINHO A — Google Auth
+    // Supabase é a ÚNICA fonte de verdade.
+    // loadLocalData() NÃO é chamado aqui para não sobrescrever.
+    // ════════════════════════════════════════════════════
+    console.log('[App] Google Auth — carregando state do Supabase...');
 
-  // 2. Decidir entre modo online e offline
-  if (isOfflineMode()) {
-    // ── OFFLINE: usa apenas localStorage ─────────────────
-    console.log('[Auth] Modo offline ativado. Carregando dados locais.');
-    showNotification('🔴 Modo offline ativo. Dados locais carregados.', 'info');
-
-  } else if (getToken()) {
-    // ── ONLINE: tenta sincronizar com o backend ───────────
-    await loadUserDataFromAPI();
-
-    // Se 401 dentro de loadUserDataFromAPI, o token foi limpo → volta p/ login
-    if (!getToken()) {
-      _showAppLoading(false);
-      showAuthScreen();
-      showNotification('Sessão expirada. Faça login novamente.', 'warning');
-      return;
-    }
-
-    // Garante modo online após carga bem-sucedida
-    setAuthMode('online');
-    console.log('[Auth] Modo online ativo.');
-  }
-
-  // 3. Supabase: aplica state completo da nuvem se o XP da nuvem for ≥ local
-  //    Feito APÓS o backend para ter a palavra final sobre qualquer xp:0 do backend
-  if (navigator.onLine) {
-    const cloudState = await loadUserData(); // null = sem dados na nuvem (primeiro acesso)
-    if (cloudState) {
-      const cloudXP = cloudState.xp || 0;
-      const localXP = state.xp      || 0;
-      if (cloudXP >= localXP) {
-        // Nuvem tem progresso igual ou maior → usa state da nuvem, preserva userId local
+    if (navigator.onLine) {
+      const cloudState = await loadUserData();
+      if (cloudState) {
         state = { ...state, ...cloudState };
-        saveLocalData(state); // espelha no localStorage para acesso offline
-        console.log('[Supabase] State da nuvem aplicado — XP:', state.xp, '| Nível:', state.level, '| Nome:', state.name);
+        saveLocalData(state); // espelha no localStorage para fallback offline
+        console.log('[Supabase] State aplicado — XP:', state.xp,
+                    '| Nível:', state.level, '| Nome:', state.name);
       } else {
-        // Local tem mais XP (progresso feito offline) → mantém local e sobe para nuvem
-        console.log('[Supabase] State local mais recente — mantendo. Local XP:', localXP, '| Nuvem XP:', cloudXP);
-        saveUserData(state); // sincroniza o progresso local com a nuvem agora
+        // Primeiro login — sem dados na nuvem ainda. State permanece no default.
+        console.log('[Supabase] Sem dados na nuvem — novo usuário Google.');
       }
     } else {
-      console.log('[Supabase] Sem dados na nuvem ainda — usando state local.');
+      // Offline com conta Google → usa espelho local (gravado por saveLocalData)
+      loadState();
+      console.log('[App] Google Auth offline — usando espelho local.');
+    }
+
+  } else {
+    // ════════════════════════════════════════════════════
+    // CAMINHO B — JWT (backend) ou modo offline
+    // localStorage é a base; Supabase (UUID local) sincroniza por cima.
+    // ════════════════════════════════════════════════════
+    console.log('[Auth] Carregando dados locais...');
+    loadState();
+    console.log('[App] State local carregado. Setup:', state.setup,
+                '| Modo:', getCurrentMode());
+
+    if (isOfflineMode()) {
+      console.log('[Auth] Modo offline — dados locais carregados.');
+      showNotification('🔴 Modo offline ativo. Dados locais carregados.', 'info');
+
+    } else if (getToken()) {
+      await loadUserDataFromAPI();
+
+      if (!getToken()) {           // 401 → token expirado
+        _showAppLoading(false);
+        showAuthScreen();
+        showNotification('Sessão expirada. Faça login novamente.', 'warning');
+        return;
+      }
+      setAuthMode('online');
+      console.log('[Auth] Modo online (JWT) ativo.');
+    }
+
+    // Supabase UUID-local: sincroniza XP/level para usuários sem conta Google
+    if (navigator.onLine) {
+      const cloudState = await loadUserData(); // usa UUID do localStorage
+      if (cloudState) {
+        const cloudXP = cloudState.xp || 0;
+        const localXP = state.xp      || 0;
+        if (cloudXP > localXP) {
+          state = { ...state, ...cloudState };
+          saveLocalData(state);
+          console.log('[Supabase] XP da nuvem aplicado:', cloudXP);
+        } else if (localXP > cloudXP) {
+          saveUserData(state); // sobe o progresso local para a nuvem
+        }
+      }
     }
   }
 
