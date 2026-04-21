@@ -4142,15 +4142,18 @@ async function launchApp() {
     console.log('[App] Google Auth — carregando state do Supabase...');
 
     if (navigator.onLine) {
-      const cloudState = await loadUserData();
+      const cloudState = await Promise.race([
+        loadUserData(),
+        new Promise(resolve => setTimeout(() => { console.warn('[Supabase] Timeout ao carregar dados — continuando.'); resolve(null); }, 7000))
+      ]);
       if (cloudState) {
         state = { ...state, ...cloudState };
         saveLocalData(state); // espelha no localStorage para fallback offline
         console.log('[Supabase] State aplicado — XP:', state.xp,
                     '| Nível:', state.level, '| Nome:', state.name);
       } else {
-        // Primeiro login — sem dados na nuvem ainda. State permanece no default.
-        console.log('[Supabase] Sem dados na nuvem — novo usuário Google.');
+        // Primeiro login ou timeout — sem dados na nuvem ainda. State permanece no default.
+        console.log('[Supabase] Sem dados na nuvem (ou timeout) — novo usuário Google / fallback.');
       }
     } else {
       // Offline com conta Google → usa espelho local (gravado por saveLocalData)
@@ -4187,7 +4190,10 @@ async function launchApp() {
 
     // Supabase UUID-local: sincroniza XP/level para usuários sem conta Google
     if (navigator.onLine) {
-      const cloudState = await loadUserData(); // usa UUID do localStorage
+      const cloudState = await Promise.race([
+        loadUserData(), // usa UUID do localStorage
+        new Promise(resolve => setTimeout(() => { console.warn('[Supabase] Timeout ao sincronizar — continuando.'); resolve(null); }, 7000))
+      ]);
       if (cloudState) {
         const cloudXP = cloudState.xp || 0;
         const localXP = state.xp      || 0;
@@ -4502,6 +4508,7 @@ async function startApp() {
  */
 async function handleSupabaseSession(session) {
   if (!session || !session.user) return;
+  if (authUserId) return; // Guard: evita chamada dupla (onAuthStateChange + startApp)
   const user = session.user;
 
   authUserId = user.id;
