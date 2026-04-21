@@ -3971,74 +3971,49 @@ async function handleLogin() {
 
   clearAuthErrors();
 
-  // Validações locais — não chega no servidor se inválido
+  // Validações locais
   if (!email)               return showAuthError('login-error', '⚠️ Digite seu e-mail.');
   if (!email.includes('@')) return showAuthError('login-error', '⚠️ E-mail inválido.');
   if (!password)            return showAuthError('login-error', '⚠️ Digite sua senha.');
 
-  // Bloqueia novas chamadas e desabilita o botão visualmente
+  if (!sb) return showAuthError('login-error', '⚠️ Serviço indisponível. Tente o modo offline.');
+
   _loginInProgress = true;
   const btn = document.getElementById('login-btn');
   btn.disabled    = true;
   btn.textContent = 'Entrando...';
 
-  console.log('[Login] Iniciado para:', email);
-
-  // Controller externo: permite que o botão "Usar modo offline" cancele o fetch
-  const loginAbortCtrl = new AbortController();
-
-  // Após 12s sem resposta, mostra opção de entrar no modo offline
-  const offlineOfferTimer = setTimeout(() => {
-    _showOfflineModeOffer(loginAbortCtrl);
-  }, 12000);
+  console.log('[Login] Iniciado via Supabase para:', email);
 
   try {
-    const res = await apiFetch('/login', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ email, password }),
-    }, { signal: loginAbortCtrl.signal });
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
 
-    // Garante resposta JSON (servidor pode retornar HTML se rota errada)
-    let json;
-    const contentType = res.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      json = await res.json();
-    } else {
-      const text = await res.text();
-      console.error('[Login] Resposta não-JSON:', text.slice(0, 200));
-      throw new Error('Servidor retornou resposta inesperada. Verifique se o backend está rodando.');
-    }
-
-    if (!res.ok) {
-      console.warn('[Login] Erro ❌', res.status, ':', json.error);
-      showAuthError('login-error', '❌ ' + (json.error || 'E-mail ou senha incorretos.'));
+    if (error) {
+      console.warn('[Login] Erro Supabase:', error.message);
+      // Traduz as mensagens mais comuns
+      if (error.message.includes('Invalid login credentials')) {
+        showAuthError('login-error', '❌ E-mail ou senha incorretos.');
+      } else if (error.message.includes('Email not confirmed')) {
+        showAuthError('login-error', '⚠️ Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada.');
+      } else {
+        showAuthError('login-error', '❌ ' + error.message);
+      }
       return;
     }
 
     // ── Sucesso ──────────────────────────────────────────────
-    console.log('[Auth] Login online bem-sucedido:', json.user?.email);
-    setToken(json.token);
-    setAuthUser({ email: json.user.email, id: json.user.id, createdAt: Date.now() });
+    const user = data.user;
+    console.log('[Auth] Login Supabase bem-sucedido:', user.email);
+    authUserId = user.id;
+    setAuthUser({ email: user.email, id: user.id, createdAt: Date.now(), provider: 'email' });
     setAuthMode('online');
     await launchApp();
 
   } catch (err) {
-    if (err.name === 'AbortError') {
-      // Cancelado manualmente pelo usuário via botão offline → modo já ativado
-      if (isOfflineMode()) {
-        return; // launchApp() já foi chamado por activateOfflineMode
-      }
-      // Cancelado pelo timeout interno de 60s (sem ação do usuário)
-      showAuthError('login-error', '⚠️ Servidor não respondeu. Tente novamente ou use o modo offline abaixo.');
-    } else {
-      console.error('[Login] ❌ Erro de conexão:', err.message);
-      showAuthError('login-error', '⚠️ Não foi possível conectar. Verifique se o backend está rodando.');
-    }
+    console.error('[Login] ❌ Exceção:', err.message);
+    showAuthError('login-error', '⚠️ Não foi possível conectar. Verifique sua conexão e tente novamente.');
 
   } finally {
-    clearTimeout(offlineOfferTimer);
-    _removeOfflineModeOffer();
     _loginInProgress = false;
     btn.disabled    = false;
     btn.textContent = '🚀 Entrar';
@@ -4061,53 +4036,58 @@ async function handleRegister() {
 
   clearAuthErrors();
 
-  // Validações locais — não chega no servidor se inválido
+  // Validações locais
   if (!email)               return showAuthError('reg-error', '⚠️ Digite seu e-mail.');
   if (!email.includes('@')) return showAuthError('reg-error', '⚠️ E-mail inválido.');
   if (!password)            return showAuthError('reg-error', '⚠️ Crie uma senha.');
   if (password.length < 6)  return showAuthError('reg-error', '⚠️ Senha deve ter ao menos 6 caracteres.');
   if (password !== confirm)  return showAuthError('reg-error', '❌ As senhas não coincidem.');
 
+  if (!sb) return showAuthError('reg-error', '⚠️ Serviço indisponível. Tente o modo offline.');
+
   _registerInProgress = true;
   const btn = document.getElementById('register-btn');
   btn.disabled    = true;
   btn.textContent = 'Criando conta...';
 
-  console.log('[Register] Tentando criar conta para:', email);
+  console.log('[Register] Tentando criar conta via Supabase para:', email);
 
   try {
-    const res  = await apiFetch('/register', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ email, password }),
-    });
+    const { data, error } = await sb.auth.signUp({ email, password });
 
-    let json;
-    const contentType = res.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      json = await res.json();
-    } else {
-      const text = await res.text();
-      console.error('[Register] Resposta não-JSON:', text.slice(0, 200));
-      throw new Error('Servidor retornou resposta inesperada. Verifique se o backend está rodando corretamente.');
-    }
-
-    if (!res.ok) {
-      console.warn('[Register] Falha HTTP', res.status, ':', json.error);
-      showAuthError('reg-error', '❌ ' + (json.error || 'Erro ao criar conta.'));
+    if (error) {
+      console.warn('[Register] Erro Supabase:', error.message);
+      if (error.message.includes('already registered') || error.message.includes('User already registered')) {
+        showAuthError('reg-error', '❌ Este e-mail já possui uma conta. Faça login.');
+      } else {
+        showAuthError('reg-error', '❌ ' + error.message);
+      }
       return;
     }
 
     // ── Sucesso ──────────────────────────────────────────────
-    console.log('[Register] ✅ Conta criada para:', email);
-    showNotification('✅ Conta criada com sucesso! Faça login para continuar.', 'success');
-    const loginEmail = document.getElementById('login-email');
-    if (loginEmail) loginEmail.value = email;
-    showAuthPanel('login');
+    console.log('[Register] ✅ Conta criada via Supabase para:', email);
+
+    // Supabase pode exigir confirmação de e-mail dependendo das configurações
+    // Se o usuário foi criado e já tem sessão, entra direto; se não, pede confirmação
+    if (data.session) {
+      // Confirmação de e-mail desativada → entra direto
+      authUserId = data.user.id;
+      setAuthUser({ email: data.user.email, id: data.user.id, createdAt: Date.now(), provider: 'email' });
+      setAuthMode('online');
+      showNotification('✅ Conta criada com sucesso! Bem-vindo(a)!', 'success');
+      await launchApp();
+    } else {
+      // Confirmação de e-mail ativada → pede para verificar caixa de entrada
+      showNotification('✅ Conta criada! Verifique seu e-mail para confirmar antes de entrar.', 'success');
+      const loginEmail = document.getElementById('login-email');
+      if (loginEmail) loginEmail.value = email;
+      showAuthPanel('login');
+    }
 
   } catch (err) {
-    console.error('[Register] ❌ Erro de conexão:', err.message);
-    showAuthError('reg-error', '⚠️ Não foi possível conectar ao servidor. Verifique se o backend está rodando e tente novamente.');
+    console.error('[Register] ❌ Exceção:', err.message);
+    showAuthError('reg-error', '⚠️ Não foi possível criar a conta. Verifique sua conexão e tente novamente.');
 
   } finally {
     _registerInProgress = false;
