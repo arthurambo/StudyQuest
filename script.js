@@ -431,25 +431,41 @@ function loadState() {
  */
 async function loadUserData() {
   if (!sb) return null;
+  const uid = getEffectiveUserId();
+  console.log('[Supabase] loadUserData() — buscando id:', uid);
   try {
     const { data, error } = await sb
       .from('users')
       .select('*')
-      .eq('id', getEffectiveUserId())
+      .eq('id', uid)
       .single();
 
     if (error) {
-      // PGRST116 = nenhum registro ainda (primeiro acesso) — completamente normal
-      if (error.code !== 'PGRST116')
-        console.warn('[Supabase] Erro ao carregar:', error.message);
+      if (error.code === 'PGRST116') {
+        // Nenhum registro ainda (primeiro acesso) — normal
+        console.log('[Supabase] Nenhum dado na nuvem para este usuário (primeiro acesso).');
+      } else {
+        // Outro erro — pode ser RLS bloqueando ou tabela errada
+        console.warn('[Supabase] Erro ao carregar (código:', error.code, '):', error.message);
+      }
+      return null;
+    }
+
+    if (!data) {
+      console.warn('[Supabase] Query retornou vazio inesperadamente.');
       return null;
     }
 
     // `data.data` é a coluna JSONB com o state completo
-    // Fallback para o próprio row caso a coluna `data` não exista ainda
-    const savedState = (data.data && typeof data.data === 'object') ? data.data : data;
-    console.log('[Supabase] State carregado — XP:', savedState.xp, '| Nível:', savedState.level, '| Nome:', savedState.name);
-    return savedState;
+    if (data.data && typeof data.data === 'object') {
+      console.log('[Supabase] ✅ State completo carregado — XP:', data.data.xp, '| Setup:', data.data.setup, '| Nome:', data.data.name);
+      return data.data;
+    }
+
+    // Fallback: coluna `data` vazia — usa só as colunas básicas
+    console.warn('[Supabase] Coluna data vazia — retornando apenas dados básicos (XP, level, name).');
+    return { xp: data.xp, level: data.level, name: data.name, coins: data.coins };
+
   } catch (e) {
     console.warn('[Supabase] Exceção ao carregar:', e);
     return null;
@@ -465,19 +481,21 @@ async function loadUserData() {
  */
 async function saveUserData(data) {
   if (!sb) return;
+  const uid = getEffectiveUserId();
+  console.log('[Supabase] saveUserData() — salvando id:', uid);
   try {
     const { error } = await sb
       .from('users')
       .upsert({
-        id:    getEffectiveUserId(),
+        id:    uid,
         name:  data.name  || '',
         xp:    data.xp    || 0,
         level: data.level || 1,
         coins: data.coins || 0,
         data:  data,          // state completo como JSONB
       });
-    if (error) console.warn('[Supabase] Erro ao salvar:', error.message);
-    else       console.log('[Supabase] State salvo — XP:', data.xp, '| Nível:', data.level, '| Nome:', data.name);
+    if (error) console.warn('[Supabase] ❌ Erro ao salvar (código:', error.code, '):', error.message);
+    else       console.log('[Supabase] ✅ State salvo — XP:', data.xp, '| Nível:', data.level, '| Nome:', data.name);
   } catch (e) {
     console.warn('[Supabase] Exceção ao salvar:', e);
   }
