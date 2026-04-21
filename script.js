@@ -32,7 +32,7 @@ function getEffectiveUserId() {
 const sb = (window.supabase && window.supabase.createClient)
   ? window.supabase.createClient(
       'https://gwenrlqhxzcnwlmvwszj.supabase.co',
-      'sb_publishable_e2WmFQsUAZKsA-BmdOMshw_a8m-lQCG'
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd3ZW5ybHFoeHpjbndsbXZ3c3pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0NTA0NjgsImV4cCI6MjA5MjAyNjQ2OH0.3sBTMvxu1Z7ASBPHrDrBWfUUy6Ruyzfo9PbKOpzFUe8'
     )
   : null;
 
@@ -513,7 +513,16 @@ window.addEventListener('DOMContentLoaded', async () => {
     // startApp() cuida do estado INICIAL via getSession() — não depende deste listener.
     sb.auth.onAuthStateChange(async (event, session) => {
       console.log('[Supabase Auth]', event, '|', session?.user?.email ?? '—');
-      if (event === 'SIGNED_IN' && session && !authUserId) {
+
+      if (event === 'INITIAL_SESSION') {
+        // Sessão restaurada do localStorage ao recarregar a página.
+        // startApp() + getSession() também cobre este caso, mas este listener
+        // serve como garantia caso getSession() falhe ou atrase.
+        if (session && session.user && !authUserId) {
+          console.log('[Supabase Auth] INITIAL_SESSION detectada — restaurando sessão...');
+          await handleSupabaseSession(session);
+        }
+      } else if (event === 'SIGNED_IN' && session && !authUserId) {
         // OAuth redirect concluído APÓS startApp() ter rodado sem sessão
         await handleSupabaseSession(session);
       } else if (event === 'SIGNED_OUT') {
