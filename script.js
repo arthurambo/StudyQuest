@@ -613,6 +613,14 @@ function initNavigation() {
   document.getElementById('menu-btn').addEventListener('click', toggleSidebar);
   document.getElementById('sidebar-overlay').addEventListener('click', closeSidebar);
 
+  // Bottom nav: botões de página
+  document.querySelectorAll('.bottom-nav-item[data-page]').forEach(el => {
+    el.addEventListener('click', () => navigateTo(el.dataset.page));
+  });
+  // Bottom nav: botão "Mais" abre a sidebar
+  const moreBtn = document.getElementById('bottom-nav-more');
+  if (moreBtn) moreBtn.addEventListener('click', toggleSidebar);
+
   // Botões de página
   document.getElementById('add-subject-btn').addEventListener('click', () => openModal('modal-subject'));
   document.getElementById('add-task-btn').addEventListener('click', () => {
@@ -648,6 +656,10 @@ function navigateTo(page) {
   });
   document.querySelectorAll('.page').forEach(el => {
     el.classList.toggle('active', el.id === `page-${page}`);
+  });
+  // Sincroniza bottom nav
+  document.querySelectorAll('.bottom-nav-item[data-page]').forEach(el => {
+    el.classList.toggle('active', el.dataset.page === page);
   });
   closeSidebar();
 

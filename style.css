@@ -1433,22 +1433,143 @@ input[type="range"] {
 .empty-state .empty-icon { font-size: 3rem; margin-bottom: 0.75rem; display: block; }
 .empty-state p { font-weight: 600; font-size: 0.95rem; }
 
+/* === BOTTOM NAV (mobile) === */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 95;
+  background: var(--bg-sidebar);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 0.5rem 0.25rem 0.4rem;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: 'Nunito', sans-serif;
+  cursor: pointer;
+  transition: var(--transition);
+  min-height: 56px;
+  gap: 2px;
+}
+
+.bottom-nav-item.active {
+  color: var(--primary-light);
+}
+
+.bottom-nav-item .bn-icon {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.bottom-nav-item .bn-label {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
 /* === RESPONSIVE === */
 @media (max-width: 768px) {
+  /* Topbar */
   .topbar { display: flex; }
-  .sidebar { transform: translateX(-100%); top: 0; z-index: 200; }
+  .topbar-stats { gap: 0.75rem; font-size: 0.85rem; }
+
+  /* Sidebar */
+  .sidebar {
+    transform: translateX(-100%);
+    top: 0; z-index: 200;
+    width: 280px;
+  }
   .sidebar.open { transform: translateX(0); }
-  .main-content { margin-left: 0; padding: 5rem 1rem 2rem; }
-  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+
+  /* Main content: espaço para topbar + bottom nav */
+  .main-content {
+    margin-left: 0;
+    padding: 4.5rem 0.85rem 5.5rem;
+  }
+
+  /* Bottom nav visível */
+  .bottom-nav { display: flex; }
+
+  /* Grids */
+  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 0.65rem; }
   .subjects-grid { grid-template-columns: 1fr; }
   .achievements-grid { grid-template-columns: repeat(2, 1fr); }
   .shop-grid { grid-template-columns: 1fr; }
+
+  /* Cards */
+  .card { padding: 1rem; }
+  .stat-card { padding: 1rem; }
+
+  /* Page header */
+  .page-header { margin-bottom: 1rem; }
+  .page-header h1 { font-size: 1.4rem; }
+
+  /* Botões — touch target mínimo 44px */
+  .btn-primary, .btn-secondary, .btn-danger {
+    min-height: 44px;
+    font-size: 0.9rem;
+  }
+  .btn-huge { min-height: 52px; font-size: 1rem; }
+
+  /* Inputs */
+  input, select, textarea {
+    font-size: 16px !important; /* evita zoom automático no iOS */
+    min-height: 44px;
+  }
+
+  /* Modais — sobem da parte inferior como bottom sheet */
+  .modal-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .modal {
+    border-radius: var(--radius) var(--radius) 0 0;
+    width: 100%;
+    max-width: 100%;
+    max-height: 90dvh;
+    overflow-y: auto;
+    padding: 1.5rem 1rem 2rem;
+  }
+
+  /* Pomodoro */
+  .pomodoro-timer { font-size: 3rem; }
+
+  /* Tasks */
+  .task-item { padding: 0.85rem 1rem; }
+
+  /* Topbar stats menor */
+  .topbar-stats span { font-size: 0.8rem; }
 }
 
 @media (max-width: 480px) {
-  .stats-grid { grid-template-columns: 1fr 1fr; }
-  .modal { padding: 1.5rem; }
-  .avatar-grid, .emoji-grid { grid-template-columns: repeat(4, 1fr); }
+  .stats-grid { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .stat-card { padding: 0.85rem 0.75rem; }
+  .stat-value { font-size: 1.3rem; }
+
+  .modal { padding: 1.25rem 0.9rem 2rem; }
+  .avatar-grid, .emoji-grid { grid-template-columns: repeat(5, 1fr); }
+
+  /* Auth tela */
+  .auth-card { padding: 1.25rem; }
+  .auth-logo h1 { font-size: 1.75rem; }
+  .auth-logo p { font-size: 0.8rem; }
+  .btn-huge { padding: 0.85rem; }
+
+  /* Page header compacto */
+  .page-header h1 { font-size: 1.25rem; }
+  .page-subtitle { font-size: 0.8rem; }
+
+  /* Esconde alguns textos da topbar em telas muito pequenas */
+  .topbar-logo { font-size: 1rem; }
 }
 
 /* === SCROLLBAR CUSTOM === */
