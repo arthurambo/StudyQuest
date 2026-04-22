@@ -6,6 +6,62 @@
 'use strict';
 
 // ============================================================
+// PWA — Service Worker + Botão de instalação
+// ============================================================
+
+// Registra o service worker assim que o script carrega
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js')
+      .then(reg => console.log('[SW] Registrado com sucesso. Scope:', reg.scope))
+      .catch(err => console.warn('[SW] Falha ao registrar:', err));
+  });
+}
+
+// Armazena o evento beforeinstallprompt para usar depois
+let _pwaInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();   // impede o mini-infobar automático do Chrome
+  _pwaInstallPrompt = e;
+  _showInstallButtons();
+  console.log('[PWA] App pode ser instalado — botão exibido.');
+});
+
+// Remove os botões se o usuário já instalou
+window.addEventListener('appinstalled', () => {
+  _pwaInstallPrompt = null;
+  _hideInstallButtons();
+  console.log('[PWA] App instalado com sucesso!');
+  showNotification('✅ StudyQuest instalado! Procure o ícone na tela inicial.', 'success');
+});
+
+function _showInstallButtons() {
+  const topbar   = document.getElementById('install-btn-topbar');
+  const section  = document.getElementById('pwa-install-section');
+  if (topbar)  topbar.style.display  = '';
+  if (section) section.style.display = '';
+}
+
+function _hideInstallButtons() {
+  const topbar   = document.getElementById('install-btn-topbar');
+  const section  = document.getElementById('pwa-install-section');
+  if (topbar)  topbar.style.display  = 'none';
+  if (section) section.style.display = 'none';
+}
+
+async function triggerPWAInstall() {
+  if (!_pwaInstallPrompt) return;
+  _pwaInstallPrompt.prompt();
+  const { outcome } = await _pwaInstallPrompt.userChoice;
+  console.log('[PWA] Resposta do usuário:', outcome);
+  if (outcome === 'accepted') {
+    _pwaInstallPrompt = null;
+    _hideInstallButtons();
+  }
+}
+
+// ============================================================
 // SUPABASE — ID único do usuário + cliente (topo do script)
 // ============================================================
 
@@ -533,6 +589,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   initEditProfile();
   initAuth();          // telas de login/cadastro (inclui botões Google)
   initOfflineStatus(); // indicador online/offline + listeners de rede
+  initPWAButtons();    // botões de instalação do PWA
 
   if (sb) {
     // onAuthStateChange: APENAS para detectar logout.
@@ -3729,6 +3786,14 @@ async function flushOfflineQueue() {
     setOfflineQueue(queue.slice(failedAt)); // mantém o que não foi enviado
     console.warn('[Offline] Sincronização parcial.', queue.slice(failedAt).length, 'item(s) restante(s).');
   }
+}
+
+// ── 5. Botões de instalação PWA ────────────────────────────────────────────────
+function initPWAButtons() {
+  const btnTopbar   = document.getElementById('install-btn-topbar');
+  const btnSettings = document.getElementById('install-btn-settings');
+  if (btnTopbar)   btnTopbar.addEventListener('click',   triggerPWAInstall);
+  if (btnSettings) btnSettings.addEventListener('click', triggerPWAInstall);
 }
 
 // ── 4. Indicador visual de status online/offline ──────────────────────────────

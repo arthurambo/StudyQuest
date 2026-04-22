@@ -1,0 +1,44 @@
+{
+  "name": "StudyQuest",
+  "short_name": "StudyQuest",
+  "description": "Transforme seus estudos em aventura — RPG de produtividade",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0d0f1a",
+  "theme_color": "#7c3aed",
+  "lang": "pt-BR",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Tarefas",
+      "short_name": "Tarefas",
+      "description": "Ver minhas tarefas",
+      "url": "./#tasks",
+      "icons": [{ "src": "./icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Missões",
+      "short_name": "Missões",
+      "description": "Ver missões do dia",
+      "url": "./#missions",
+      "icons": [{ "src": "./icon.svg", "sizes": "any" }]
+    }
+  ]
+}

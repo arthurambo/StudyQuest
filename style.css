@@ -367,6 +367,20 @@ select option { background: var(--bg-card); }
   font-size: 0.9rem;
 }
 
+.install-btn-topbar {
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 1.1rem;
+  padding: 5px 8px;
+  cursor: pointer;
+  line-height: 1;
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+.install-btn-topbar:active { transform: scale(0.93); }
+
 .sidebar-overlay {
   display: none;
   position: fixed;

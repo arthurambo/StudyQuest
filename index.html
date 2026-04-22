@@ -4,6 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>StudyQuest — Transforme seus estudos em aventura</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#7c3aed">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="StudyQuest">
+  <link rel="apple-touch-icon" href="./icon.svg">
+
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -201,6 +211,7 @@
       <span>🔥 <span id="top-streak">0</span></span>
       <span>💰 <span id="top-coins">0</span></span>
     </div>
+    <button class="install-btn-topbar" id="install-btn-topbar" style="display:none" title="Instalar app">📲</button>
   </div>
 
   <!-- CONTEÚDO PRINCIPAL -->
@@ -709,6 +720,20 @@
             <button class="btn-settings-action" id="import-btn">📥 Importar</button>
           </div>
           <input type="file" id="import-file" accept=".json" style="display:none">
+        </div>
+      </div>
+
+      <!-- SEÇÃO: INSTALAR APP (PWA) -->
+      <div class="settings-section" id="pwa-install-section" style="display:none">
+        <div class="settings-section-title">📲 App</div>
+        <div class="settings-card">
+          <div class="settings-row">
+            <div class="settings-row-info">
+              <span class="settings-row-label">📲 Instalar StudyQuest</span>
+              <span class="settings-row-desc">Adicionar à tela inicial e usar sem navegador</span>
+            </div>
+            <button class="btn-settings-action" id="install-btn-settings">Instalar</button>
+          </div>
         </div>
       </div>
 
