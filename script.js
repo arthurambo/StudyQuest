@@ -481,6 +481,14 @@ async function loadUserData() {
  */
 async function saveUserData(data) {
   if (!sb) return;
+
+  // Proteção anti-sobrescrita: nunca salva um state vazio/padrão por cima de dados reais
+  // Um state válido tem nome preenchido OU setup já feito OU XP > 0
+  if (!data.name && !data.setup && (!data.xp || data.xp === 0)) {
+    console.warn('[Supabase] ⚠️ Ignorando save de state vazio/padrão — protegendo dados na nuvem.');
+    return;
+  }
+
   const uid = getEffectiveUserId();
   console.log('[Supabase] saveUserData() — salvando id:', uid);
   try {
