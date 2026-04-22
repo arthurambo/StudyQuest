@@ -535,28 +535,17 @@ window.addEventListener('DOMContentLoaded', async () => {
   initOfflineStatus(); // indicador online/offline + listeners de rede
 
   if (sb) {
-    // Monitora mudanças futuras: novo login Google (SIGNED_IN) e logout (SIGNED_OUT).
-    // startApp() cuida do estado INICIAL via getSession() — não depende deste listener.
-    sb.auth.onAuthStateChange(async (event, session) => {
+    // onAuthStateChange: APENAS para detectar logout.
+    // O lançamento do app é feito EXCLUSIVAMENTE por startApp() via getSession().
+    // Isso evita a corrida entre os dois caminhos que causava dupla chamada de launchApp().
+    sb.auth.onAuthStateChange((event, session) => {
       console.log('[Supabase Auth]', event, '|', session?.user?.email ?? '—');
-
-      if (event === 'INITIAL_SESSION') {
-        // Sessão restaurada do localStorage ao recarregar a página.
-        // startApp() + getSession() também cobre este caso, mas este listener
-        // serve como garantia caso getSession() falhe ou atrase.
-        if (session && session.user && !authUserId) {
-          console.log('[Supabase Auth] INITIAL_SESSION detectada — restaurando sessão...');
-          await handleSupabaseSession(session);
-        }
-      } else if (event === 'SIGNED_IN' && session && !authUserId) {
-        // OAuth redirect concluído APÓS startApp() ter rodado sem sessão
-        await handleSupabaseSession(session);
-      } else if (event === 'SIGNED_OUT') {
+      if (event === 'SIGNED_OUT') {
         authUserId = null;
       }
     });
 
-    await startApp(); // ← decide tudo: sessão Google, JWT, offline ou tela de login
+    await startApp();
     return;
   }
 
@@ -4113,11 +4102,23 @@ async function handleRegister() {
       showNotification('✅ Conta criada com sucesso! Bem-vindo(a)!', 'success');
       await launchApp();
     } else {
-      // Confirmação de e-mail ativada → pede para verificar caixa de entrada
-      showNotification('✅ Conta criada! Verifique seu e-mail para confirmar antes de entrar.', 'success');
-      const loginEmail = document.getElementById('login-email');
-      if (loginEmail) loginEmail.value = email;
-      showAuthPanel('login');
+      // Confirmação de e-mail ativada → tenta login direto mesmo assim
+      // (funciona se o Supabase não exigir confirmação para este projeto)
+      console.log('[Register] Sem sessão automática — tentando login direto...');
+      const { data: loginData, error: loginError } = await sb.auth.signInWithPassword({ email, password });
+      if (!loginError && loginData?.session) {
+        authUserId = loginData.user.id;
+        setAuthUser({ email: loginData.user.email, id: loginData.user.id, createdAt: Date.now(), provider: 'email' });
+        setAuthMode('online');
+        showNotification('✅ Conta criada com sucesso! Bem-vindo(a)!', 'success');
+        await launchApp();
+      } else {
+        // Confirmação de e-mail realmente necessária
+        showNotification('✅ Conta criada! Confirme seu e-mail para entrar.', 'success');
+        const loginEmail = document.getElementById('login-email');
+        if (loginEmail) loginEmail.value = email;
+        showAuthPanel('login');
+      }
     }
 
   } catch (err) {
@@ -4487,6 +4488,7 @@ async function handleGoogleLogin() {
  * Sem sessão  → fluxo normal (JWT / modo offline / tela de login)
  */
 async function startApp() {
+  console.log('[startApp] Iniciando...');
   try {
     const { data, error } = await sb.auth.getSession();
 
@@ -4497,20 +4499,18 @@ async function startApp() {
     const session = data?.session;
 
     if (session && session.user) {
-      // ── Sessão Google ativa ───────────────────────────
-      console.log('[startApp] Sessão encontrada:', session.user.email);
+      console.log('[startApp] Sessão encontrada:', session.user.email, '| provider:', session.user.app_metadata?.provider);
       await handleSupabaseSession(session);
       return;
     }
 
-    // ── Sem sessão Google ─────────────────────────────
-    console.log('[startApp] Sem sessão Google — verificando JWT / modo offline.');
+    console.log('[startApp] Sem sessão Supabase.');
   } catch (e) {
     console.warn('[startApp] Exceção em getSession:', e.message);
   }
 
-  // Nenhuma sessão Google (ou erro) → fluxo normal
-  if (isLoggedIn()) {
+  // Sem sessão → modo offline/demo ou tela de login
+  if (isOfflineMode()) {
     await launchApp();
   } else {
     showAuthScreen();
@@ -4522,15 +4522,16 @@ async function startApp() {
  * Define authUserId, armazena user info e chama launchApp().
  */
 async function handleSupabaseSession(session) {
-  if (!session || !session.user) return;
-  if (authUserId) return; // Guard: evita chamada dupla (onAuthStateChange + startApp)
-  const user = session.user;
+  if (!session?.user) return;
+  if (authUserId) return; // Guard: evita chamada dupla
+
+  const user     = session.user;
+  const provider = user.app_metadata?.provider || 'email';
 
   authUserId = user.id;
-  console.log('[Google Auth] Sessão ativa:', user.email, '| ID:', user.id);
+  console.log('[Auth] Sessão ativa:', user.email, '| provider:', provider, '| ID:', user.id);
 
-  // Guarda e-mail + ID para pré-preencher tela de login em sessões futuras
-  setAuthUser({ email: user.email, id: user.id, createdAt: Date.now(), provider: 'google' });
+  setAuthUser({ email: user.email, id: user.id, createdAt: Date.now(), provider });
   setAuthMode('online');
 
   await launchApp();
