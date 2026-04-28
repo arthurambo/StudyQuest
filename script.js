@@ -39,15 +39,23 @@ window.addEventListener('appinstalled', () => {
 function _showInstallButtons() {
   const topbar   = document.getElementById('install-btn-topbar');
   const section  = document.getElementById('pwa-install-section');
-  if (topbar)  topbar.style.display  = '';
-  if (section) section.style.display = '';
+  const login    = document.getElementById('install-btn-login');
+  const register = document.getElementById('install-btn-register');
+  if (topbar)    topbar.style.display   = '';
+  if (section)   section.style.display  = '';
+  if (login)     login.style.display    = '';
+  if (register)  register.style.display = '';
 }
 
 function _hideInstallButtons() {
   const topbar   = document.getElementById('install-btn-topbar');
   const section  = document.getElementById('pwa-install-section');
-  if (topbar)  topbar.style.display  = 'none';
-  if (section) section.style.display = 'none';
+  const login    = document.getElementById('install-btn-login');
+  const register = document.getElementById('install-btn-register');
+  if (topbar)    topbar.style.display   = 'none';
+  if (section)   section.style.display  = 'none';
+  if (login)     login.style.display    = 'none';
+  if (register)  register.style.display = 'none';
 }
 
 async function triggerPWAInstall() {
@@ -3792,8 +3800,12 @@ async function flushOfflineQueue() {
 function initPWAButtons() {
   const btnTopbar   = document.getElementById('install-btn-topbar');
   const btnSettings = document.getElementById('install-btn-settings');
+  const btnLogin    = document.getElementById('install-btn-login');
+  const btnRegister = document.getElementById('install-btn-register');
   if (btnTopbar)   btnTopbar.addEventListener('click',   triggerPWAInstall);
   if (btnSettings) btnSettings.addEventListener('click', triggerPWAInstall);
+  if (btnLogin)    btnLogin.addEventListener('click',    triggerPWAInstall);
+  if (btnRegister) btnRegister.addEventListener('click', triggerPWAInstall);
 }
 
 // ── 4. Indicador visual de status online/offline ──────────────────────────────
