@@ -5131,53 +5131,113 @@ function renderProfilePage() {
 }
 
 // ============================================================
-// AMIGOS
+// AMIGOS — usa tabela `friends` (user_id, friend_id, created_at)
+//           e busca dados de perfil na tabela `users`
 // ============================================================
 
-async function loadFriendships() {
-  if (!sb || !authUserId) return [];
-  try {
-    const { data } = await sb.from('friendships').select('*').or(`requester_id.eq.${authUserId},addressee_id.eq.${authUserId}`);
-    return data || [];
-  } catch (e) { return []; }
+/** Extrai dados públicos de uma linha da tabela users */
+function _parseUserRow(row) {
+  if (!row) return null;
+  return {
+    id:              row.id,
+    name:            row.name            || 'Herói',
+    level:           row.level           || 1,
+    xp:              row.xp              || 0,
+    avatar:          row.data?.avatar    || '🧙',
+    favoriteSubject: row.data?.favoriteSubject || '',
+    achievements:    row.data?.achievements    || [],
+  };
 }
 
-async function loadProfileById(userId) {
-  if (!sb) return null;
+/** Busca dados de um único usuário pela tabela users */
+async function getUserById(userId) {
+  if (!sb || !userId) return null;
   try {
-    const { data } = await sb.from('profiles').select('*').eq('id', userId).single();
-    return data || null;
+    const { data } = await sb.from('users').select('id, name, xp, level, data').eq('id', userId).single();
+    return _parseUserRow(data);
   } catch (e) { return null; }
 }
 
-async function searchProfilesByName(query) {
+/** Busca usuários por nome na tabela users */
+async function searchUsersByName(query) {
   if (!sb || !query.trim()) return [];
   try {
-    const { data } = await sb.from('profiles').select('*').ilike('name', `%${query.trim()}%`).neq('id', authUserId || '').limit(10);
-    return data || [];
+    const { data } = await sb
+      .from('users')
+      .select('id, name, xp, level, data')
+      .ilike('name', `%${query.trim()}%`)
+      .neq('id', authUserId || '')
+      .limit(10);
+    return (data || []).map(_parseUserRow).filter(Boolean);
   } catch (e) { return []; }
 }
 
-async function sendFriendRequest(addresseeId) {
+/** Lista os IDs dos amigos do usuário atual */
+async function listFriendIds() {
+  if (!sb || !authUserId) return [];
+  try {
+    const { data } = await sb
+      .from('friends')
+      .select('friend_id')
+      .eq('user_id', authUserId);
+    return (data || []).map(r => r.friend_id);
+  } catch (e) { return []; }
+}
+
+/** Lista amigos com dados de perfil completos */
+async function listFriendsWithData() {
+  if (!sb || !authUserId) return [];
+  try {
+    const ids = await listFriendIds();
+    if (!ids.length) return [];
+    const { data } = await sb
+      .from('users')
+      .select('id, name, xp, level, data')
+      .in('id', ids);
+    return (data || []).map(_parseUserRow).filter(Boolean);
+  } catch (e) { return []; }
+}
+
+/** Adiciona amigo: insere (user_id=eu, friend_id=alvo) na tabela friends */
+async function addFriend(friendId) {
   if (!sb || !authUserId) return false;
   try {
-    const { error } = await sb.from('friendships').insert({ requester_id: authUserId, addressee_id: addresseeId, status: 'pending' });
+    const { error } = await sb.from('friends').insert({ user_id: authUserId, friend_id: friendId });
     return !error;
   } catch (e) { return false; }
 }
 
-async function respondFriendRequest(friendshipId, accept) {
+/** Remove amigo: deleta o registro onde user_id=eu e friend_id=alvo */
+async function removeFriend(friendId) {
   if (!sb || !authUserId) return;
-  if (accept) {
-    await sb.from('friendships').update({ status: 'accepted' }).eq('id', friendshipId);
-  } else {
-    await sb.from('friendships').delete().eq('id', friendshipId);
-  }
+  try {
+    await sb.from('friends').delete().eq('user_id', authUserId).eq('friend_id', friendId);
+  } catch (e) {}
 }
 
-async function removeFriend(friendshipId) {
-  if (!sb || !authUserId) return;
-  await sb.from('friendships').delete().eq('id', friendshipId);
+/** Verifica se já é amigo */
+async function isFriend(friendId) {
+  if (!sb || !authUserId) return false;
+  try {
+    const { data } = await sb.from('friends').select('friend_id').eq('user_id', authUserId).eq('friend_id', friendId).single();
+    return !!data;
+  } catch (e) { return false; }
+}
+
+// ── Render ────────────────────────────────────────────────────
+
+function _friendCard(user) {
+  return `<div class="friend-card" onclick="openFriendProfile('${user.id}')">
+    <div class="friend-avatar">${user.avatar}</div>
+    <div class="friend-info">
+      <div class="friend-name">${escHtml(user.name)}</div>
+      <div class="friend-level">⚔️ Nível ${user.level} · ✨ ${user.xp} XP</div>
+      ${user.favoriteSubject ? `<div class="friend-fav">❤️ ${escHtml(user.favoriteSubject)}</div>` : ''}
+    </div>
+    <button class="btn-danger-sm"
+      onclick="event.stopPropagation(); confirmRemoveFriend('${user.id}')"
+      title="Remover amigo">✕</button>
+  </div>`;
 }
 
 async function renderFriendsPage() {
@@ -5185,91 +5245,34 @@ async function renderFriendsPage() {
   if (!container) return;
 
   if (!authUserId) {
-    container.innerHTML = '<div class="social-auth-wall"><div class="social-auth-icon">👥</div><p>Faça login para adicionar amigos e ver seus perfis.</p><button class="btn-primary" onclick="showAuthScreen()">Fazer Login</button></div>';
+    container.innerHTML = `<div class="social-auth-wall">
+      <div class="social-auth-icon">👥</div>
+      <p>Faça login para adicionar amigos e ver seus perfis.</p>
+      <button class="btn-primary" onclick="showAuthScreen()">Fazer Login</button>
+    </div>`;
     return;
   }
 
   container.innerHTML = '<div class="social-loading">Carregando amigos...</div>';
-
-  const friendships = await loadFriendships();
-  const accepted  = friendships.filter(f => f.status === 'accepted');
-  const incoming  = friendships.filter(f => f.status === 'pending' && f.addressee_id === authUserId);
-  const outgoing  = friendships.filter(f => f.status === 'pending' && f.requester_id === authUserId);
-
-  // Load profiles for all
-  const friendIds = accepted.map(f => f.requester_id === authUserId ? f.addressee_id : f.requester_id);
-  const incomingIds = incoming.map(f => f.requester_id);
-
-  const profileCache = {};
-  const idsToLoad = [...new Set([...friendIds, ...incomingIds])];
-  if (idsToLoad.length && sb) {
-    try {
-      const { data } = await sb.from('profiles').select('*').in('id', idsToLoad);
-      (data || []).forEach(p => { profileCache[p.id] = p; });
-    } catch (e) {}
-  }
-
-  const friendCard = (f, profile) => {
-    if (!profile) return '';
-    const fid = f.id;
-    return `<div class="friend-card" onclick="openFriendProfile('${profile.id}')">
-      <div class="friend-avatar">${profile.avatar || '🧙'}</div>
-      <div class="friend-info">
-        <div class="friend-name">${escHtml(profile.name)}</div>
-        <div class="friend-level">⚔️ Nível ${profile.level || 1} · ✨ ${profile.total_xp || 0} XP</div>
-        ${profile.favorite_subject ? `<div class="friend-fav">❤️ ${escHtml(profile.favorite_subject)}</div>` : ''}
-      </div>
-      <button class="btn-danger-sm" onclick="event.stopPropagation(); confirmRemoveFriend('${fid}')" title="Remover amigo">✕</button>
-    </div>`;
-  };
+  const friends = await listFriendsWithData();
 
   let html = `
     <div class="page-header"><h1>👥 Amigos</h1></div>
     <div class="friends-search-section">
-      <p class="friends-search-hint">Digite o nome de um amigo e clique em Buscar para adicionar.</p>
+      <p class="friends-search-hint">Digite o nome de um usuário para encontrá-lo e adicionar como amigo.</p>
       <div class="friends-search-bar">
         <input type="text" id="friend-search-input" placeholder="🔍 Nome do usuário..." autocomplete="off">
         <button class="btn-primary" id="friend-search-btn">Buscar</button>
       </div>
       <div id="friend-search-results"></div>
     </div>
+    <div class="social-section-title">👥 Meus Amigos (${friends.length})</div>
   `;
 
-  if (incoming.length) {
-    html += `<div class="social-section-title">📨 Solicitações recebidas (${incoming.length})</div>`;
-    html += incoming.map(f => {
-      const p = profileCache[f.requester_id];
-      if (!p) return '';
-      return `<div class="friend-card pending">
-        <div class="friend-avatar">${p.avatar || '🧙'}</div>
-        <div class="friend-info">
-          <div class="friend-name">${escHtml(p.name)}</div>
-          <div class="friend-level">⚔️ Nível ${p.level || 1}</div>
-        </div>
-        <div class="friend-req-btns">
-          <button class="btn-accept" onclick="handleFriendResponse('${f.id}', true)">✓</button>
-          <button class="btn-reject" onclick="handleFriendResponse('${f.id}', false)">✕</button>
-        </div>
-      </div>`;
-    }).join('');
-  }
-
-  if (accepted.length) {
-    html += `<div class="social-section-title">👥 Meus Amigos (${accepted.length})</div>`;
-    html += accepted.map(f => {
-      const id = f.requester_id === authUserId ? f.addressee_id : f.requester_id;
-      return friendCard(f, profileCache[id]);
-    }).join('');
+  if (friends.length) {
+    html += friends.map(_friendCard).join('');
   } else {
-    html += '<div class="social-empty">Sem amigos ainda. Busque pelo nome acima! 😊</div>';
-  }
-
-  if (outgoing.length) {
-    html += `<div class="social-section-title">📤 Solicitações enviadas (${outgoing.length})</div>`;
-    html += outgoing.map(f => `<div class="friend-card outgoing">
-      <div class="friend-info"><div class="friend-name">Aguardando resposta...</div></div>
-      <button class="btn-danger-sm" onclick="removeFriend('${f.id}').then(renderFriendsPage)">Cancelar</button>
-    </div>`).join('');
+    html += '<div class="social-empty">Sem amigos ainda. Busque pelo nome acima e clique em "+ Adicionar"! 😊</div>';
   }
 
   container.innerHTML = html;
@@ -5284,74 +5287,77 @@ async function doFriendSearch() {
   const query = document.getElementById('friend-search-input')?.value || '';
   const resultsDiv = document.getElementById('friend-search-results');
   if (!resultsDiv) return;
-  if (!query.trim()) {
-    resultsDiv.innerHTML = '';
-    return;
-  }
+  if (!query.trim()) { resultsDiv.innerHTML = ''; return; }
+
   resultsDiv.innerHTML = '<div class="social-loading">Buscando...</div>';
 
-  const results = await searchProfilesByName(query);
+  const results = await searchUsersByName(query);
   if (!results.length) {
     resultsDiv.innerHTML = '<div class="social-empty">Nenhum usuário encontrado.</div>';
     return;
   }
 
-  // Check existing friendships to avoid duplicates
-  const existing = await loadFriendships();
-  const existingIds = existing.map(f => f.requester_id === authUserId ? f.addressee_id : f.requester_id);
+  const myFriendIds = await listFriendIds();
 
-  resultsDiv.innerHTML = results.map(p => {
-    const isFriend = existingIds.includes(p.id);
-    const btnHtml = isFriend
-      ? '<span class="friend-tag">Já amigos ✓</span>'
-      : `<button class="btn-add-friend" onclick="handleAddFriend('${p.id}', this)">+ Adicionar</button>`;
+  resultsDiv.innerHTML = results.map(u => {
+    const already = myFriendIds.includes(u.id);
+    const btn = already
+      ? '<span class="friend-tag">Já é amigo ✓</span>'
+      : `<button class="btn-add-friend" onclick="handleAddFriend('${u.id}', this)">+ Adicionar</button>`;
     return `<div class="friend-card search-result">
-      <div class="friend-avatar">${p.avatar || '🧙'}</div>
+      <div class="friend-avatar">${u.avatar}</div>
       <div class="friend-info">
-        <div class="friend-name">${escHtml(p.name)}</div>
-        <div class="friend-level">⚔️ Nível ${p.level || 1} · ✨ ${p.total_xp || 0} XP</div>
+        <div class="friend-name">${escHtml(u.name)}</div>
+        <div class="friend-level">⚔️ Nível ${u.level} · ✨ ${u.xp} XP</div>
+        ${u.favoriteSubject ? `<div class="friend-fav">❤️ ${escHtml(u.favoriteSubject)}</div>` : ''}
       </div>
-      ${btnHtml}
+      ${btn}
     </div>`;
   }).join('');
 }
 
-async function handleAddFriend(addresseeId, btn) {
+async function handleAddFriend(friendId, btn) {
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
-  const ok = await sendFriendRequest(addresseeId);
-  if (btn) btn.textContent = ok ? '✅ Enviado!' : '❌ Erro';
-  if (ok) showNotification('✅ Solicitação enviada!', 'success');
+  const ok = await addFriend(friendId);
+  if (btn) btn.textContent = ok ? '✅ Adicionado!' : '❌ Erro';
+  if (ok) {
+    showNotification('✅ Amigo adicionado!', 'success');
+    // Atualiza a lista de amigos em background sem rerender a busca
+    const cont = document.getElementById('page-friends');
+    const section = cont?.querySelector('.social-section-title');
+    if (section) {
+      listFriendsWithData().then(friends => {
+        if (section) section.textContent = `👥 Meus Amigos (${friends.length})`;
+      });
+    }
+  } else {
+    showNotification('Erro ao adicionar amigo. Tente novamente.', 'error');
+  }
 }
 
-async function handleFriendResponse(friendshipId, accept) {
-  await respondFriendRequest(friendshipId, accept);
-  showNotification(accept ? '✅ Amizade aceita!' : 'Solicitação recusada.', accept ? 'success' : 'info');
-  renderFriendsPage();
-}
-
-async function confirmRemoveFriend(friendshipId) {
+async function confirmRemoveFriend(friendId) {
   if (!confirm('Remover este amigo?')) return;
-  await removeFriend(friendshipId);
+  await removeFriend(friendId);
   showNotification('Amigo removido.', 'info');
   renderFriendsPage();
 }
 
 async function openFriendProfile(userId) {
-  const profile = await loadProfileById(userId);
-  if (!profile) return showNotification('Perfil não encontrado.', 'warning');
+  const user = await getUserById(userId);
+  if (!user) return showNotification('Perfil não encontrado.', 'warning');
 
-  const achs = ((profile.achievements) || []).map(id => {
+  const achs = (user.achievements || []).map(id => {
     const def = ACHIEVEMENTS_DEF.find(a => a.id === id);
     return def ? `<div class="profile-ach-badge" title="${def.name}">${def.icon}</div>` : '';
   }).join('');
 
-  document.getElementById('friend-profile-avatar').textContent   = profile.avatar || '🧙';
-  document.getElementById('friend-profile-name').textContent     = profile.name || 'Herói';
-  document.getElementById('friend-profile-level').textContent    = `⚔️ Nível ${profile.level || 1}`;
-  document.getElementById('friend-profile-xp').textContent       = `✨ ${profile.total_xp || 0} XP total`;
-  document.getElementById('friend-profile-fav').textContent      = profile.favorite_subject ? `❤️ Favorita: ${profile.favorite_subject}` : '';
-  document.getElementById('friend-profile-best').textContent     = profile.best_subject ? `🏆 Melhor: ${profile.best_subject}` : '';
-  document.getElementById('friend-profile-achs').innerHTML       = achs || '<em>Sem conquistas ainda.</em>';
+  document.getElementById('friend-profile-avatar').textContent = user.avatar;
+  document.getElementById('friend-profile-name').textContent   = user.name;
+  document.getElementById('friend-profile-level').textContent  = `⚔️ Nível ${user.level}`;
+  document.getElementById('friend-profile-xp').textContent     = `✨ ${user.xp} XP`;
+  document.getElementById('friend-profile-fav').textContent    = user.favoriteSubject ? `❤️ Favorita: ${user.favoriteSubject}` : '';
+  document.getElementById('friend-profile-best').textContent   = '';
+  document.getElementById('friend-profile-achs').innerHTML     = achs || '<em>Sem conquistas ainda.</em>';
   openModal('modal-friend-profile');
 }
 
