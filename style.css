@@ -3081,7 +3081,7 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
 }
 .profile-stats-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: .75rem;
   margin-bottom: 1rem;
 }
@@ -3112,6 +3112,42 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
   background: rgba(124,58,237,.08);
   border-radius: var(--radius-sm);
   margin-bottom: .5rem;
+}
+
+/* Cards de matéria favorita / melhor matéria no perfil */
+.subject-info-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: .75rem;
+  margin-bottom: 1.25rem;
+}
+.subject-info-card {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius);
+  border: 1.5px solid;
+}
+.subject-info-card.fav-card {
+  background: linear-gradient(135deg, rgba(239,68,68,.08), rgba(236,72,153,.06));
+  border-color: rgba(239,68,68,.3);
+}
+.subject-info-card.best-card {
+  background: linear-gradient(135deg, rgba(245,158,11,.08), rgba(234,179,8,.06));
+  border-color: rgba(245,158,11,.3);
+}
+.sic-label {
+  font-size: .72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+}
+.sic-value {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text);
 }
 .profile-section-title {
   font-weight: 800;
@@ -3188,10 +3224,23 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
 /* =============================================
    AMIGOS
    ============================================= */
+.friends-search-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.friends-search-hint {
+  font-size: .83rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin: 0 0 .75rem;
+}
 .friends-search-bar {
   display: flex;
   gap: .5rem;
-  margin-bottom: .75rem;
+  margin-bottom: .5rem;
 }
 .friends-search-bar input {
   flex: 1;
@@ -3326,8 +3375,9 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
 }
 
 @media (max-width: 500px) {
-  .profile-stats-row { grid-template-columns: repeat(2, 1fr); }
+  .profile-stats-row { grid-template-columns: repeat(3, 1fr); }
   .profile-page-hero { flex-direction: column; text-align: center; }
   .xp-bar-wrap { width: 100%; }
   .groups-actions { flex-direction: column; }
+  .subject-info-row { grid-template-columns: 1fr 1fr; }
 }

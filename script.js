@@ -1161,6 +1161,7 @@ function toggleTask(id) {
 
   updateMissionProgress('tasksToday', 1);
   updateMissionProgress('xpToday', xpGain);
+  if (task.difficulty === 'hard') updateMissionProgress('hardTasksToday', 1);
   if (task.subjectId) updateSubjectsStudiedToday(task.subjectId);
   updateWeeklyMissionProgress('tasksThisWeek', 1);
 
@@ -1345,28 +1346,8 @@ function confirmExamGrade() {
   playSound('complete');
 }
 
-// Missão automática de revisão quando nota < 7
-function triggerRevisionMission(exam) {
-  const subj = exam.subjectId ? state.subjects.find(s => s.id === exam.subjectId) : null;
-  const subjName = subj ? subj.name : 'o conteúdo';
-  const missionId = 'revision_' + exam.id;
-  if (!state.dynamicMissions) state.dynamicMissions = [];
-  if (!state.dynamicMissions.find(m => m.id === missionId)) {
-    state.dynamicMissions.push({
-      id: missionId,
-      name: 'Revisar ' + subjName + ' (nota ' + exam.grade + ')',
-      icon: '📖',
-      goal: 2,
-      progress: 0,
-      reward: 30,
-      key: 'tasksToday',
-      completed: false,
-      type: 'revision',
-      subjectId: exam.subjectId,
-      createdAt: Date.now(),
-    });
-    showNotification('📖 Nova missão criada: Revisar ' + subjName + '!', 'info');
-  }
+function triggerRevisionMission(_exam) {
+  // Missões de revisão foram removidas — a notificação de nota baixa já informa o aluno.
 }
 
 function renderExams() {
@@ -1618,40 +1599,74 @@ function generateDynamicMissions() {
   if (!state.dynamicMissions) state.dynamicMissions = [];
   const today = todayStr();
 
-  // Remove missões dinâmicas antigas (concluídas há mais de 1 dia ou sem tarefas relevantes)
-  state.dynamicMissions = state.dynamicMissions.filter(m => {
-    if (m.completed) return false; // remove completadas
-    if (m.type === 'revision') return true; // mantém revisão até completar
-    return true;
-  });
+  // Remove concluídas e missões de revisão legadas
+  state.dynamicMissions = state.dynamicMissions.filter(m =>
+    !m.completed && m.type !== 'revision'
+  );
 
-  const pendingTasks = state.tasks.filter(t => !t.done);
-  const overdueTasks = state.tasks.filter(t => !t.done && t.dueDate && t.dueDate < today);
-  const todayTasks = state.tasks.filter(t => !t.done && t.dueDate === today);
-  const pendingExams = state.exams.filter(e => e.status === 'pending');
+  const pendingTasks  = state.tasks.filter(t => !t.done);
+  const overdueTasks  = state.tasks.filter(t => !t.done && t.dueDate && t.dueDate < today);
+  const todayTasks    = state.tasks.filter(t => !t.done && t.dueDate === today);
+  const hardTasks     = pendingTasks.filter(t => t.difficulty === 'hard');
+  const pendingExams  = state.exams.filter(e => e.status === 'pending');
+  const pendingStudy  = (state.studyItems || []).filter(i => !i.done);
+  const existingIds   = state.dynamicMissions.map(m => m.id);
 
-  const existingIds = state.dynamicMissions.map(m => m.id);
-  const pendingStudy = (state.studyItems || []).filter(i => !i.done);
-
-  // Missão: tarefas pendentes
-  if (pendingTasks.length >= 2 && !existingIds.includes('dm_dyn_2tasks')) {
-    state.dynamicMissions.push({ id: 'dm_dyn_2tasks', name: 'Concluir 2 tarefas pendentes', icon: '✅', goal: 2, progress: 0, reward: 25, key: 'tasksToday', completed: false, type: 'auto' });
-  }
-  // Missão: tarefas atrasadas
-  if (overdueTasks.length >= 1 && !existingIds.includes('dm_dyn_overdue')) {
-    state.dynamicMissions.push({ id: 'dm_dyn_overdue', name: 'Recuperar 1 tarefa atrasada', icon: '⚠️', goal: 1, progress: 0, reward: 40, key: 'overdueFixed', completed: false, type: 'auto' });
-  }
-  // Missão: provas pendentes
-  if (pendingExams.length >= 1 && !existingIds.includes('dm_dyn_exam')) {
-    state.dynamicMissions.push({ id: 'dm_dyn_exam', name: 'Lançar nota de 1 prova', icon: '📝', goal: 1, progress: 0, reward: 35, key: 'examsToday', completed: false, type: 'auto' });
-  }
-  // Missão: conteúdos para estudar
-  if (pendingStudy.length >= 1 && !existingIds.includes('dm_dyn_study')) {
-    state.dynamicMissions.push({ id: 'dm_dyn_study', name: 'Estudar 1 conteúdo pendente', icon: '📘', goal: 1, progress: 0, reward: 20, key: 'studiedToday', completed: false, type: 'auto' });
-  }
-  // Missão: tarefas de hoje
+  // Tarefas com prazo HOJE — prioridade máxima
   if (todayTasks.length >= 1 && !existingIds.includes('dm_dyn_today')) {
-    state.dynamicMissions.push({ id: 'dm_dyn_today', name: 'Completar tarefa de hoje (' + todayTasks.length + ' pendentes)', icon: '🔔', goal: Math.min(todayTasks.length, 2), progress: 0, reward: 30, key: 'tasksToday', completed: false, type: 'auto' });
+    const g = Math.min(todayTasks.length, 3);
+    state.dynamicMissions.push({
+      id: 'dm_dyn_today', icon: '🔔',
+      name: g === 1 ? 'Entregar a tarefa que vence hoje' : `Entregar ${g} tarefas que vencem hoje`,
+      goal: g, progress: 0, reward: 35, key: 'tasksToday', completed: false, type: 'auto',
+    });
+  }
+
+  // Tarefas atrasadas
+  if (overdueTasks.length >= 1 && !existingIds.includes('dm_dyn_overdue')) {
+    state.dynamicMissions.push({
+      id: 'dm_dyn_overdue', icon: '⚠️',
+      name: 'Concluir 1 tarefa atrasada',
+      goal: 1, progress: 0, reward: 40, key: 'tasksToday', completed: false, type: 'auto',
+    });
+  }
+
+  // Tarefas pendentes — adapta o objetivo ao total disponível
+  if (pendingTasks.length >= 1 && !existingIds.includes('dm_dyn_tasks')) {
+    const g = Math.min(3, pendingTasks.length);
+    state.dynamicMissions.push({
+      id: 'dm_dyn_tasks', icon: '✅',
+      name: g === 1 ? 'Concluir a tarefa pendente' : `Concluir ${g} tarefas pendentes`,
+      goal: g, progress: 0, reward: 10 * g, key: 'tasksToday', completed: false, type: 'auto',
+    });
+  }
+
+  // Tarefa difícil — bônus especial
+  if (hardTasks.length >= 1 && !existingIds.includes('dm_dyn_hard')) {
+    state.dynamicMissions.push({
+      id: 'dm_dyn_hard', icon: '⚡',
+      name: 'Encarar 1 tarefa difícil',
+      goal: 1, progress: 0, reward: 45, key: 'hardTasksToday', completed: false, type: 'auto',
+    });
+  }
+
+  // Conteúdos de estudo — adapta ao total disponível
+  if (pendingStudy.length >= 1 && !existingIds.includes('dm_dyn_study')) {
+    const g = Math.min(3, pendingStudy.length);
+    state.dynamicMissions.push({
+      id: 'dm_dyn_study', icon: '📘',
+      name: g === 1 ? 'Estudar o conteúdo pendente' : `Estudar ${g} conteúdos pendentes`,
+      goal: g, progress: 0, reward: 15 * g, key: 'studiedToday', completed: false, type: 'auto',
+    });
+  }
+
+  // Prova com nota pendente
+  if (pendingExams.length >= 1 && !existingIds.includes('dm_dyn_exam')) {
+    state.dynamicMissions.push({
+      id: 'dm_dyn_exam', icon: '📝',
+      name: 'Lançar nota de 1 prova pendente',
+      goal: 1, progress: 0, reward: 35, key: 'examsToday', completed: false, type: 'auto',
+    });
   }
 
   saveState();
@@ -4355,6 +4370,8 @@ async function launchApp() {
     updateAllUI();
     navigateTo('dashboard');
     console.log('[App] App iniciado para:', state.name, '| XP:', state.xp, '| Nível:', state.level);
+    // Sincroniza perfil público para que amigos possam buscar
+    if (authUserId) setTimeout(syncPublicProfile, 2000);
   } else {
     // Primeiro acesso → criação de herói
     console.log('[App] Novo usuário → tela de criação de herói.');
@@ -5077,27 +5094,36 @@ function renderProfilePage() {
   const xpNext = xpForLevel(state.level + 1);
   const xpPct  = Math.min(100, Math.round((state.xp / xpNext) * 100));
   const authNote = authUserId ? '' : '<div class="social-auth-hint">🔒 Faça login para usar amigos e grupos</div>';
+
+  const subjCards = [
+    state.favoriteSubject ? `<div class="subject-info-card fav-card">
+      <div class="sic-label">❤️ Favorita</div>
+      <div class="sic-value">${escHtml(state.favoriteSubject)}</div>
+    </div>` : '',
+    bestSubj ? `<div class="subject-info-card best-card">
+      <div class="sic-label">🏆 Melhor</div>
+      <div class="sic-value">${escHtml(bestSubj)}</div>
+    </div>` : '',
+  ].filter(Boolean).join('');
+
   container.innerHTML = `
+    <div class="page-header"><h1>👤 Meu Perfil</h1></div>
     <div class="profile-page-hero">
       <div class="profile-page-avatar">${state.avatar || '🧙'}</div>
       <div class="profile-page-info">
-        <h2>${state.name || 'Herói'}</h2>
+        <h2>${escHtml(state.name || 'Herói')}</h2>
         <div class="profile-page-level">⚔️ Nível ${state.level}</div>
-        <div class="xp-bar-wrap">
-          <div class="xp-bar-fill" style="width:${xpPct}%"></div>
-        </div>
-        <div class="profile-page-xptext">${state.xp} / ${xpNext} XP</div>
+        <div class="xp-bar-wrap"><div class="xp-bar-fill" style="width:${xpPct}%"></div></div>
+        <div class="profile-page-xptext">${state.xp} / ${xpNext} XP para o próximo nível</div>
       </div>
     </div>
     ${authNote}
     <div class="profile-stats-row">
       <div class="profile-stat"><span class="profile-stat-val">${state.totalXpEarned || 0}</span><span class="profile-stat-label">XP Total</span></div>
       <div class="profile-stat"><span class="profile-stat-val">${state.streak || 0}🔥</span><span class="profile-stat-label">Streak</span></div>
-      <div class="profile-stat"><span class="profile-stat-val">${state.totalTasksDone || 0}</span><span class="profile-stat-label">Tarefas</span></div>
       <div class="profile-stat"><span class="profile-stat-val">${(state.achievements || []).length}</span><span class="profile-stat-label">Conquistas</span></div>
     </div>
-    ${state.favoriteSubject ? `<div class="profile-fav-subject">❤️ Matéria favorita: <strong>${state.favoriteSubject}</strong></div>` : ''}
-    ${bestSubj ? `<div class="profile-fav-subject">🏆 Melhor matéria: <strong>${bestSubj}</strong></div>` : ''}
+    ${subjCards ? `<div class="subject-info-row">${subjCards}</div>` : ''}
     <div class="profile-section-title">🏅 Conquistas (${(state.achievements || []).length} / ${ACHIEVEMENTS_DEF.length})</div>
     <div class="profile-ach-grid">${achs || '<div class="profile-ach-empty">Nenhuma conquista ainda. Continue jogando!</div>'}</div>
     <button class="btn-primary" style="margin-top:1.5rem" onclick="openEditProfile()">✏️ Editar Perfil</button>
@@ -5198,11 +5224,15 @@ async function renderFriendsPage() {
   };
 
   let html = `
-    <div class="friends-search-bar">
-      <input type="text" id="friend-search-input" placeholder="🔍 Buscar usuário pelo nome..." autocomplete="off">
-      <button class="btn-primary" id="friend-search-btn">Buscar</button>
+    <div class="page-header"><h1>👥 Amigos</h1></div>
+    <div class="friends-search-section">
+      <p class="friends-search-hint">Digite o nome de um amigo e clique em Buscar para adicionar.</p>
+      <div class="friends-search-bar">
+        <input type="text" id="friend-search-input" placeholder="🔍 Nome do usuário..." autocomplete="off">
+        <button class="btn-primary" id="friend-search-btn">Buscar</button>
+      </div>
+      <div id="friend-search-results"></div>
     </div>
-    <div id="friend-search-results" style="display:none"></div>
   `;
 
   if (incoming.length) {
@@ -5254,7 +5284,10 @@ async function doFriendSearch() {
   const query = document.getElementById('friend-search-input')?.value || '';
   const resultsDiv = document.getElementById('friend-search-results');
   if (!resultsDiv) return;
-  resultsDiv.style.display = 'block';
+  if (!query.trim()) {
+    resultsDiv.innerHTML = '';
+    return;
+  }
   resultsDiv.innerHTML = '<div class="social-loading">Buscando...</div>';
 
   const results = await searchProfilesByName(query);
@@ -5390,6 +5423,7 @@ async function renderGroupsPage() {
   const myGroups = await loadMyGroups();
 
   let html = `
+    <div class="page-header"><h1>🏰 Grupos de Estudo</h1></div>
     <div class="groups-actions">
       <button class="btn-primary" id="create-group-btn">+ Criar Grupo</button>
       <button class="btn-secondary" id="join-group-btn">🔗 Entrar por Código</button>
