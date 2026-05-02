@@ -11,7 +11,10 @@
       "Bash(cmd.exe /c \"netstat -ano | findstr :3001\")",
       "Bash(netstat -ano)",
       "Bash(gh pr *)",
-      "PowerShell(Get-Command gh -ErrorAction SilentlyContinue)"
+      "PowerShell(Get-Command gh -ErrorAction SilentlyContinue)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }
