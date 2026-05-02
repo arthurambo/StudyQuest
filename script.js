@@ -5131,8 +5131,8 @@ function renderProfilePage() {
 }
 
 // ============================================================
-// AMIGOS — usa tabela `friends` (user_id, friend_id, created_at)
-//           e busca dados de perfil na tabela `users`
+// AMIGOS — tabelas: friends (user_id, friend_id), friend_requests (from_id, to_id, status)
+//           dados de perfil na tabela users
 // ============================================================
 
 /** Extrai dados públicos de uma linha da tabela users */
@@ -5176,10 +5176,7 @@ async function searchUsersByName(query) {
 async function listFriendIds() {
   if (!sb || !authUserId) return [];
   try {
-    const { data } = await sb
-      .from('friends')
-      .select('friend_id')
-      .eq('user_id', authUserId);
+    const { data } = await sb.from('friends').select('friend_id').eq('user_id', authUserId);
     return (data || []).map(r => r.friend_id);
   } catch (e) { return []; }
 }
@@ -5190,38 +5187,75 @@ async function listFriendsWithData() {
   try {
     const ids = await listFriendIds();
     if (!ids.length) return [];
-    const { data } = await sb
-      .from('users')
-      .select('id, name, xp, level, data')
-      .in('id', ids);
+    const { data } = await sb.from('users').select('id, name, xp, level, data').in('id', ids);
     return (data || []).map(_parseUserRow).filter(Boolean);
   } catch (e) { return []; }
 }
 
-/** Adiciona amigo: insere (user_id=eu, friend_id=alvo) na tabela friends */
-async function addFriend(friendId) {
+/** Remove amigo: deleta o registro onde user_id=eu e friend_id=alvo (e vice-versa) */
+async function removeFriend(friendId) {
+  if (!sb || !authUserId) return;
+  try {
+    await Promise.all([
+      sb.from('friends').delete().eq('user_id', authUserId).eq('friend_id', friendId),
+      sb.from('friends').delete().eq('user_id', friendId).eq('friend_id', authUserId),
+    ]);
+  } catch (e) {}
+}
+
+// ── Pedidos de amizade ────────────────────────────────────────
+
+/** Envia pedido de amizade */
+async function sendFriendRequest(toId) {
   if (!sb || !authUserId) return false;
   try {
-    const { error } = await sb.from('friends').insert({ user_id: authUserId, friend_id: friendId });
+    const { error } = await sb.from('friend_requests').insert({ from_id: authUserId, to_id: toId, status: 'pending' });
     return !error;
   } catch (e) { return false; }
 }
 
-/** Remove amigo: deleta o registro onde user_id=eu e friend_id=alvo */
-async function removeFriend(friendId) {
-  if (!sb || !authUserId) return;
+/** Lista IDs para quem eu já enviei pedido pendente */
+async function listSentRequestIds() {
+  if (!sb || !authUserId) return [];
   try {
-    await sb.from('friends').delete().eq('user_id', authUserId).eq('friend_id', friendId);
-  } catch (e) {}
+    const { data } = await sb.from('friend_requests').select('to_id').eq('from_id', authUserId).eq('status', 'pending');
+    return (data || []).map(r => r.to_id);
+  } catch (e) { return []; }
 }
 
-/** Verifica se já é amigo */
-async function isFriend(friendId) {
+/** Lista pedidos recebidos pendentes com dados do solicitante */
+async function listPendingRequests() {
+  if (!sb || !authUserId) return [];
+  try {
+    const { data: reqs } = await sb.from('friend_requests').select('id, from_id, created_at').eq('to_id', authUserId).eq('status', 'pending');
+    if (!reqs || !reqs.length) return [];
+    const ids = reqs.map(r => r.from_id);
+    const { data: users } = await sb.from('users').select('id, name, xp, level, data').in('id', ids);
+    const userMap = {};
+    (users || []).forEach(u => { userMap[u.id] = _parseUserRow(u); });
+    return reqs.map(r => ({ ...r, user: userMap[r.from_id] })).filter(r => r.user);
+  } catch (e) { return []; }
+}
+
+/** Aceita pedido: adiciona nas duas direções e deleta o pedido */
+async function acceptFriendRequest(fromId, requestId) {
   if (!sb || !authUserId) return false;
   try {
-    const { data } = await sb.from('friends').select('friend_id').eq('user_id', authUserId).eq('friend_id', friendId).single();
-    return !!data;
+    await sb.from('friends').insert([
+      { user_id: authUserId, friend_id: fromId },
+      { user_id: fromId, friend_id: authUserId },
+    ]);
+    await sb.from('friend_requests').delete().eq('id', requestId);
+    return true;
   } catch (e) { return false; }
+}
+
+/** Rejeita pedido: deleta o pedido */
+async function rejectFriendRequest(requestId) {
+  if (!sb || !authUserId) return;
+  try {
+    await sb.from('friend_requests').delete().eq('id', requestId);
+  } catch (e) {}
 }
 
 // ── Render ────────────────────────────────────────────────────
@@ -5254,7 +5288,7 @@ async function renderFriendsPage() {
   }
 
   container.innerHTML = '<div class="social-loading">Carregando amigos...</div>';
-  const friends = await listFriendsWithData();
+  const [friends, pendingReqs] = await Promise.all([listFriendsWithData(), listPendingRequests()]);
 
   let html = `
     <div class="page-header"><h1>👥 Amigos</h1></div>
@@ -5266,9 +5300,24 @@ async function renderFriendsPage() {
       </div>
       <div id="friend-search-results"></div>
     </div>
-    <div class="social-section-title">👥 Meus Amigos (${friends.length})</div>
   `;
 
+  if (pendingReqs.length) {
+    html += `<div class="social-section-title">📨 Pedidos Recebidos (${pendingReqs.length})</div>`;
+    html += pendingReqs.map(req => `<div class="friend-card">
+      <div class="friend-avatar">${req.user.avatar}</div>
+      <div class="friend-info">
+        <div class="friend-name">${escHtml(req.user.name)}</div>
+        <div class="friend-level">⚔️ Nível ${req.user.level} · ✨ ${req.user.xp} XP</div>
+      </div>
+      <div class="friend-request-btns">
+        <button class="btn-accept" onclick="handleAcceptFriend('${req.from_id}','${req.id}',this)">✓ Aceitar</button>
+        <button class="btn-reject" onclick="handleRejectFriend('${req.id}',this)">✕ Rejeitar</button>
+      </div>
+    </div>`).join('');
+  }
+
+  html += `<div class="social-section-title">👥 Meus Amigos (${friends.length})</div>`;
   if (friends.length) {
     html += friends.map(_friendCard).join('');
   } else {
@@ -5297,13 +5346,17 @@ async function doFriendSearch() {
     return;
   }
 
-  const myFriendIds = await listFriendIds();
+  const [myFriendIds, sentIds] = await Promise.all([listFriendIds(), listSentRequestIds()]);
 
   resultsDiv.innerHTML = results.map(u => {
-    const already = myFriendIds.includes(u.id);
-    const btn = already
-      ? '<span class="friend-tag">Já é amigo ✓</span>'
-      : `<button class="btn-add-friend" onclick="handleAddFriend('${u.id}', this)">+ Adicionar</button>`;
+    let btn;
+    if (myFriendIds.includes(u.id)) {
+      btn = '<span class="friend-tag">Já é amigo ✓</span>';
+    } else if (sentIds.includes(u.id)) {
+      btn = '<span class="friend-tag pending-tag">⏳ Pedido enviado</span>';
+    } else {
+      btn = `<button class="btn-add-friend" onclick="handleAddFriend('${u.id}', this)">+ Adicionar</button>`;
+    }
     return `<div class="friend-card search-result">
       <div class="friend-avatar">${u.avatar}</div>
       <div class="friend-info">
@@ -5318,21 +5371,33 @@ async function doFriendSearch() {
 
 async function handleAddFriend(friendId, btn) {
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
-  const ok = await addFriend(friendId);
-  if (btn) btn.textContent = ok ? '✅ Adicionado!' : '❌ Erro';
+  const ok = await sendFriendRequest(friendId);
   if (ok) {
-    showNotification('✅ Amigo adicionado!', 'success');
-    // Atualiza a lista de amigos em background sem rerender a busca
-    const cont = document.getElementById('page-friends');
-    const section = cont?.querySelector('.social-section-title');
-    if (section) {
-      listFriendsWithData().then(friends => {
-        if (section) section.textContent = `👥 Meus Amigos (${friends.length})`;
-      });
-    }
+    if (btn) btn.outerHTML = '<span class="friend-tag pending-tag">⏳ Pedido enviado</span>';
+    showNotification('✉️ Pedido de amizade enviado!', 'success');
   } else {
-    showNotification('Erro ao adicionar amigo. Tente novamente.', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '+ Adicionar'; }
+    showNotification('Erro ao enviar pedido. Tente novamente.', 'error');
   }
+}
+
+async function handleAcceptFriend(fromId, requestId, btn) {
+  if (btn) btn.disabled = true;
+  const ok = await acceptFriendRequest(fromId, requestId);
+  if (ok) {
+    showNotification('✅ Pedido aceito! Vocês agora são amigos.', 'success');
+    renderFriendsPage();
+  } else {
+    showNotification('Erro ao aceitar pedido.', 'error');
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function handleRejectFriend(requestId, btn) {
+  if (btn) btn.disabled = true;
+  await rejectFriendRequest(requestId);
+  showNotification('Pedido rejeitado.', 'info');
+  renderFriendsPage();
 }
 
 async function confirmRemoveFriend(friendId) {
@@ -5411,8 +5476,13 @@ async function loadMyGroups() {
 async function loadGroupMembers(groupId) {
   if (!sb) return [];
   try {
-    const { data } = await sb.from('group_members').select('role, profile:profiles(*)').eq('group_id', groupId);
-    return data || [];
+    const { data: members } = await sb.from('group_members').select('role, user_id').eq('group_id', groupId);
+    if (!members || !members.length) return [];
+    const ids = members.map(m => m.user_id);
+    const { data: users } = await sb.from('users').select('id, name, xp, level, data').in('id', ids);
+    const userMap = {};
+    (users || []).forEach(u => { userMap[u.id] = _parseUserRow(u); });
+    return members.map(m => ({ role: m.role, profile: userMap[m.user_id] }));
   } catch (e) { return []; }
 }
 
@@ -5480,11 +5550,11 @@ async function openGroupView(groupId) {
     const p = m.profile;
     if (!p) return '';
     return `<div class="friend-card" onclick="openFriendProfile('${p.id}')">
-      <div class="friend-avatar">${p.avatar || '🧙'}</div>
+      <div class="friend-avatar">${p.avatar}</div>
       <div class="friend-info">
         <div class="friend-name">${escHtml(p.name)} ${m.role === 'creator' ? '👑' : ''}</div>
-        <div class="friend-level">⚔️ Nível ${p.level || 1} · ✨ ${p.total_xp || 0} XP</div>
-        ${p.favorite_subject ? `<div class="friend-fav">❤️ ${escHtml(p.favorite_subject)}</div>` : ''}
+        <div class="friend-level">⚔️ Nível ${p.level} · ✨ ${p.xp} XP</div>
+        ${p.favoriteSubject ? `<div class="friend-fav">❤️ ${escHtml(p.favoriteSubject)}</div>` : ''}
       </div>
     </div>`;
   }).join('') || '<div class="social-empty">Sem membros carregados.</div>';
