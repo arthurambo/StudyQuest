@@ -150,21 +150,27 @@ const ACHIEVEMENTS_DEF = [
   { id: 'fifty_study',    name: 'Estudante Modelo',  icon: '🏅', desc: 'Estude 50 conteúdos',         condition: s => (s.totalStudied||0) >= 50 },
 ];
 
-// Missões diárias
+// Missões diárias — valid(state) retorna false se a missão for impossível
 const DAILY_MISSIONS_DEF = [
-  { id: 'dm_3tasks', name: 'Completar 3 tarefas', icon: '✅', goal: 3, reward: 30, key: 'tasksToday' },
-  { id: 'dm_2subjects', name: 'Estudar 2 matérias diferentes', icon: '📚', goal: 2, reward: 25, key: 'subjectsToday' },
-  { id: 'dm_50xp', name: 'Ganhar 50 XP', icon: '⚡', goal: 50, reward: 20, key: 'xpToday' },
-  { id: 'dm_1exam', name: 'Registrar 1 prova', icon: '📝', goal: 1, reward: 35, key: 'examsToday' },
-  { id: 'dm_pomodoro', name: 'Completar 1 sessão Pomodoro', icon: '⏱️', goal: 1, reward: 20, key: 'pomodorosToday' },
-  { id: 'dm_2study',   name: 'Estudar 2 conteúdos',          icon: '📘', goal: 2, reward: 25, key: 'studiedToday' },
+  { id: 'dm_3tasks',   name: 'Completar 3 tarefas',             icon: '✅', goal: 3,  reward: 30, key: 'tasksToday',
+    valid: s => s.tasks.filter(t => !t.done).length >= 1 },
+  { id: 'dm_2subjects',name: 'Estudar 2 matérias diferentes',   icon: '📚', goal: 2,  reward: 25, key: 'subjectsToday',
+    valid: s => s.subjects.length >= 2 },
+  { id: 'dm_50xp',     name: 'Ganhar 50 XP',                    icon: '⚡', goal: 50, reward: 20, key: 'xpToday' },
+  { id: 'dm_1exam',    name: 'Registrar 1 prova',               icon: '📝', goal: 1,  reward: 35, key: 'examsToday' },
+  { id: 'dm_pomodoro', name: 'Completar 1 sessão Pomodoro',     icon: '⏱️', goal: 1,  reward: 20, key: 'pomodorosToday' },
+  { id: 'dm_2study',   name: 'Estudar 2 conteúdos',             icon: '📘', goal: 2,  reward: 25, key: 'studiedToday',
+    valid: s => (s.studyItems || []).filter(i => !i.done).length >= 1 },
 ];
 
+// valid(state, currentProgress) — missão semanal só some se progresso=0 e impossível
 const WEEKLY_MISSIONS_DEF = [
-  { id: 'wm_10tasks',  name: 'Completar 10 tarefas esta semana', icon: '🔥', goal: 10, reward: 100, key: 'tasksThisWeek' },
+  { id: 'wm_10tasks', name: 'Completar 10 tarefas esta semana', icon: '🔥', goal: 10, reward: 100, key: 'tasksThisWeek',
+    valid: (s, p) => s.tasks.filter(t => !t.done).length >= 1 || (p || 0) > 0 },
   { id: 'wm_5days',   name: 'Estudar 5 dias seguidos',          icon: '📅', goal: 5,  reward: 80,  key: 'daysThisWeek' },
   { id: 'wm_3exams',  name: 'Registrar 3 provas',               icon: '📝', goal: 3,  reward: 90,  key: 'examsThisWeek' },
-  { id: 'wm_5study',  name: 'Estudar 5 conteúdos esta semana',  icon: '📘', goal: 5,  reward: 75,  key: 'studiedThisWeek' },
+  { id: 'wm_5study',  name: 'Estudar 5 conteúdos esta semana',  icon: '📘', goal: 5,  reward: 75,  key: 'studiedThisWeek',
+    valid: (s, p) => (s.studyItems || []).filter(i => !i.done).length >= 1 || (p || 0) > 0 },
 ];
 
 // ============================================================
@@ -205,6 +211,7 @@ let state = {
   gradeEntries: {},
   studyItems: [],
   totalStudied: 0,
+  favoriteSubject: '',
   settings: {
     schoolAverage:       7,       // média escolar padrão
     notificationsEnabled: true,   // notificações visuais
@@ -577,7 +584,10 @@ async function saveUserData(data) {
 let _supabaseSyncTimer = null;
 function scheduleSyncToSupabase() {
   clearTimeout(_supabaseSyncTimer);
-  _supabaseSyncTimer = setTimeout(() => saveUserData(state), 3000);
+  _supabaseSyncTimer = setTimeout(async () => {
+    await saveUserData(state);
+    syncPublicProfile(); // atualiza dados públicos (perfil, amigos, grupos)
+  }, 3000);
 }
 
 // ============================================================
@@ -598,6 +608,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   initAuth();          // telas de login/cadastro (inclui botões Google)
   initOfflineStatus(); // indicador online/offline + listeners de rede
   initPWAButtons();    // botões de instalação do PWA
+  initSocialModals();  // modais de amigos e grupos
 
   if (sb) {
     // onAuthStateChange: APENAS para detectar logout.
@@ -739,6 +750,9 @@ function navigateTo(page) {
   if (page === 'stats') renderStats();
   if (page === 'calendar') renderCalendar();
   if (page === 'settings') initSettingsPage();
+  if (page === 'profile') renderProfilePage();
+  if (page === 'friends') renderFriendsPage();
+  if (page === 'groups')  renderGroupsPage();
 }
 
 function toggleSidebar() {
@@ -1758,8 +1772,12 @@ function renderDailyMissions() {
 
   let html = '';
 
-  // Missões fixas
-  html += DAILY_MISSIONS_DEF.map(m => {
+  // Missões fixas — filtra apenas as possíveis no estado atual
+  const validDaily = DAILY_MISSIONS_DEF.filter(m => !m.valid || m.valid(state));
+  if (validDaily.length === 0) {
+    html += '<div class="mission-empty">📋 Adicione tarefas, matérias ou conteúdos para desbloquear missões!</div>';
+  }
+  html += validDaily.map(m => {
     const data = state.dailyMissions[m.id] || { progress: 0, completed: false };
     const pct = Math.min(100, Math.round((data.progress / m.goal) * 100));
     return '<div class="mission-item ' + (data.completed ? 'completed' : '') + '">' +
@@ -1795,7 +1813,11 @@ function renderDailyMissions() {
 function renderWeeklyMissions() {
   const container = document.getElementById('weekly-missions-list');
   if (!state.weeklyMissions) return;
-  container.innerHTML = WEEKLY_MISSIONS_DEF.map(m => {
+  const validWeekly = WEEKLY_MISSIONS_DEF.filter(m => {
+    if (!m.valid) return true;
+    return m.valid(state, state.weeklyMissions[m.id]?.progress);
+  });
+  container.innerHTML = validWeekly.map(m => {
     const data = state.weeklyMissions[m.id] || { progress: 0, completed: false };
     const pct = Math.min(100, Math.round((data.progress / m.goal) * 100));
     return '<div class="mission-item ' + (data.completed ? 'completed' : '') + '">' +
@@ -1811,9 +1833,9 @@ function renderWeeklyMissions() {
 function renderMissionsPreview() {
   const container = document.getElementById('missions-preview-list');
   if (!container) return;
-  // Show daily + first dynamic mission
+  // Show up to 2 valid daily missions + first dynamic mission
   let missions = [];
-  DAILY_MISSIONS_DEF.slice(0, 2).forEach(m => {
+  DAILY_MISSIONS_DEF.filter(m => !m.valid || m.valid(state)).slice(0, 2).forEach(m => {
     const data = state.dailyMissions && state.dailyMissions[m.id] || { progress: 0, completed: false };
     missions.push({ name: m.icon + ' ' + m.name, progress: data.progress, goal: m.goal, reward: m.reward, completed: data.completed });
   });
@@ -4841,16 +4863,20 @@ function resetAllProgress() {
 // ============================================================
 
 function openEditProfile() {
-  // Pre-fill current values
   document.getElementById('profile-name-input').value = state.name || '';
 
-  // Mark current avatar
   const grid = document.getElementById('profile-avatar-grid');
   grid.querySelectorAll('.avatar-opt').forEach(el => {
     el.classList.toggle('selected', el.dataset.av === state.avatar);
   });
 
-  // Update preview
+  // Populate favorite subject select
+  const sel = document.getElementById('profile-fav-subject');
+  if (sel) {
+    sel.innerHTML = '<option value="">— Nenhuma —</option>' +
+      state.subjects.map(s => `<option value="${s.name}" ${s.name === state.favoriteSubject ? 'selected' : ''}>${s.icon || '📚'} ${s.name}</option>`).join('');
+  }
+
   updateProfilePreview();
   openModal('modal-edit-profile');
 }
@@ -4894,6 +4920,8 @@ function saveProfile() {
   const name   = document.getElementById('profile-name-input').value.trim();
   const selAv  = document.querySelector('#profile-avatar-grid .avatar-opt.selected');
   const avatar = selAv ? selAv.dataset.av : state.avatar;
+  const favSel = document.getElementById('profile-fav-subject');
+  const favoriteSubject = favSel ? favSel.value : state.favoriteSubject;
 
   if (!name) return showNotification('Digite seu nome de herói!', 'warning');
 
@@ -4902,6 +4930,7 @@ function saveProfile() {
 
   state.name   = name;
   state.avatar = avatar;
+  state.favoriteSubject = favoriteSubject;
   saveState();
 
   // Update all UI elements immediately
@@ -5002,3 +5031,491 @@ setTimeout(checkUrgentTasks, 1000);
 // ============================================================
 
 setInterval(saveState, 30000); // salva a cada 30 segundos
+
+// ============================================================
+// PERFIL PÚBLICO
+// ============================================================
+
+function computeBestSubject() {
+  if (!state.subjects.length) return '';
+  let best = { name: '', avg: -1 };
+  state.subjects.forEach(subj => {
+    const entries = state.gradeEntries[subj.id];
+    if (!entries) return;
+    let total = 0, count = 0;
+    Object.values(entries).forEach(scores => scores.forEach(s => { total += s; count++; }));
+    if (count > 0 && total / count > best.avg) best = { name: subj.name, avg: total / count };
+  });
+  return best.name;
+}
+
+async function syncPublicProfile() {
+  if (!sb || !authUserId) return;
+  try {
+    await sb.from('profiles').upsert({
+      id: authUserId,
+      name: state.name || 'Herói',
+      avatar: state.avatar || '🧙',
+      level: state.level || 1,
+      total_xp: state.totalXpEarned || 0,
+      favorite_subject: state.favoriteSubject || '',
+      achievements: state.achievements || [],
+      best_subject: computeBestSubject(),
+      updated_at: new Date().toISOString(),
+    });
+  } catch (e) { console.warn('[Profile] syncPublicProfile erro:', e); }
+}
+
+function renderProfilePage() {
+  const container = document.getElementById('page-profile');
+  if (!container) return;
+  const achs = (state.achievements || []).map(id => {
+    const def = ACHIEVEMENTS_DEF.find(a => a.id === id);
+    return def ? `<div class="profile-ach-badge" title="${def.name}: ${def.desc}">${def.icon}</div>` : '';
+  }).join('');
+  const bestSubj = computeBestSubject();
+  const xpNext = xpForLevel(state.level + 1);
+  const xpPct  = Math.min(100, Math.round((state.xp / xpNext) * 100));
+  const authNote = authUserId ? '' : '<div class="social-auth-hint">🔒 Faça login para usar amigos e grupos</div>';
+  container.innerHTML = `
+    <div class="profile-page-hero">
+      <div class="profile-page-avatar">${state.avatar || '🧙'}</div>
+      <div class="profile-page-info">
+        <h2>${state.name || 'Herói'}</h2>
+        <div class="profile-page-level">⚔️ Nível ${state.level}</div>
+        <div class="xp-bar-wrap">
+          <div class="xp-bar-fill" style="width:${xpPct}%"></div>
+        </div>
+        <div class="profile-page-xptext">${state.xp} / ${xpNext} XP</div>
+      </div>
+    </div>
+    ${authNote}
+    <div class="profile-stats-row">
+      <div class="profile-stat"><span class="profile-stat-val">${state.totalXpEarned || 0}</span><span class="profile-stat-label">XP Total</span></div>
+      <div class="profile-stat"><span class="profile-stat-val">${state.streak || 0}🔥</span><span class="profile-stat-label">Streak</span></div>
+      <div class="profile-stat"><span class="profile-stat-val">${state.totalTasksDone || 0}</span><span class="profile-stat-label">Tarefas</span></div>
+      <div class="profile-stat"><span class="profile-stat-val">${(state.achievements || []).length}</span><span class="profile-stat-label">Conquistas</span></div>
+    </div>
+    ${state.favoriteSubject ? `<div class="profile-fav-subject">❤️ Matéria favorita: <strong>${state.favoriteSubject}</strong></div>` : ''}
+    ${bestSubj ? `<div class="profile-fav-subject">🏆 Melhor matéria: <strong>${bestSubj}</strong></div>` : ''}
+    <div class="profile-section-title">🏅 Conquistas (${(state.achievements || []).length} / ${ACHIEVEMENTS_DEF.length})</div>
+    <div class="profile-ach-grid">${achs || '<div class="profile-ach-empty">Nenhuma conquista ainda. Continue jogando!</div>'}</div>
+    <button class="btn-primary" style="margin-top:1.5rem" onclick="openEditProfile()">✏️ Editar Perfil</button>
+  `;
+}
+
+// ============================================================
+// AMIGOS
+// ============================================================
+
+async function loadFriendships() {
+  if (!sb || !authUserId) return [];
+  try {
+    const { data } = await sb.from('friendships').select('*').or(`requester_id.eq.${authUserId},addressee_id.eq.${authUserId}`);
+    return data || [];
+  } catch (e) { return []; }
+}
+
+async function loadProfileById(userId) {
+  if (!sb) return null;
+  try {
+    const { data } = await sb.from('profiles').select('*').eq('id', userId).single();
+    return data || null;
+  } catch (e) { return null; }
+}
+
+async function searchProfilesByName(query) {
+  if (!sb || !query.trim()) return [];
+  try {
+    const { data } = await sb.from('profiles').select('*').ilike('name', `%${query.trim()}%`).neq('id', authUserId || '').limit(10);
+    return data || [];
+  } catch (e) { return []; }
+}
+
+async function sendFriendRequest(addresseeId) {
+  if (!sb || !authUserId) return false;
+  try {
+    const { error } = await sb.from('friendships').insert({ requester_id: authUserId, addressee_id: addresseeId, status: 'pending' });
+    return !error;
+  } catch (e) { return false; }
+}
+
+async function respondFriendRequest(friendshipId, accept) {
+  if (!sb || !authUserId) return;
+  if (accept) {
+    await sb.from('friendships').update({ status: 'accepted' }).eq('id', friendshipId);
+  } else {
+    await sb.from('friendships').delete().eq('id', friendshipId);
+  }
+}
+
+async function removeFriend(friendshipId) {
+  if (!sb || !authUserId) return;
+  await sb.from('friendships').delete().eq('id', friendshipId);
+}
+
+async function renderFriendsPage() {
+  const container = document.getElementById('page-friends');
+  if (!container) return;
+
+  if (!authUserId) {
+    container.innerHTML = '<div class="social-auth-wall"><div class="social-auth-icon">👥</div><p>Faça login para adicionar amigos e ver seus perfis.</p><button class="btn-primary" onclick="showAuthScreen()">Fazer Login</button></div>';
+    return;
+  }
+
+  container.innerHTML = '<div class="social-loading">Carregando amigos...</div>';
+
+  const friendships = await loadFriendships();
+  const accepted  = friendships.filter(f => f.status === 'accepted');
+  const incoming  = friendships.filter(f => f.status === 'pending' && f.addressee_id === authUserId);
+  const outgoing  = friendships.filter(f => f.status === 'pending' && f.requester_id === authUserId);
+
+  // Load profiles for all
+  const friendIds = accepted.map(f => f.requester_id === authUserId ? f.addressee_id : f.requester_id);
+  const incomingIds = incoming.map(f => f.requester_id);
+
+  const profileCache = {};
+  const idsToLoad = [...new Set([...friendIds, ...incomingIds])];
+  if (idsToLoad.length && sb) {
+    try {
+      const { data } = await sb.from('profiles').select('*').in('id', idsToLoad);
+      (data || []).forEach(p => { profileCache[p.id] = p; });
+    } catch (e) {}
+  }
+
+  const friendCard = (f, profile) => {
+    if (!profile) return '';
+    const fid = f.id;
+    return `<div class="friend-card" onclick="openFriendProfile('${profile.id}')">
+      <div class="friend-avatar">${profile.avatar || '🧙'}</div>
+      <div class="friend-info">
+        <div class="friend-name">${escHtml(profile.name)}</div>
+        <div class="friend-level">⚔️ Nível ${profile.level || 1} · ✨ ${profile.total_xp || 0} XP</div>
+        ${profile.favorite_subject ? `<div class="friend-fav">❤️ ${escHtml(profile.favorite_subject)}</div>` : ''}
+      </div>
+      <button class="btn-danger-sm" onclick="event.stopPropagation(); confirmRemoveFriend('${fid}')" title="Remover amigo">✕</button>
+    </div>`;
+  };
+
+  let html = `
+    <div class="friends-search-bar">
+      <input type="text" id="friend-search-input" placeholder="🔍 Buscar usuário pelo nome..." autocomplete="off">
+      <button class="btn-primary" id="friend-search-btn">Buscar</button>
+    </div>
+    <div id="friend-search-results" style="display:none"></div>
+  `;
+
+  if (incoming.length) {
+    html += `<div class="social-section-title">📨 Solicitações recebidas (${incoming.length})</div>`;
+    html += incoming.map(f => {
+      const p = profileCache[f.requester_id];
+      if (!p) return '';
+      return `<div class="friend-card pending">
+        <div class="friend-avatar">${p.avatar || '🧙'}</div>
+        <div class="friend-info">
+          <div class="friend-name">${escHtml(p.name)}</div>
+          <div class="friend-level">⚔️ Nível ${p.level || 1}</div>
+        </div>
+        <div class="friend-req-btns">
+          <button class="btn-accept" onclick="handleFriendResponse('${f.id}', true)">✓</button>
+          <button class="btn-reject" onclick="handleFriendResponse('${f.id}', false)">✕</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  if (accepted.length) {
+    html += `<div class="social-section-title">👥 Meus Amigos (${accepted.length})</div>`;
+    html += accepted.map(f => {
+      const id = f.requester_id === authUserId ? f.addressee_id : f.requester_id;
+      return friendCard(f, profileCache[id]);
+    }).join('');
+  } else {
+    html += '<div class="social-empty">Sem amigos ainda. Busque pelo nome acima! 😊</div>';
+  }
+
+  if (outgoing.length) {
+    html += `<div class="social-section-title">📤 Solicitações enviadas (${outgoing.length})</div>`;
+    html += outgoing.map(f => `<div class="friend-card outgoing">
+      <div class="friend-info"><div class="friend-name">Aguardando resposta...</div></div>
+      <button class="btn-danger-sm" onclick="removeFriend('${f.id}').then(renderFriendsPage)">Cancelar</button>
+    </div>`).join('');
+  }
+
+  container.innerHTML = html;
+
+  document.getElementById('friend-search-btn').addEventListener('click', doFriendSearch);
+  document.getElementById('friend-search-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doFriendSearch();
+  });
+}
+
+async function doFriendSearch() {
+  const query = document.getElementById('friend-search-input')?.value || '';
+  const resultsDiv = document.getElementById('friend-search-results');
+  if (!resultsDiv) return;
+  resultsDiv.style.display = 'block';
+  resultsDiv.innerHTML = '<div class="social-loading">Buscando...</div>';
+
+  const results = await searchProfilesByName(query);
+  if (!results.length) {
+    resultsDiv.innerHTML = '<div class="social-empty">Nenhum usuário encontrado.</div>';
+    return;
+  }
+
+  // Check existing friendships to avoid duplicates
+  const existing = await loadFriendships();
+  const existingIds = existing.map(f => f.requester_id === authUserId ? f.addressee_id : f.requester_id);
+
+  resultsDiv.innerHTML = results.map(p => {
+    const isFriend = existingIds.includes(p.id);
+    const btnHtml = isFriend
+      ? '<span class="friend-tag">Já amigos ✓</span>'
+      : `<button class="btn-add-friend" onclick="handleAddFriend('${p.id}', this)">+ Adicionar</button>`;
+    return `<div class="friend-card search-result">
+      <div class="friend-avatar">${p.avatar || '🧙'}</div>
+      <div class="friend-info">
+        <div class="friend-name">${escHtml(p.name)}</div>
+        <div class="friend-level">⚔️ Nível ${p.level || 1} · ✨ ${p.total_xp || 0} XP</div>
+      </div>
+      ${btnHtml}
+    </div>`;
+  }).join('');
+}
+
+async function handleAddFriend(addresseeId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  const ok = await sendFriendRequest(addresseeId);
+  if (btn) btn.textContent = ok ? '✅ Enviado!' : '❌ Erro';
+  if (ok) showNotification('✅ Solicitação enviada!', 'success');
+}
+
+async function handleFriendResponse(friendshipId, accept) {
+  await respondFriendRequest(friendshipId, accept);
+  showNotification(accept ? '✅ Amizade aceita!' : 'Solicitação recusada.', accept ? 'success' : 'info');
+  renderFriendsPage();
+}
+
+async function confirmRemoveFriend(friendshipId) {
+  if (!confirm('Remover este amigo?')) return;
+  await removeFriend(friendshipId);
+  showNotification('Amigo removido.', 'info');
+  renderFriendsPage();
+}
+
+async function openFriendProfile(userId) {
+  const profile = await loadProfileById(userId);
+  if (!profile) return showNotification('Perfil não encontrado.', 'warning');
+
+  const achs = ((profile.achievements) || []).map(id => {
+    const def = ACHIEVEMENTS_DEF.find(a => a.id === id);
+    return def ? `<div class="profile-ach-badge" title="${def.name}">${def.icon}</div>` : '';
+  }).join('');
+
+  document.getElementById('friend-profile-avatar').textContent   = profile.avatar || '🧙';
+  document.getElementById('friend-profile-name').textContent     = profile.name || 'Herói';
+  document.getElementById('friend-profile-level').textContent    = `⚔️ Nível ${profile.level || 1}`;
+  document.getElementById('friend-profile-xp').textContent       = `✨ ${profile.total_xp || 0} XP total`;
+  document.getElementById('friend-profile-fav').textContent      = profile.favorite_subject ? `❤️ Favorita: ${profile.favorite_subject}` : '';
+  document.getElementById('friend-profile-best').textContent     = profile.best_subject ? `🏆 Melhor: ${profile.best_subject}` : '';
+  document.getElementById('friend-profile-achs').innerHTML       = achs || '<em>Sem conquistas ainda.</em>';
+  openModal('modal-friend-profile');
+}
+
+// ============================================================
+// GRUPOS
+// ============================================================
+
+function generateInviteCode() {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+async function createGroup(name, description) {
+  if (!sb || !authUserId) return null;
+  try {
+    const inviteCode = generateInviteCode();
+    const { data, error } = await sb.from('study_groups').insert({
+      name, description, creator_id: authUserId, invite_code: inviteCode,
+    }).select().single();
+    if (error || !data) return null;
+    await sb.from('group_members').insert({ group_id: data.id, user_id: authUserId, role: 'creator' });
+    return data;
+  } catch (e) { return null; }
+}
+
+async function joinGroupByCode(inviteCode) {
+  if (!sb || !authUserId) return null;
+  try {
+    const { data: group, error } = await sb.from('study_groups').select('*').eq('invite_code', inviteCode.toUpperCase().trim()).single();
+    if (error || !group) return null;
+    // Check already member
+    const { data: existing } = await sb.from('group_members').select('*').eq('group_id', group.id).eq('user_id', authUserId).single();
+    if (existing) return group; // already in
+    await sb.from('group_members').insert({ group_id: group.id, user_id: authUserId });
+    return group;
+  } catch (e) { return null; }
+}
+
+async function leaveGroup(groupId) {
+  if (!sb || !authUserId) return;
+  await sb.from('group_members').delete().eq('group_id', groupId).eq('user_id', authUserId);
+}
+
+async function loadMyGroups() {
+  if (!sb || !authUserId) return [];
+  try {
+    const { data } = await sb.from('group_members').select('role, group:study_groups(*)').eq('user_id', authUserId);
+    return data || [];
+  } catch (e) { return []; }
+}
+
+async function loadGroupMembers(groupId) {
+  if (!sb) return [];
+  try {
+    const { data } = await sb.from('group_members').select('role, profile:profiles(*)').eq('group_id', groupId);
+    return data || [];
+  } catch (e) { return []; }
+}
+
+async function renderGroupsPage() {
+  const container = document.getElementById('page-groups');
+  if (!container) return;
+
+  if (!authUserId) {
+    container.innerHTML = '<div class="social-auth-wall"><div class="social-auth-icon">🏰</div><p>Faça login para criar e entrar em grupos de estudo.</p><button class="btn-primary" onclick="showAuthScreen()">Fazer Login</button></div>';
+    return;
+  }
+
+  container.innerHTML = '<div class="social-loading">Carregando grupos...</div>';
+  const myGroups = await loadMyGroups();
+
+  let html = `
+    <div class="groups-actions">
+      <button class="btn-primary" id="create-group-btn">+ Criar Grupo</button>
+      <button class="btn-secondary" id="join-group-btn">🔗 Entrar por Código</button>
+    </div>
+  `;
+
+  if (myGroups.length) {
+    html += `<div class="social-section-title">🏰 Meus Grupos (${myGroups.length})</div>`;
+    html += myGroups.map(mg => {
+      const g = mg.group;
+      if (!g) return '';
+      return `<div class="group-card" onclick="openGroupView('${g.id}')">
+        <div class="group-icon">🏰</div>
+        <div class="group-info">
+          <div class="group-name">${escHtml(g.name)}</div>
+          <div class="group-desc">${g.description ? escHtml(g.description) : 'Sem descrição'}</div>
+          <div class="group-code">Código: <strong>${g.invite_code}</strong></div>
+        </div>
+        <div class="group-role">${mg.role === 'creator' ? '👑' : '👤'}</div>
+      </div>`;
+    }).join('');
+  } else {
+    html += '<div class="social-empty">Você não está em nenhum grupo ainda. Crie ou entre em um! 🏰</div>';
+  }
+
+  container.innerHTML = html;
+  document.getElementById('create-group-btn').addEventListener('click', () => openModal('modal-create-group'));
+  document.getElementById('join-group-btn').addEventListener('click', () => openModal('modal-join-group'));
+}
+
+async function openGroupView(groupId) {
+  document.getElementById('group-view-members').innerHTML = '<div class="social-loading">Carregando...</div>';
+  openModal('modal-group-view');
+
+  const members = await loadGroupMembers(groupId);
+  // Store groupId for leave action
+  document.getElementById('modal-group-view').dataset.groupId = groupId;
+
+  // Try get group info from members data
+  const { data: group } = sb ? await sb.from('study_groups').select('*').eq('id', groupId).single() : { data: null };
+  if (group) {
+    document.getElementById('group-view-title').textContent = group.name;
+    document.getElementById('group-view-code').textContent  = `Código de convite: ${group.invite_code}`;
+    document.getElementById('copy-invite-code-btn').dataset.code = group.invite_code;
+  }
+
+  document.getElementById('group-view-members').innerHTML = members.map(m => {
+    const p = m.profile;
+    if (!p) return '';
+    return `<div class="friend-card" onclick="openFriendProfile('${p.id}')">
+      <div class="friend-avatar">${p.avatar || '🧙'}</div>
+      <div class="friend-info">
+        <div class="friend-name">${escHtml(p.name)} ${m.role === 'creator' ? '👑' : ''}</div>
+        <div class="friend-level">⚔️ Nível ${p.level || 1} · ✨ ${p.total_xp || 0} XP</div>
+        ${p.favorite_subject ? `<div class="friend-fav">❤️ ${escHtml(p.favorite_subject)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('') || '<div class="social-empty">Sem membros carregados.</div>';
+}
+
+async function handleCreateGroup() {
+  const name = document.getElementById('create-group-name').value.trim();
+  const desc = document.getElementById('create-group-desc').value.trim();
+  if (!name) return showNotification('Digite o nome do grupo!', 'warning');
+  const btn = document.getElementById('confirm-create-group-btn');
+  btn.disabled = true; btn.textContent = 'Criando...';
+  const group = await createGroup(name, desc);
+  btn.disabled = false; btn.textContent = 'Criar Grupo';
+  if (group) {
+    showNotification('🏰 Grupo "' + name + '" criado! Código: ' + group.invite_code, 'success');
+    closeModal('modal-create-group');
+    document.getElementById('create-group-name').value = '';
+    document.getElementById('create-group-desc').value = '';
+    renderGroupsPage();
+  } else {
+    showNotification('Erro ao criar grupo. Tente novamente.', 'error');
+  }
+}
+
+async function handleJoinGroup() {
+  const code = document.getElementById('join-group-code').value.trim();
+  if (!code) return showNotification('Digite o código do grupo!', 'warning');
+  const btn = document.getElementById('confirm-join-group-btn');
+  btn.disabled = true; btn.textContent = 'Entrando...';
+  const group = await joinGroupByCode(code);
+  btn.disabled = false; btn.textContent = 'Entrar';
+  if (group) {
+    showNotification('🏰 Você entrou no grupo "' + group.name + '"!', 'success');
+    closeModal('modal-join-group');
+    document.getElementById('join-group-code').value = '';
+    renderGroupsPage();
+  } else {
+    showNotification('Grupo não encontrado. Verifique o código.', 'error');
+  }
+}
+
+function initSocialModals() {
+  // Create group
+  const confirmCreate = document.getElementById('confirm-create-group-btn');
+  if (confirmCreate) confirmCreate.addEventListener('click', handleCreateGroup);
+
+  // Join group
+  const confirmJoin = document.getElementById('confirm-join-group-btn');
+  if (confirmJoin) confirmJoin.addEventListener('click', handleJoinGroup);
+  const joinInput = document.getElementById('join-group-code');
+  if (joinInput) joinInput.addEventListener('keydown', e => { if (e.key === 'Enter') handleJoinGroup(); });
+
+  // Copy invite code
+  const copyBtn = document.getElementById('copy-invite-code-btn');
+  if (copyBtn) copyBtn.addEventListener('click', () => {
+    const code = copyBtn.dataset.code;
+    if (code) navigator.clipboard.writeText(code).then(() => showNotification('✅ Código copiado!', 'success'));
+  });
+
+  // Leave group
+  const leaveBtn = document.getElementById('leave-group-btn');
+  if (leaveBtn) leaveBtn.addEventListener('click', async () => {
+    const gid = document.getElementById('modal-group-view').dataset.groupId;
+    if (!gid || !confirm('Sair deste grupo?')) return;
+    await leaveGroup(gid);
+    closeModal('modal-group-view');
+    showNotification('Você saiu do grupo.', 'info');
+    renderGroupsPage();
+  });
+}
+
+function escHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}

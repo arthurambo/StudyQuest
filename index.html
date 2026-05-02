@@ -204,6 +204,9 @@
       <a class="nav-item" data-page="study">📘 Estudo</a>
       <a class="nav-item" data-page="stats">📊 Estatísticas</a>
       <a class="nav-item" data-page="calendar">📅 Calendário</a>
+      <a class="nav-item" data-page="profile">👤 Perfil</a>
+      <a class="nav-item" data-page="friends">👥 Amigos</a>
+      <a class="nav-item" data-page="groups">🏰 Grupos</a>
       <a class="nav-item" data-page="settings">⚙️ Configurações</a>
     </div>
     <div class="sidebar-bottom">
@@ -766,6 +769,27 @@
       </div>
     </div>
 
+    <!-- ===== PERFIL ===== -->
+    <div id="page-profile" class="page">
+      <div class="page-header">
+        <h1>👤 Meu Perfil</h1>
+      </div>
+    </div>
+
+    <!-- ===== AMIGOS ===== -->
+    <div id="page-friends" class="page">
+      <div class="page-header">
+        <h1>👥 Amigos</h1>
+      </div>
+    </div>
+
+    <!-- ===== GRUPOS ===== -->
+    <div id="page-groups" class="page">
+      <div class="page-header">
+        <h1>🏰 Grupos de Estudo</h1>
+      </div>
+    </div>
+
     <!-- ===== CALENDÁRIO ===== -->
     <div id="page-calendar" class="page">
       <div class="page-header">
@@ -877,9 +901,85 @@
       </div>
     </div>
 
+    <div class="profile-field">
+      <label class="grades-label">❤️ Matéria Favorita</label>
+      <select id="profile-fav-subject" style="font-size:16px">
+        <option value="">— Nenhuma —</option>
+      </select>
+    </div>
+
     <div class="modal-btns">
       <button class="btn-secondary" data-close="modal-edit-profile">Cancelar</button>
       <button class="btn-primary" id="save-profile-btn">💾 Salvar Perfil</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Ver Perfil de Amigo -->
+<div class="modal-overlay" id="modal-friend-profile">
+  <div class="modal">
+    <h2>👤 Perfil</h2>
+    <div class="friend-profile-header">
+      <div class="friend-profile-avatar" id="friend-profile-avatar">🧙</div>
+      <div class="friend-profile-info">
+        <div class="friend-profile-name" id="friend-profile-name">Herói</div>
+        <div class="friend-profile-level" id="friend-profile-level">⚔️ Nível 1</div>
+        <div class="friend-profile-xp" id="friend-profile-xp"></div>
+      </div>
+    </div>
+    <div id="friend-profile-fav" style="margin:.5rem 0;font-size:.9rem"></div>
+    <div id="friend-profile-best" style="margin:.25rem 0 .75rem;font-size:.9rem"></div>
+    <div style="font-weight:700;margin-bottom:.5rem">🏅 Conquistas</div>
+    <div class="profile-ach-grid" id="friend-profile-achs"></div>
+    <div class="modal-btns">
+      <button class="btn-secondary" data-close="modal-friend-profile">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Criar Grupo -->
+<div class="modal-overlay" id="modal-create-group">
+  <div class="modal">
+    <h2>🏰 Criar Grupo</h2>
+    <div class="auth-field">
+      <label class="auth-label">📌 Nome do grupo</label>
+      <input type="text" id="create-group-name" placeholder="Ex: Turma de Física..." maxlength="40">
+    </div>
+    <div class="auth-field">
+      <label class="auth-label">📝 Descrição (opcional)</label>
+      <input type="text" id="create-group-desc" placeholder="Do que trata o grupo..." maxlength="80">
+    </div>
+    <div class="modal-btns">
+      <button class="btn-secondary" data-close="modal-create-group">Cancelar</button>
+      <button class="btn-primary" id="confirm-create-group-btn">🏰 Criar Grupo</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Entrar em Grupo -->
+<div class="modal-overlay" id="modal-join-group">
+  <div class="modal">
+    <h2>🔗 Entrar em Grupo</h2>
+    <p style="color:var(--text-muted);margin-bottom:1rem">Peça o código de convite ao criador do grupo.</p>
+    <input type="text" id="join-group-code" placeholder="Código (ex: AB12CD)" maxlength="6" style="text-transform:uppercase;letter-spacing:.2em;text-align:center;font-size:1.2rem">
+    <div class="modal-btns">
+      <button class="btn-secondary" data-close="modal-join-group">Cancelar</button>
+      <button class="btn-primary" id="confirm-join-group-btn">Entrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Ver Grupo -->
+<div class="modal-overlay" id="modal-group-view">
+  <div class="modal">
+    <h2 id="group-view-title">Grupo</h2>
+    <div id="group-view-code" style="font-size:.85rem;color:var(--text-muted);margin-bottom:.75rem"></div>
+    <button class="btn-secondary btn-sm" id="copy-invite-code-btn" style="margin-bottom:1rem">📋 Copiar código</button>
+    <div style="font-weight:700;margin-bottom:.5rem">👥 Membros</div>
+    <div id="group-view-members"></div>
+    <div class="modal-btns">
+      <button class="btn-danger-action" id="leave-group-btn">🚪 Sair do Grupo</button>
+      <button class="btn-secondary" data-close="modal-group-view">Fechar</button>
     </div>
   </div>
 </div>
