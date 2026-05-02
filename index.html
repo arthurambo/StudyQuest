@@ -184,7 +184,7 @@
     <div class="sidebar-logo">
       <span>⚔️</span> StudyQuest
     </div>
-    <div class="sidebar-user" id="sidebar-user" onclick="openEditProfile()" title="Editar perfil" style="cursor:pointer">
+    <div class="sidebar-user" id="sidebar-user" onclick="navigateTo('profile')" title="Ver perfil" style="cursor:pointer">
       <div class="user-avatar" id="nav-avatar">🧙</div>
       <div class="user-info">
         <span class="user-name" id="nav-name">Herói</span>
@@ -194,6 +194,8 @@
     </div>
     <div class="nav-items">
       <a class="nav-item active" data-page="dashboard">🏠 Dashboard</a>
+      <a class="nav-item" data-page="friends">👥 Amigos</a>
+      <a class="nav-item" data-page="groups">🏰 Grupos</a>
       <a class="nav-item" data-page="subjects">📚 Matérias</a>
       <a class="nav-item" data-page="tasks">✅ Tarefas</a>
       <a class="nav-item" data-page="exams">📝 Provas</a>
@@ -204,9 +206,6 @@
       <a class="nav-item" data-page="study">📘 Estudo</a>
       <a class="nav-item" data-page="stats">📊 Estatísticas</a>
       <a class="nav-item" data-page="calendar">📅 Calendário</a>
-      <a class="nav-item" data-page="profile">👤 Perfil</a>
-      <a class="nav-item" data-page="friends">👥 Amigos</a>
-      <a class="nav-item" data-page="groups">🏰 Grupos</a>
       <a class="nav-item" data-page="settings">⚙️ Configurações</a>
     </div>
     <div class="sidebar-bottom">
@@ -814,17 +813,17 @@
       <span class="bn-icon">🏠</span>
       <span class="bn-label">Início</span>
     </button>
-    <button class="bottom-nav-item" data-page="tasks">
-      <span class="bn-icon">✅</span>
-      <span class="bn-label">Tarefas</span>
+    <button class="bottom-nav-item" data-page="grades">
+      <span class="bn-icon">🎓</span>
+      <span class="bn-label">Notas</span>
     </button>
-    <button class="bottom-nav-item" data-page="missions">
-      <span class="bn-icon">🎯</span>
-      <span class="bn-label">Missões</span>
+    <button class="bottom-nav-item" data-page="friends">
+      <span class="bn-icon">👥</span>
+      <span class="bn-label">Amigos</span>
     </button>
-    <button class="bottom-nav-item" data-page="subjects">
-      <span class="bn-icon">📚</span>
-      <span class="bn-label">Matérias</span>
+    <button class="bottom-nav-item" data-page="groups">
+      <span class="bn-icon">🏰</span>
+      <span class="bn-label">Grupos</span>
     </button>
     <button class="bottom-nav-item" id="bottom-nav-more">
       <span class="bn-icon">☰</span>
