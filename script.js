@@ -6223,23 +6223,15 @@ async function openGroupInviteModal(groupId, currentMembers) {
   const friends   = await listFriendsWithData();
   const available = friends.filter(f => !memberIds.includes(f.id));
 
-  // Verifica quem já tem convite pendente
-  let pendingToIds = [];
-  if (sb && authUserId) {
-    const { data } = await sb.from('group_invites')
-      .select('to_id').eq('group_id', groupId).eq('status', 'pending');
-    pendingToIds = (data || []).map(r => r.to_id);
-  }
-
-  // Busca IDs dos convites pendentes enviados (para permitir cancelamento)
-  let pendingInvites = []; // { id, to_id }
+  // Busca convites pendentes enviados por MIM (para mostrar cancelar)
+  let pendingInvites = [];
   if (sb && authUserId) {
     const { data } = await sb.from('group_invites')
       .select('id, to_id').eq('group_id', groupId).eq('from_id', authUserId).eq('status', 'pending');
     pendingInvites = data || [];
   }
-  const pendingToIds = pendingInvites.map(r => r.to_id);
-  const pendingMap   = {}; pendingInvites.forEach(r => { pendingMap[r.to_id] = r.id; });
+  const pendingMap = {};
+  pendingInvites.forEach(r => { pendingMap[r.to_id] = r.id; });
 
   const availableHtml = available.length
     ? available.map(f => {
