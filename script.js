@@ -605,13 +605,12 @@ async function saveUserData(data) {
     const { error } = await sb
       .from('users')
       .upsert({
-        id:     uid,
-        name:   data.name   || '',
-        xp:     data.xp     || 0,
-        level:  data.level  || 1,
-        coins:  data.coins  || 0,
-        streak: data.streak || 0,
-        data:   data,         // state completo como JSONB
+        id:    uid,
+        name:  data.name  || '',
+        xp:    data.xp    || 0,
+        level: data.level || 1,
+        coins: data.coins || 0,
+        data:  data,        // state completo como JSONB (inclui streak)
       });
     if (error) console.warn('[Supabase] ❌ Erro ao salvar (código:', error.code, '):', error.message);
     else       console.log('[Supabase] ✅ State salvo — XP:', data.xp, '| Nível:', data.level, '| Nome:', data.name);
