@@ -5145,6 +5145,11 @@ function renderProfilePage() {
         <div class="profile-page-xptext">${state.xp} / ${xpNext} XP para o próximo nível</div>
       </div>
     </div>
+    ${authUserId ? `<div class="friend-code-box">
+      <span class="friend-code-label">🔑 Código de amizade:</span>
+      <span class="friend-code-val">${_friendCode(authUserId)}</span>
+      <button class="btn-sm btn-secondary" onclick="copyFriendCode()">📋 Copiar</button>
+    </div>` : ''}
     ${authNote}
     <div class="profile-stats-row">
       <div class="profile-stat"><span class="profile-stat-val">${state.totalXpEarned || 0}</span><span class="profile-stat-label">XP Total</span></div>
@@ -5286,6 +5291,60 @@ async function rejectFriendRequest(requestId) {
   } catch (e) {}
 }
 
+/** Cancela pedido que EU enviei */
+async function cancelFriendRequest(requestId) {
+  if (!sb || !authUserId) return;
+  try { await sb.from('friend_requests').delete().eq('id', requestId).eq('from_id', authUserId); } catch (e) {}
+}
+
+/** Lista pedidos que EU enviei com dados do destinatário */
+async function listSentRequests() {
+  if (!sb || !authUserId) return [];
+  try {
+    const { data: reqs } = await sb.from('friend_requests')
+      .select('id, to_id, created_at').eq('from_id', authUserId).eq('status', 'pending');
+    if (!reqs?.length) return [];
+    const ids = reqs.map(r => r.to_id);
+    const { data: users } = await sb.from('users').select('id, name, xp, level, data').in('id', ids);
+    const uMap = {};
+    (users || []).forEach(u => { uMap[u.id] = _parseUserRow(u); });
+    return reqs.map(r => ({ ...r, user: uMap[r.to_id] })).filter(r => r.user);
+  } catch (e) { return []; }
+}
+
+/** Busca usuário pelo código de amizade (8 hex chars) */
+async function searchUserByCode(code) {
+  if (!sb) return [];
+  const clean = code.trim().toLowerCase();
+  if (clean.length !== 8) return [];
+  try {
+    // UUID começa com esses 8 chars seguidos de '-'
+    const { data } = await sb.from('users').select('id, name, xp, level, data').ilike('id', `${clean}-%`);
+    return (data || []).map(_parseUserRow).filter(Boolean);
+  } catch (e) { return []; }
+}
+
+/** Amigos de amigos (sugestões) — exclui quem já é amigo ou tem pedido pendente */
+async function loadFriendSuggestions(myFriendIds, sentIds) {
+  if (!sb || !authUserId || !myFriendIds.length) return [];
+  try {
+    const { data: rows } = await sb.from('friends').select('friend_id').in('user_id', myFriendIds);
+    const countMap = {};
+    for (const row of (rows || [])) {
+      const fid = row.friend_id;
+      if (fid === authUserId || myFriendIds.includes(fid) || sentIds.includes(fid)) continue;
+      countMap[fid] = (countMap[fid] || 0) + 1;
+    }
+    const cids = Object.keys(countMap);
+    if (!cids.length) return [];
+    const { data: users } = await sb.from('users').select('id, name, xp, level, data').in('id', cids);
+    return (users || [])
+      .map(u => ({ ..._parseUserRow(u), mutualCount: countMap[u.id] || 0 }))
+      .sort((a, b) => b.mutualCount - a.mutualCount)
+      .slice(0, 8);
+  } catch (e) { return []; }
+}
+
 // ── Render ────────────────────────────────────────────────────
 
 function _friendCard(user) {
@@ -5316,9 +5375,14 @@ async function renderFriendsPage() {
   }
 
   container.innerHTML = '<div class="social-loading">Carregando amigos...</div>';
-  const [friends, pendingReqs] = await Promise.all([listFriendsWithData(), listPendingRequests()]);
+  const [friends, pendingReqs, sentReqs] = await Promise.all([
+    listFriendsWithData(), listPendingRequests(), listSentRequests(),
+  ]);
+  const myFriendIds = friends.map(f => f.id);
+  const sentIds     = sentReqs.map(r => r.to_id);
 
-  const pendingHtml = pendingReqs.length
+  // ── Painel: pedidos recebidos ──────────────────────────────
+  const receivedHtml = pendingReqs.length
     ? pendingReqs.map(req => `<div class="friend-card">
         <div class="friend-avatar">${req.user.avatar}</div>
         <div class="friend-info">
@@ -5330,54 +5394,96 @@ async function renderFriendsPage() {
           <button class="btn-reject" onclick="handleRejectFriend('${req.id}',this)">✕ Rejeitar</button>
         </div>
       </div>`).join('')
-    : '<div class="social-empty">Sem pedidos pendentes no momento. 😊</div>';
+    : '<div class="social-empty">Sem pedidos recebidos. 😊</div>';
+
+  // ── Painel: pedidos enviados ───────────────────────────────
+  const sentHtml = sentReqs.length
+    ? sentReqs.map(req => `<div class="friend-card">
+        <div class="friend-avatar">${req.user.avatar}</div>
+        <div class="friend-info">
+          <div class="friend-name">${escHtml(req.user.name)}</div>
+          <div class="friend-level">⚔️ Nível ${req.user.level} · ✨ ${req.user.xp} XP</div>
+        </div>
+        <button class="btn-reject" onclick="handleCancelFriendRequest('${req.id}',this)">✕ Cancelar</button>
+      </div>`).join('')
+    : '<div class="social-empty">Sem pedidos enviados. 😊</div>';
+
+  const totalPending = pendingReqs.length + sentReqs.length;
 
   const friendsHtml = friends.length
     ? friends.map(_friendCard).join('')
     : '<div class="social-empty">Sem amigos ainda. Clique em "Adicionar Amigo" para buscar! 😊</div>';
 
-  let html = `
+  container.innerHTML = `
     <div class="page-header"><h1>👥 Amigos</h1></div>
 
     <div class="friends-action-row">
       <button class="btn-primary" id="btn-buscar-amigo">🔍 Adicionar Amigo</button>
       <button class="btn-secondary" id="btn-pedidos">
-        📨 Pedidos Pendentes${pendingReqs.length ? `<span class="notif-badge">${pendingReqs.length}</span>` : ''}
+        📨 Pedidos${totalPending ? `<span class="notif-badge">${totalPending}</span>` : ''}
       </button>
     </div>
 
     <!-- Painel de busca (fechado por padrão) -->
     <div id="add-friend-section" class="friends-panel" style="display:none">
       <div class="friends-search-bar">
-        <input type="text" id="friend-search-input" placeholder="🔍 Nome do usuário..." autocomplete="off">
+        <input type="text" id="friend-search-input" placeholder="🔍 Buscar por nome..." autocomplete="off">
         <button class="btn-primary" id="friend-search-btn">Buscar</button>
       </div>
+      <div class="friends-search-bar" style="margin-top:.5rem">
+        <input type="text" id="friend-code-input" placeholder="🔑 Adicionar por código (ex: A3F7B2C1)" autocomplete="off" maxlength="8">
+        <button class="btn-secondary" id="friend-code-btn">Adicionar</button>
+      </div>
       <div id="friend-search-results"></div>
+      <div id="friend-suggestions-wrap"></div>
     </div>
 
-    <!-- Painel de pedidos pendentes (fechado por padrão) -->
+    <!-- Painel de pedidos (recebidos + enviados) -->
     <div id="pending-section" class="friends-panel" style="display:none">
-      <div class="social-section-title">📨 Pedidos Recebidos (${pendingReqs.length})</div>
-      ${pendingHtml}
+      <div class="social-section-title">📨 Recebidos (${pendingReqs.length})</div>
+      ${receivedHtml}
+      <div class="social-section-title" style="margin-top:.75rem">📤 Enviados (${sentReqs.length})</div>
+      ${sentHtml}
     </div>
 
     <div class="social-section-title">👥 Meus Amigos (${friends.length})</div>
     ${friendsHtml}
   `;
 
-  container.innerHTML = html;
-
   // Toggle: Adicionar Amigo
-  document.getElementById('btn-buscar-amigo').addEventListener('click', () => {
+  document.getElementById('btn-buscar-amigo').addEventListener('click', async () => {
     const s = document.getElementById('add-friend-section');
     const p = document.getElementById('pending-section');
     const opening = s.style.display === 'none';
     s.style.display = opening ? 'block' : 'none';
     p.style.display = 'none';
-    if (opening) document.getElementById('friend-search-input').focus();
+    if (opening) {
+      document.getElementById('friend-search-input').focus();
+      // Carrega sugestões (amigos de amigos)
+      const sugWrap = document.getElementById('friend-suggestions-wrap');
+      sugWrap.innerHTML = '<div class="social-loading" style="font-size:.8rem;padding:.5rem 0">Carregando sugestões...</div>';
+      const suggestions = await loadFriendSuggestions(myFriendIds, sentIds);
+      if (!suggestions.length) { sugWrap.innerHTML = ''; return; }
+      sugWrap.innerHTML = `<div class="social-section-title" style="margin-top:.75rem">✨ Sugestões de Amizade</div>` +
+        suggestions.map(u => {
+          const alreadySent = sentIds.includes(u.id);
+          const btn = alreadySent
+            ? '<span class="friend-tag pending-tag">⏳ Enviado</span>'
+            : `<button class="btn-add-friend" onclick="handleAddFriend('${u.id}',this)">+ Adicionar</button>`;
+          return `<div class="friend-card search-result">
+            <div class="friend-avatar">${u.avatar}</div>
+            <div class="friend-info">
+              <div class="friend-name">${escHtml(u.name)}</div>
+              <div class="friend-level">⚔️ Nível ${u.level} · ✨ ${u.xp} XP</div>
+              <div class="friend-fav">👥 ${u.mutualCount} amigo${u.mutualCount > 1 ? 's' : ''} em comum</div>
+            </div>
+            ${btn}
+          </div>`;
+        }).join('');
+    }
   });
 
-  // Toggle: Pedidos Pendentes
+  // Toggle: Pedidos
   document.getElementById('btn-pedidos').addEventListener('click', () => {
     const s = document.getElementById('add-friend-section');
     const p = document.getElementById('pending-section');
@@ -5387,9 +5493,10 @@ async function renderFriendsPage() {
   });
 
   document.getElementById('friend-search-btn').addEventListener('click', doFriendSearch);
-  document.getElementById('friend-search-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') doFriendSearch();
-  });
+  document.getElementById('friend-search-input').addEventListener('keydown', e => { if (e.key === 'Enter') doFriendSearch(); });
+
+  document.getElementById('friend-code-btn').addEventListener('click', doFriendCodeSearch);
+  document.getElementById('friend-code-input').addEventListener('keydown', e => { if (e.key === 'Enter') doFriendCodeSearch(); });
 }
 
 async function doFriendSearch() {
@@ -5427,6 +5534,50 @@ async function doFriendSearch() {
       ${btn}
     </div>`;
   }).join('');
+}
+
+async function doFriendCodeSearch() {
+  const code = document.getElementById('friend-code-input')?.value.trim().toUpperCase();
+  const resultsDiv = document.getElementById('friend-search-results');
+  if (!resultsDiv) return;
+  if (!code) { resultsDiv.innerHTML = ''; return; }
+  if (code.length !== 8) {
+    resultsDiv.innerHTML = '<div class="social-empty">O código deve ter 8 caracteres.</div>';
+    return;
+  }
+
+  resultsDiv.innerHTML = '<div class="social-loading">Buscando...</div>';
+  const results = await searchUserByCode(code);
+
+  if (!results.length) {
+    resultsDiv.innerHTML = '<div class="social-empty">Nenhum usuário encontrado com esse código.</div>';
+    return;
+  }
+
+  const [myFriendIds, sentIds] = await Promise.all([listFriendIds(), listSentRequestIds()]);
+  resultsDiv.innerHTML = results
+    .filter(u => u.id !== authUserId) // esconde a si mesmo
+    .map(u => {
+      let btn;
+      if (myFriendIds.includes(u.id))  btn = '<span class="friend-tag">Já é amigo ✓</span>';
+      else if (sentIds.includes(u.id)) btn = '<span class="friend-tag pending-tag">⏳ Pedido enviado</span>';
+      else btn = `<button class="btn-add-friend" onclick="handleAddFriend('${u.id}',this)">+ Adicionar</button>`;
+      return `<div class="friend-card search-result">
+        <div class="friend-avatar">${u.avatar}</div>
+        <div class="friend-info">
+          <div class="friend-name">${escHtml(u.name)}</div>
+          <div class="friend-level">⚔️ Nível ${u.level} · ✨ ${u.xp} XP</div>
+        </div>
+        ${btn}
+      </div>`;
+    }).join('') || '<div class="social-empty">Código pertence a você mesmo. 😄</div>';
+}
+
+async function handleCancelFriendRequest(requestId, btn) {
+  if (btn) btn.disabled = true;
+  await cancelFriendRequest(requestId);
+  showNotification('Pedido cancelado.', 'info');
+  renderFriendsPage();
 }
 
 async function handleAddFriend(friendId, btn) {
@@ -5497,6 +5648,18 @@ function generateInviteCode() {
 // Usa os primeiros 6 chars do UUID como código de convite (sem coluna extra)
 function _groupCode(id) {
   return id ? id.replace(/-/g, '').substring(0, 6).toUpperCase() : '';
+}
+
+/** Código de amizade: primeiros 8 hex chars do UUID, maiúsculo */
+function _friendCode(userId) {
+  return userId ? userId.replace(/-/g, '').substring(0, 8).toUpperCase() : '';
+}
+
+function copyFriendCode() {
+  const code = _friendCode(authUserId);
+  navigator.clipboard?.writeText(code)
+    .then(() => showNotification('🔑 Código copiado!', 'success'))
+    .catch(() => showNotification('Código: ' + code, 'info'));
 }
 
 async function createGroup(name) {
@@ -6034,6 +6197,12 @@ async function declineGroupInvite(inviteId) {
   try { await sb.from('group_invites').delete().eq('id', inviteId); } catch (e) {}
 }
 
+/** Cancela convite que EU enviei */
+async function cancelGroupInvite(inviteId) {
+  if (!sb || !authUserId) return;
+  try { await sb.from('group_invites').delete().eq('id', inviteId).eq('from_id', authUserId); } catch (e) {}
+}
+
 /** Remove um membro do grupo (apenas o criador pode chamar) */
 async function removeMemberFromGroup(groupId, userId) {
   if (!sb || !authUserId) return false;
@@ -6062,25 +6231,45 @@ async function openGroupInviteModal(groupId, currentMembers) {
     pendingToIds = (data || []).map(r => r.to_id);
   }
 
-  if (!available.length) {
-    listEl.innerHTML = '<div class="social-empty">Todos os seus amigos já estão no grupo! 😊</div>';
-    return;
+  // Busca IDs dos convites pendentes enviados (para permitir cancelamento)
+  let pendingInvites = []; // { id, to_id }
+  if (sb && authUserId) {
+    const { data } = await sb.from('group_invites')
+      .select('id, to_id').eq('group_id', groupId).eq('from_id', authUserId).eq('status', 'pending');
+    pendingInvites = data || [];
   }
+  const pendingToIds = pendingInvites.map(r => r.to_id);
+  const pendingMap   = {}; pendingInvites.forEach(r => { pendingMap[r.to_id] = r.id; });
 
-  listEl.innerHTML = available.map(f => {
-    const pending = pendingToIds.includes(f.id);
-    const btn = pending
-      ? '<span class="friend-tag pending-tag">⏳ Convite enviado</span>'
-      : `<button class="btn-primary btn-sm" onclick="handleSendGroupInvite('${groupId}','${f.id}',this)">+ Convidar</button>`;
-    return `<div class="friend-card">
-      <div class="friend-avatar">${f.avatar}</div>
-      <div class="friend-info">
-        <div class="friend-name">${escHtml(f.name)}</div>
-        <div class="friend-level">⚔️ Nível ${f.level} · ✨ ${f.xp} XP</div>
-      </div>
-      ${btn}
-    </div>`;
-  }).join('');
+  const availableHtml = available.length
+    ? available.map(f => {
+        const invId = pendingMap[f.id];
+        const btn = invId
+          ? `<button class="btn-reject" onclick="handleCancelGroupInvite('${invId}','${groupId}',this)" title="Cancelar convite">✕ Cancelar</button>`
+          : `<button class="btn-primary btn-sm" onclick="handleSendGroupInvite('${groupId}','${f.id}',this)">+ Convidar</button>`;
+        return `<div class="friend-card">
+          <div class="friend-avatar">${f.avatar}</div>
+          <div class="friend-info">
+            <div class="friend-name">${escHtml(f.name)}</div>
+            <div class="friend-level">⚔️ Nível ${f.level} · ✨ ${f.xp} XP</div>
+          </div>
+          ${btn}
+        </div>`;
+      }).join('')
+    : '<div class="social-empty">Todos os seus amigos já estão no grupo! 😊</div>';
+
+  listEl.innerHTML = availableHtml;
+}
+
+async function handleCancelGroupInvite(inviteId, groupId, btn) {
+  if (btn) btn.disabled = true;
+  await cancelGroupInvite(inviteId);
+  showNotification('Convite cancelado.', 'info');
+  // Reabre o modal atualizado
+  const modal = document.getElementById('modal-group-view');
+  const memberCount = parseInt(modal?.dataset.memberCount || '0', 10);
+  const members = await loadGroupMembers(groupId);
+  await openGroupInviteModal(groupId, members);
 }
 
 async function handleSendGroupInvite(groupId, toId, btn) {
