@@ -9,13 +9,52 @@
 // PWA — Service Worker + Botão de instalação
 // ============================================================
 
-// Registra o service worker assim que o script carrega
+// Registra o service worker e detecta atualizações automaticamente
 if ('serviceWorker' in navigator) {
+  // Guarda se já havia um SW ativo antes desta sessão
+  const _hadSwController = !!navigator.serviceWorker.controller;
+
+  // controllerchange dispara quando um NOVO SW assume controle da página
+  // (acontece após skipWaiting + clients.claim do novo SW)
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (_hadSwController) {
+      // Havia um SW antigo → esta é uma atualização real → mostra banner
+      _showSwUpdateBanner();
+    }
+  });
+
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./service-worker.js')
-      .then(reg => console.log('[SW] Registrado com sucesso. Scope:', reg.scope))
+      .then(reg => {
+        console.log('[SW] Registrado. Scope:', reg.scope);
+        // Verifica por novo SW a cada carregamento de página
+        reg.update();
+      })
       .catch(err => console.warn('[SW] Falha ao registrar:', err));
   });
+}
+
+/** Exibe banner de "Nova versão disponível" no rodapé da tela */
+function _showSwUpdateBanner() {
+  if (document.getElementById('sw-update-banner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'sw-update-banner';
+  banner.innerHTML = `
+    <span>🚀 Nova versão disponível!</span>
+    <button onclick="window.location.reload()" style="background:#fff;color:#7c3aed;border:none;border-radius:8px;padding:.3rem .8rem;font-weight:700;cursor:pointer;">Atualizar</button>
+    <button onclick="document.getElementById('sw-update-banner').remove()" style="background:transparent;color:rgba(255,255,255,.7);border:none;font-size:1.1rem;cursor:pointer;padding:0 .25rem;">✕</button>
+  `;
+  banner.style.cssText = [
+    'position:fixed', 'bottom:72px', 'left:50%', 'transform:translateX(-50%)',
+    'background:var(--primary, #7c3aed)', 'color:#fff',
+    'padding:.6rem 1rem', 'border-radius:12px',
+    'display:flex', 'align-items:center', 'gap:.75rem',
+    'z-index:9999', 'font-size:.88rem', 'font-weight:600',
+    'box-shadow:0 4px 24px rgba(0,0,0,.45)', 'white-space:nowrap',
+  ].join(';');
+  document.body.appendChild(banner);
+  // Some automaticamente após 30s se o usuário ignorar
+  setTimeout(() => banner.remove(), 30000);
 }
 
 // Armazena o evento beforeinstallprompt para usar depois
@@ -566,12 +605,13 @@ async function saveUserData(data) {
     const { error } = await sb
       .from('users')
       .upsert({
-        id:    uid,
-        name:  data.name  || '',
-        xp:    data.xp    || 0,
-        level: data.level || 1,
-        coins: data.coins || 0,
-        data:  data,          // state completo como JSONB
+        id:     uid,
+        name:   data.name   || '',
+        xp:     data.xp     || 0,
+        level:  data.level  || 1,
+        coins:  data.coins  || 0,
+        streak: data.streak || 0,
+        data:   data,         // state completo como JSONB
       });
     if (error) console.warn('[Supabase] ❌ Erro ao salvar (código:', error.code, '):', error.message);
     else       console.log('[Supabase] ✅ State salvo — XP:', data.xp, '| Nível:', data.level, '| Nome:', data.name);
@@ -5067,20 +5107,9 @@ function computeBestSubject() {
 }
 
 async function syncPublicProfile() {
-  if (!sb || !authUserId) return;
-  try {
-    await sb.from('profiles').upsert({
-      id: authUserId,
-      name: state.name || 'Herói',
-      avatar: state.avatar || '🧙',
-      level: state.level || 1,
-      total_xp: state.totalXpEarned || 0,
-      favorite_subject: state.favoriteSubject || '',
-      achievements: state.achievements || [],
-      best_subject: computeBestSubject(),
-      updated_at: new Date().toISOString(),
-    });
-  } catch (e) { console.warn('[Profile] syncPublicProfile erro:', e); }
+  // Garante que o state completo (incluindo avatar, favoriteSubject, achievements)
+  // está salvo na tabela users — fonte de verdade para o sistema de amigos.
+  await saveUserData(state);
 }
 
 function renderProfilePage() {
