@@ -970,15 +970,51 @@
 
 <!-- Modal: Ver Grupo -->
 <div class="modal-overlay" id="modal-group-view">
-  <div class="modal">
+  <div class="modal modal-wide">
     <h2 id="group-view-title">Grupo</h2>
-    <div id="group-view-code" style="font-size:.85rem;color:var(--text-muted);margin-bottom:.75rem"></div>
+    <div id="group-view-code" style="font-size:.85rem;color:var(--text-muted);margin-bottom:.5rem"></div>
     <button class="btn-secondary btn-sm" id="copy-invite-code-btn" style="margin-bottom:1rem">📋 Copiar código</button>
-    <div style="font-weight:700;margin-bottom:.5rem">👥 Membros</div>
+
+    <div class="group-view-section-title">👥 Membros</div>
     <div id="group-view-members"></div>
-    <div class="modal-btns">
-      <button class="btn-danger-action" id="leave-group-btn">🚪 Sair do Grupo</button>
+
+    <div class="group-view-section-title" style="margin-top:1.25rem">
+      📋 Tarefas do Grupo
+      <button class="btn-primary btn-sm" id="create-group-task-btn" style="margin-left:auto">+ Nova Tarefa</button>
+    </div>
+    <div id="group-view-tasks"></div>
+
+    <div class="modal-btns" style="margin-top:1.25rem">
+      <button class="btn-danger-action" id="leave-group-btn">🚪 Sair</button>
       <button class="btn-secondary" data-close="modal-group-view">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Criar Tarefa em Grupo -->
+<div class="modal-overlay" id="modal-create-group-task">
+  <div class="modal">
+    <h2>📋 Nova Tarefa em Grupo</h2>
+    <div class="auth-field">
+      <label class="auth-label">📌 Título da tarefa</label>
+      <input type="text" id="group-task-title" placeholder="Ex: Resolver lista de exercícios..." maxlength="60">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+      <div class="auth-field">
+        <label class="auth-label">⚡ XP de recompensa</label>
+        <input type="number" id="group-task-xp" value="50" min="10" max="500">
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">🪙 Moedas</label>
+        <input type="number" id="group-task-coins" value="20" min="5" max="200">
+      </div>
+    </div>
+    <p style="font-size:.8rem;color:var(--text-muted);margin:.5rem 0 1rem">
+      A recompensa é dada a todos os membros quando ≥ 50% concluírem a tarefa.
+    </p>
+    <div class="modal-btns">
+      <button class="btn-secondary" data-close="modal-create-group-task">Cancelar</button>
+      <button class="btn-primary" id="confirm-create-group-task-btn">Criar Tarefa</button>
     </div>
   </div>
 </div>

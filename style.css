@@ -1278,6 +1278,90 @@ canvas { max-width: 100%; border-radius: 8px; }
   from { opacity: 0; transform: scale(0.9) translateY(20px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
+.modal-wide { max-width: 560px; }
+
+/* ── Grupo: seção interna ───────────────────────────── */
+.group-view-section-title {
+  font-weight: 800;
+  font-size: .9rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: .6rem;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+/* ── Tarefas em Grupo ───────────────────────────────── */
+.group-task-card {
+  background: var(--bg-secondary, rgba(255,255,255,.04));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: .85rem 1rem;
+  margin-bottom: .65rem;
+}
+.group-task-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .5rem;
+  margin-bottom: .55rem;
+}
+.group-task-title {
+  font-weight: 700;
+  font-size: .95rem;
+  flex: 1;
+}
+.group-task-rewards {
+  font-size: .78rem;
+  font-weight: 700;
+  color: var(--primary-light, #a78bfa);
+  white-space: nowrap;
+}
+.group-task-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-bottom: .4rem;
+}
+.group-task-progress-bar {
+  flex: 1;
+  height: 7px;
+  background: rgba(255,255,255,.1);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.group-task-progress-fill {
+  height: 100%;
+  background: var(--primary, #7c3aed);
+  border-radius: 999px;
+  transition: width .4s ease;
+}
+.group-task-progress-fill.done { background: var(--success, #22c55e); }
+.group-task-pct {
+  font-size: .75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  min-width: 2.5rem;
+  text-align: right;
+}
+.group-task-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: .78rem;
+  color: var(--text-muted);
+  margin-bottom: .55rem;
+}
+.group-task-rewarded { color: #f59e0b; font-weight: 700; }
+.group-task-need     { color: var(--text-muted); }
+.group-task-actions  { display: flex; align-items: center; gap: .5rem; }
+.group-task-done-badge {
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--success, #22c55e);
+}
 
 .modal h2 {
   font-family: 'Fredoka One', cursive;
