@@ -5771,19 +5771,24 @@ async function createGroupTask(groupId, title, difficulty) {
 
 /** Dá a recompensa ao usuário atual e marca como recebida no banco */
 async function _giveGroupTaskReward(taskId, xpReward, coinsReward) {
-  state.xp               = (state.xp               || 0) + xpReward;
-  state.coins            = (state.coins             || 0) + coinsReward;
-  state.totalXpEarned    = (state.totalXpEarned     || 0) + xpReward;
+  const xp    = Math.max(1, xpReward    || 20);
+  const coins = Math.max(1, coinsReward || 10);
+
+  state.xp            = (state.xp            || 0) + xp;
+  state.coins         = (state.coins          || 0) + coins;
+  state.totalXpEarned = (state.totalXpEarned  || 0) + xp;
   checkLevelUp();
   saveState();
   updateAllUI();
-  showNotification(`🏆 Recompensa em grupo! +${xpReward} XP · +${coinsReward} 🪙`, 'success');
+  showNotification(`🏆 Recompensa em grupo! +${xp} XP · +${coins} 🪙`, 'success');
 
   if (sb && authUserId) {
-    await sb.from('group_task_progress')
-      .update({ reward_received: true })
-      .eq('task_id', taskId)
-      .eq('user_id', authUserId);
+    // Upsert garante que a linha existe E marca reward_received = true,
+    // mesmo que o usuário nunca tenha marcado a tarefa como feita.
+    await sb.from('group_task_progress').upsert(
+      { task_id: taskId, user_id: authUserId, reward_received: true },
+      { onConflict: 'task_id,user_id' }
+    );
   }
 }
 
@@ -5836,8 +5841,9 @@ async function markGroupTaskDone(taskId, groupId, memberCount, btn) {
         .eq('user_id', authUserId)
         .maybeSingle();
 
-      if (myRow && !myRow.reward_received) {
-        await _giveGroupTaskReward(taskId, task.xp_reward, task.coins_reward);
+      // Dá recompensa se: linha não existe OU reward_received ainda é false
+      if (!myRow || !myRow.reward_received) {
+        await _giveGroupTaskReward(taskId, task.xp_reward || 20, task.coins_reward || 10);
       }
     } else {
       showNotification('✅ Tarefa marcada! Aguardando outros membros...', 'info');
@@ -5856,60 +5862,69 @@ async function renderGroupTasks(groupId, memberCount) {
   const container = document.getElementById('group-view-tasks');
   if (!container) return;
 
-  const tasks = await loadGroupTasks(groupId);
+  try {
+    const tasks = await loadGroupTasks(groupId);
 
-  if (!tasks.length) {
-    container.innerHTML = '<div class="social-empty" style="margin:.25rem 0 0">Sem tarefas ainda. Crie a primeira! 📋</div>';
-    return;
-  }
+    if (!tasks.length) {
+      container.innerHTML = '<div class="social-empty" style="margin:.25rem 0 0">Sem tarefas ainda. Crie a primeira! 📋</div>';
+      return;
+    }
 
-  // Auto-entrega recompensas pendentes (quando o grupo já completou mas o usuário ainda não recebeu)
-  for (const task of tasks) {
-    if (task.reward_given) {
+    // Auto-entrega: para cada tarefa com reward_given = true,
+    // verifica se o usuário atual ainda não recebeu (linha inexistente OU reward_received = false)
+    for (const task of tasks) {
+      if (!task.reward_given) continue;
       const myRow = task.progress.find(p => p.user_id === authUserId);
-      if (myRow && !myRow.reward_received) {
-        await _giveGroupTaskReward(task.id, task.xp_reward, task.coins_reward);
-        myRow.reward_received = true; // atualiza localmente para evitar double-entrega
+      const jaRecebeu = myRow && myRow.reward_received;
+      if (!jaRecebeu) {
+        await _giveGroupTaskReward(task.id, task.xp_reward || 20, task.coins_reward || 10);
+        // Atualiza localmente para evitar dar novamente na próxima iteração
+        if (myRow) myRow.reward_received = true;
+        else task.progress.push({ user_id: authUserId, reward_received: true });
       }
     }
-  }
 
-  const diffLabels = { easy: '😊 Fácil', medium: '😤 Médio', hard: '💀 Difícil' };
-  const diffClass  = { easy: 'badge-easy', medium: 'badge-medium', hard: 'badge-hard' };
+    const diffLabels = { easy: '😊 Fácil', medium: '😤 Médio', hard: '💀 Difícil' };
+    const diffClass  = { easy: 'badge-easy', medium: 'badge-medium', hard: 'badge-hard' };
 
-  container.innerHTML = tasks.map(task => {
-    const completedCount = task.progress.length;
-    const needed         = Math.ceil(memberCount * 0.5);
-    const pct            = memberCount > 0 ? Math.round((completedCount / memberCount) * 100) : 0;
-    const iDone          = task.progress.some(p => p.user_id === authUserId);
-    const rewardGiven    = task.reward_given;
-    const diff           = task.difficulty || 'medium';
+    container.innerHTML = tasks.map(task => {
+      const completedCount = task.progress.length;
+      const needed         = Math.max(1, Math.ceil(memberCount * 0.5));
+      const pct            = memberCount > 0 ? Math.round((completedCount / memberCount) * 100) : 0;
+      const iDone          = task.progress.some(p => p.user_id === authUserId);
+      const rewardGiven    = task.reward_given;
+      const diff           = task.difficulty || 'medium';
 
-    return `<div class="group-task-card">
-      <div class="group-task-header">
-        <div class="group-task-title">${escHtml(task.title)}</div>
-        <span class="task-badge ${diffClass[diff]}">${diffLabels[diff]}</span>
-      </div>
-      <div class="group-task-rewards-row">⚡ +${task.xp_reward} XP · 🪙 +${task.coins_reward} moedas ao grupo</div>
-      <div class="group-task-progress-wrap">
-        <div class="group-task-progress-bar">
-          <div class="group-task-progress-fill ${rewardGiven ? 'done' : ''}" style="width:${pct}%"></div>
+      return `<div class="group-task-card">
+        <div class="group-task-header">
+          <div class="group-task-title">${escHtml(task.title)}</div>
+          <span class="task-badge ${diffClass[diff]}">${diffLabels[diff]}</span>
         </div>
-        <span class="group-task-pct">${pct}%</span>
-      </div>
-      <div class="group-task-meta">
-        <span>${completedCount} de ${memberCount} concluíram</span>
-        ${rewardGiven
-          ? '<span class="group-task-rewarded">🏆 Recompensa liberada!</span>'
-          : `<span class="group-task-need">Faltam ${Math.max(0, needed - completedCount)} para a recompensa</span>`}
-      </div>
-      <div class="group-task-actions">
-        ${iDone
-          ? '<span class="group-task-done-badge">✅ Você concluiu</span>'
-          : `<button class="btn-primary btn-sm" onclick="markGroupTaskDone('${task.id}','${groupId}',${memberCount},this)">✓ Marcar como feita</button>`}
-      </div>
-    </div>`;
-  }).join('');
+        <div class="group-task-rewards-row">⚡ +${task.xp_reward} XP · 🪙 +${task.coins_reward} moedas</div>
+        <div class="group-task-progress-wrap">
+          <div class="group-task-progress-bar">
+            <div class="group-task-progress-fill ${rewardGiven ? 'done' : ''}" style="width:${pct}%"></div>
+          </div>
+          <span class="group-task-pct">${pct}%</span>
+        </div>
+        <div class="group-task-meta">
+          <span>${completedCount} de ${memberCount} concluíram</span>
+          ${rewardGiven
+            ? '<span class="group-task-rewarded">🏆 Recompensa liberada!</span>'
+            : `<span class="group-task-need">Faltam ${Math.max(0, needed - completedCount)} para a recompensa</span>`}
+        </div>
+        <div class="group-task-actions">
+          ${iDone
+            ? '<span class="group-task-done-badge">✅ Você concluiu</span>'
+            : `<button class="btn-primary btn-sm" onclick="markGroupTaskDone('${task.id}','${groupId}',${memberCount},this)">✓ Marcar como feita</button>`}
+        </div>
+      </div>`;
+    }).join('');
+
+  } catch (e) {
+    console.error('[GroupTask] Erro ao renderizar tarefas:', e);
+    container.innerHTML = '<div class="social-empty">Erro ao carregar tarefas. Feche e abra o grupo novamente.</div>';
+  }
 }
 
 async function handleCreateGroupTask() {
