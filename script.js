@@ -5678,11 +5678,12 @@ async function openGroupView(groupId) {
     inviteBtn.onclick = () => openGroupInviteModal(groupId, members);
   }
 
-  // Guarda groupId no botão de nova tarefa e renderiza tarefas
+  // Guarda groupId e flag de admin no modal
   const createTaskBtn = document.getElementById('create-group-task-btn');
   if (createTaskBtn) createTaskBtn.dataset.groupId = groupId;
+  document.getElementById('modal-group-view').dataset.isAdmin = iAmCreator ? '1' : '0';
 
-  await renderGroupTasks(groupId, members.length);
+  await renderGroupTasks(groupId, members.length, iAmCreator);
 }
 
 async function handleCreateGroup() {
@@ -5847,7 +5848,8 @@ async function markGroupTaskDone(taskId, groupId, memberCount, btn) {
     }
 
     // Atualiza a lista de tarefas no modal
-    await renderGroupTasks(groupId, memberCount);
+    const _isAdmin = document.getElementById('modal-group-view')?.dataset.isAdmin === '1';
+    await renderGroupTasks(groupId, memberCount, _isAdmin);
   } catch (e) {
     console.warn('[GroupTask] Exceção em markGroupTaskDone:', e);
     if (btn) { btn.disabled = false; btn.textContent = '✓ Marcar como feita'; }
@@ -5855,7 +5857,7 @@ async function markGroupTaskDone(taskId, groupId, memberCount, btn) {
 }
 
 /** Renderiza as tarefas no modal do grupo e auto-entrega recompensas pendentes */
-async function renderGroupTasks(groupId, memberCount) {
+async function renderGroupTasks(groupId, memberCount, isAdmin = false) {
   const container = document.getElementById('group-view-tasks');
   if (!container) return;
 
@@ -5895,7 +5897,10 @@ async function renderGroupTasks(groupId, memberCount) {
       return `<div class="group-task-card">
         <div class="group-task-header">
           <div class="group-task-title">${escHtml(task.title)}</div>
-          <span class="task-badge ${diffClass[diff]}">${diffLabels[diff]}</span>
+          <div style="display:flex;align-items:center;gap:.4rem;flex-shrink:0">
+            <span class="task-badge ${diffClass[diff]}">${diffLabels[diff]}</span>
+            ${isAdmin ? `<button class="btn-danger-sm" title="Excluir tarefa" onclick="deleteGroupTask('${task.id}','${groupId}',${memberCount})">🗑</button>` : ''}
+          </div>
         </div>
         <div class="group-task-rewards-row">⚡ +${task.xp_reward} XP · 🪙 +${task.coins_reward} moedas</div>
         <div class="group-task-progress-wrap">
@@ -5924,6 +5929,20 @@ async function renderGroupTasks(groupId, memberCount) {
   }
 }
 
+async function deleteGroupTask(taskId, groupId, memberCount) {
+  if (!sb || !authUserId) return;
+  if (!confirm('Excluir esta tarefa? Essa ação não pode ser desfeita.')) return;
+
+  const { error } = await sb.from('group_tasks').delete().eq('id', taskId);
+  if (error) {
+    console.error('[GroupTask] Erro ao excluir:', error.message, error);
+    return showNotification('Erro ao excluir tarefa.', 'error');
+  }
+  showNotification('🗑 Tarefa excluída.', 'info');
+  const isAdmin = document.getElementById('modal-group-view')?.dataset.isAdmin === '1';
+  await renderGroupTasks(groupId, memberCount, isAdmin);
+}
+
 async function handleCreateGroupTask() {
   const groupId    = document.getElementById('create-group-task-btn')?.dataset.groupId;
   const title      = document.getElementById('group-task-title').value.trim();
@@ -5948,7 +5967,8 @@ async function handleCreateGroupTask() {
     const easyBtn = document.querySelector('.gt-diff-btn[data-diff="easy"]');
     if (easyBtn) easyBtn.classList.add('active');
     const members = await loadGroupMembers(groupId);
-    await renderGroupTasks(groupId, members.length);
+    const _isAdmin = document.getElementById('modal-group-view')?.dataset.isAdmin === '1';
+    await renderGroupTasks(groupId, members.length, _isAdmin);
   } else {
     showNotification('Erro ao criar tarefa. Tente novamente.', 'error');
   }
