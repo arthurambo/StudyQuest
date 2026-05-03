@@ -5579,11 +5579,31 @@ async function renderGroupsPage() {
   container.innerHTML = '<div class="social-loading">Carregando grupos...</div>';
   const myGroups = await loadMyGroups();
 
+  const invites = await listGroupInvites();
+
   let html = `
     <div class="page-header"><h1>🏰 Grupos de Estudo</h1></div>
     <div class="groups-actions">
       <button class="btn-primary" id="create-group-btn">+ Criar Grupo</button>
       <button class="btn-secondary" id="join-group-btn">🔗 Entrar por Código</button>
+      <button class="btn-secondary" id="group-invites-btn">
+        📨 Convites${invites.length ? `<span class="notif-badge">${invites.length}</span>` : ''}
+      </button>
+    </div>
+    <div id="group-invites-panel" class="friends-panel" style="display:none">
+      <div class="social-section-title">📨 Convites Recebidos (${invites.length})</div>
+      ${invites.length ? invites.map(inv => `
+        <div class="friend-card">
+          <div class="friend-avatar">🏰</div>
+          <div class="friend-info">
+            <div class="friend-name">${escHtml(inv.group_name)}</div>
+            <div class="friend-level">Convidado por ${escHtml(inv.from_name)}</div>
+          </div>
+          <div class="friend-request-btns">
+            <button class="btn-accept" onclick="handleAcceptGroupInvite('${inv.id}','${inv.group_id}',this)">✓ Entrar</button>
+            <button class="btn-reject" onclick="handleDeclineGroupInvite('${inv.id}',this)">✕</button>
+          </div>
+        </div>`).join('') : '<div class="social-empty">Sem convites pendentes.</div>'}
     </div>
   `;
 
@@ -5609,6 +5629,10 @@ async function renderGroupsPage() {
   container.innerHTML = html;
   document.getElementById('create-group-btn').addEventListener('click', () => openModal('modal-create-group'));
   document.getElementById('join-group-btn').addEventListener('click', () => openModal('modal-join-group'));
+  document.getElementById('group-invites-btn').addEventListener('click', () => {
+    const panel = document.getElementById('group-invites-panel');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  });
 }
 
 async function openGroupView(groupId) {
@@ -5630,19 +5654,29 @@ async function openGroupView(groupId) {
     document.getElementById('copy-invite-code-btn').dataset.code = code;
   }
 
+  const iAmCreator = group && group.created_by === authUserId;
+
   document.getElementById('group-view-members').innerHTML = members.map(m => {
     const p = m.profile;
     if (!p) return '';
     const isCreator = group && group.created_by === p.id;
-    return `<div class="friend-card" onclick="openFriendProfile('${p.id}')">
-      <div class="friend-avatar">${p.avatar}</div>
-      <div class="friend-info">
+    const canRemove = iAmCreator && !isCreator; // criador pode remover outros membros
+    return `<div class="friend-card">
+      <div class="friend-avatar" style="cursor:pointer" onclick="openFriendProfile('${p.id}')">${p.avatar}</div>
+      <div class="friend-info" style="cursor:pointer" onclick="openFriendProfile('${p.id}')">
         <div class="friend-name">${escHtml(p.name)} ${isCreator ? '👑' : ''}</div>
         <div class="friend-level">⚔️ Nível ${p.level} · ✨ ${p.xp} XP</div>
         ${p.favoriteSubject ? `<div class="friend-fav">❤️ ${escHtml(p.favoriteSubject)}</div>` : ''}
       </div>
+      ${canRemove ? `<button class="btn-danger-sm" onclick="handleRemoveMember('${groupId}','${p.id}','${escHtml(p.name)}',${members.length})" title="Remover membro">✕</button>` : ''}
     </div>`;
   }).join('') || '<div class="social-empty">Sem membros carregados.</div>';
+
+  // Botão convidar amigo
+  const inviteBtn = document.getElementById('invite-friend-btn');
+  if (inviteBtn) {
+    inviteBtn.onclick = () => openGroupInviteModal(groupId, members);
+  }
 
   // Guarda groupId no botão de nova tarefa e renderiza tarefas
   const createTaskBtn = document.getElementById('create-group-task-btn');
@@ -5717,12 +5751,15 @@ async function loadGroupTasks(groupId) {
   } catch (e) { return []; }
 }
 
-async function createGroupTask(groupId, title, xpReward, coinsReward) {
+async function createGroupTask(groupId, title, difficulty) {
   if (!sb || !authUserId) return null;
+  const xpReward    = XP_REWARDS[difficulty]   || 20;
+  const coinsReward = COIN_REWARDS[difficulty]  || 10;
   try {
     const { data, error } = await sb.from('group_tasks').insert({
       group_id:     groupId,
       title,
+      difficulty,
       xp_reward:    xpReward,
       coins_reward: coinsReward,
       created_by:   authUserId,
@@ -5837,18 +5874,23 @@ async function renderGroupTasks(groupId, memberCount) {
     }
   }
 
+  const diffLabels = { easy: '😊 Fácil', medium: '😤 Médio', hard: '💀 Difícil' };
+  const diffClass  = { easy: 'badge-easy', medium: 'badge-medium', hard: 'badge-hard' };
+
   container.innerHTML = tasks.map(task => {
     const completedCount = task.progress.length;
     const needed         = Math.ceil(memberCount * 0.5);
     const pct            = memberCount > 0 ? Math.round((completedCount / memberCount) * 100) : 0;
     const iDone          = task.progress.some(p => p.user_id === authUserId);
     const rewardGiven    = task.reward_given;
+    const diff           = task.difficulty || 'medium';
 
     return `<div class="group-task-card">
       <div class="group-task-header">
         <div class="group-task-title">${escHtml(task.title)}</div>
-        <div class="group-task-rewards">⚡${task.xp_reward} XP · 🪙${task.coins_reward}</div>
+        <span class="task-badge ${diffClass[diff]}">${diffLabels[diff]}</span>
       </div>
+      <div class="group-task-rewards-row">⚡ +${task.xp_reward} XP · 🪙 +${task.coins_reward} moedas ao grupo</div>
       <div class="group-task-progress-wrap">
         <div class="group-task-progress-bar">
           <div class="group-task-progress-fill ${rewardGiven ? 'done' : ''}" style="width:${pct}%"></div>
@@ -5873,8 +5915,7 @@ async function renderGroupTasks(groupId, memberCount) {
 async function handleCreateGroupTask() {
   const groupId    = document.getElementById('create-group-task-btn')?.dataset.groupId;
   const title      = document.getElementById('group-task-title').value.trim();
-  const xpReward   = parseInt(document.getElementById('group-task-xp').value)   || 50;
-  const coinsReward = parseInt(document.getElementById('group-task-coins').value) || 20;
+  const difficulty = document.querySelector('.gt-diff-btn.active')?.dataset.diff || 'medium';
 
   if (!groupId) return showNotification('Erro: grupo não identificado.', 'error');
   if (!title)   return showNotification('Digite o título da tarefa!', 'warning');
@@ -5882,7 +5923,7 @@ async function handleCreateGroupTask() {
   const btn = document.getElementById('confirm-create-group-task-btn');
   btn.disabled = true; btn.textContent = 'Criando...';
 
-  const task = await createGroupTask(groupId, title, xpReward, coinsReward);
+  const task = await createGroupTask(groupId, title, difficulty);
 
   btn.disabled = false; btn.textContent = 'Criar Tarefa';
 
@@ -5890,14 +5931,167 @@ async function handleCreateGroupTask() {
     showNotification('📋 Tarefa criada com sucesso!', 'success');
     closeModal('modal-create-group-task');
     document.getElementById('group-task-title').value = '';
-    document.getElementById('group-task-xp').value    = '50';
-    document.getElementById('group-task-coins').value = '20';
-
-    // Descobre quantos membros o grupo tem para re-renderizar
+    // Reset difficulty to easy
+    document.querySelectorAll('.gt-diff-btn').forEach(b => b.classList.remove('active'));
+    const easyBtn = document.querySelector('.gt-diff-btn[data-diff="easy"]');
+    if (easyBtn) easyBtn.classList.add('active');
     const members = await loadGroupMembers(groupId);
     await renderGroupTasks(groupId, members.length);
   } else {
     showNotification('Erro ao criar tarefa. Tente novamente.', 'error');
+  }
+}
+
+// ============================================================
+// CONVITES DE GRUPO — tabela group_invites
+// (group_id, from_id, to_id, status, created_at)
+// ============================================================
+
+/** Envia convite para um amigo entrar no grupo */
+async function sendGroupInvite(groupId, toId) {
+  if (!sb || !authUserId) return false;
+  try {
+    const { error } = await sb.from('group_invites').insert({
+      group_id: groupId, from_id: authUserId, to_id: toId, status: 'pending',
+    });
+    return !error;
+  } catch (e) { return false; }
+}
+
+/** Lista convites pendentes recebidos pelo usuário atual */
+async function listGroupInvites() {
+  if (!sb || !authUserId) return [];
+  try {
+    const { data: invites } = await sb
+      .from('group_invites').select('id, group_id, from_id').eq('to_id', authUserId).eq('status', 'pending');
+    if (!invites || !invites.length) return [];
+
+    const groupIds  = [...new Set(invites.map(i => i.group_id))];
+    const fromIds   = [...new Set(invites.map(i => i.from_id))];
+    const [{ data: groups }, { data: fromUsers }] = await Promise.all([
+      sb.from('study_groups').select('id, name').in('id', groupIds),
+      sb.from('users').select('id, name').in('id', fromIds),
+    ]);
+    const gMap = {}; (groups   || []).forEach(g => { gMap[g.id] = g.name; });
+    const uMap = {}; (fromUsers || []).forEach(u => { uMap[u.id] = u.name || 'Alguém'; });
+
+    return invites.map(i => ({
+      id: i.id, group_id: i.group_id,
+      group_name: gMap[i.group_id] || 'Grupo',
+      from_name:  uMap[i.from_id]  || 'Alguém',
+    }));
+  } catch (e) { return []; }
+}
+
+/** Aceita convite: entra no grupo e exclui o convite */
+async function acceptGroupInvite(inviteId, groupId) {
+  if (!sb || !authUserId) return false;
+  try {
+    const { data: existing } = await sb.from('group_members')
+      .select('user_id').eq('group_id', groupId).eq('user_id', authUserId).maybeSingle();
+    if (!existing) {
+      await sb.from('group_members').insert({ group_id: groupId, user_id: authUserId });
+    }
+    await sb.from('group_invites').delete().eq('id', inviteId);
+    return true;
+  } catch (e) { return false; }
+}
+
+/** Recusa convite */
+async function declineGroupInvite(inviteId) {
+  if (!sb || !authUserId) return;
+  try { await sb.from('group_invites').delete().eq('id', inviteId); } catch (e) {}
+}
+
+/** Remove um membro do grupo (apenas o criador pode chamar) */
+async function removeMemberFromGroup(groupId, userId) {
+  if (!sb || !authUserId) return false;
+  try {
+    await sb.from('group_members').delete().eq('group_id', groupId).eq('user_id', userId);
+    return true;
+  } catch (e) { return false; }
+}
+
+/** Abre modal de convite mostrando amigos que ainda não estão no grupo */
+async function openGroupInviteModal(groupId, currentMembers) {
+  const listEl = document.getElementById('invite-friend-list');
+  if (!listEl) return;
+  listEl.innerHTML = '<div class="social-loading">Carregando amigos...</div>';
+  openModal('modal-invite-to-group');
+
+  const memberIds = currentMembers.map(m => m.profile?.id).filter(Boolean);
+  const friends   = await listFriendsWithData();
+  const available = friends.filter(f => !memberIds.includes(f.id));
+
+  // Verifica quem já tem convite pendente
+  let pendingToIds = [];
+  if (sb && authUserId) {
+    const { data } = await sb.from('group_invites')
+      .select('to_id').eq('group_id', groupId).eq('status', 'pending');
+    pendingToIds = (data || []).map(r => r.to_id);
+  }
+
+  if (!available.length) {
+    listEl.innerHTML = '<div class="social-empty">Todos os seus amigos já estão no grupo! 😊</div>';
+    return;
+  }
+
+  listEl.innerHTML = available.map(f => {
+    const pending = pendingToIds.includes(f.id);
+    const btn = pending
+      ? '<span class="friend-tag pending-tag">⏳ Convite enviado</span>'
+      : `<button class="btn-primary btn-sm" onclick="handleSendGroupInvite('${groupId}','${f.id}',this)">+ Convidar</button>`;
+    return `<div class="friend-card">
+      <div class="friend-avatar">${f.avatar}</div>
+      <div class="friend-info">
+        <div class="friend-name">${escHtml(f.name)}</div>
+        <div class="friend-level">⚔️ Nível ${f.level} · ✨ ${f.xp} XP</div>
+      </div>
+      ${btn}
+    </div>`;
+  }).join('');
+}
+
+async function handleSendGroupInvite(groupId, toId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  const ok = await sendGroupInvite(groupId, toId);
+  if (ok) {
+    if (btn) btn.outerHTML = '<span class="friend-tag pending-tag">⏳ Convite enviado</span>';
+    showNotification('✉️ Convite enviado!', 'success');
+  } else {
+    if (btn) { btn.disabled = false; btn.textContent = '+ Convidar'; }
+    showNotification('Erro ao enviar convite.', 'error');
+  }
+}
+
+async function handleAcceptGroupInvite(inviteId, groupId, btn) {
+  if (btn) btn.disabled = true;
+  const ok = await acceptGroupInvite(inviteId, groupId);
+  if (ok) {
+    showNotification('🏰 Você entrou no grupo!', 'success');
+    renderGroupsPage();
+  } else {
+    showNotification('Erro ao aceitar convite.', 'error');
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function handleDeclineGroupInvite(inviteId, btn) {
+  if (btn) btn.disabled = true;
+  await declineGroupInvite(inviteId);
+  showNotification('Convite recusado.', 'info');
+  renderGroupsPage();
+}
+
+async function handleRemoveMember(groupId, userId, userName, memberCount) {
+  if (!confirm(`Remover "${userName}" do grupo?`)) return;
+  const ok = await removeMemberFromGroup(groupId, userId);
+  if (ok) {
+    showNotification(`${userName} foi removido do grupo.`, 'info');
+    // Re-abre o modal com dados atualizados
+    await openGroupView(groupId);
+  } else {
+    showNotification('Erro ao remover membro.', 'error');
   }
 }
 
@@ -5928,6 +6122,14 @@ function initSocialModals() {
     closeModal('modal-group-view');
     showNotification('Você saiu do grupo.', 'info');
     renderGroupsPage();
+  });
+
+  // Botões de dificuldade do modal de tarefa em grupo
+  document.querySelectorAll('.gt-diff-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.gt-diff-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
   });
 
   // Abrir modal de nova tarefa (botão dentro do modal de grupo)

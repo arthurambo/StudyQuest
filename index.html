@@ -973,7 +973,10 @@
   <div class="modal modal-wide">
     <h2 id="group-view-title">Grupo</h2>
     <div id="group-view-code" style="font-size:.85rem;color:var(--text-muted);margin-bottom:.5rem"></div>
-    <button class="btn-secondary btn-sm" id="copy-invite-code-btn" style="margin-bottom:1rem">📋 Copiar código</button>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem">
+      <button class="btn-secondary btn-sm" id="copy-invite-code-btn">📋 Copiar código</button>
+      <button class="btn-secondary btn-sm" id="invite-friend-btn">👥 Convidar Amigo</button>
+    </div>
 
     <div class="group-view-section-title">👥 Membros</div>
     <div id="group-view-members"></div>
@@ -999,22 +1002,32 @@
       <label class="auth-label">📌 Título da tarefa</label>
       <input type="text" id="group-task-title" placeholder="Ex: Resolver lista de exercícios..." maxlength="60">
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
-      <div class="auth-field">
-        <label class="auth-label">⚡ XP de recompensa</label>
-        <input type="number" id="group-task-xp" value="50" min="10" max="500">
-      </div>
-      <div class="auth-field">
-        <label class="auth-label">🪙 Moedas</label>
-        <input type="number" id="group-task-coins" value="20" min="5" max="200">
+    <div class="auth-field">
+      <label class="auth-label">⚡ Dificuldade</label>
+      <div class="diff-btns">
+        <button class="diff-btn gt-diff-btn active" data-diff="easy">😊 Fácil (+10 XP)</button>
+        <button class="diff-btn gt-diff-btn" data-diff="medium">😤 Médio (+20 XP)</button>
+        <button class="diff-btn gt-diff-btn" data-diff="hard">💀 Difícil (+40 XP)</button>
       </div>
     </div>
-    <p style="font-size:.8rem;color:var(--text-muted);margin:.5rem 0 1rem">
-      A recompensa é dada a todos os membros quando ≥ 50% concluírem a tarefa.
+    <p style="font-size:.8rem;color:var(--text-muted);margin:.25rem 0 1rem">
+      Recompensa dada a todos quando ≥ 50% concluírem.
     </p>
     <div class="modal-btns">
       <button class="btn-secondary" data-close="modal-create-group-task">Cancelar</button>
       <button class="btn-primary" id="confirm-create-group-task-btn">Criar Tarefa</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Convidar Amigo para Grupo -->
+<div class="modal-overlay" id="modal-invite-to-group">
+  <div class="modal">
+    <h2>👥 Convidar Amigo</h2>
+    <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem">Selecione um amigo para convidar para o grupo.</p>
+    <div id="invite-friend-list"><div class="social-loading">Carregando amigos...</div></div>
+    <div class="modal-btns">
+      <button class="btn-secondary" data-close="modal-invite-to-group">Fechar</button>
     </div>
   </div>
 </div>

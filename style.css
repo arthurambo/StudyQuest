@@ -1362,6 +1362,20 @@ canvas { max-width: 100%; border-radius: 8px; }
   font-weight: 700;
   color: var(--success, #22c55e);
 }
+.group-task-rewards-row {
+  font-size: .78rem;
+  color: var(--primary-light, #a78bfa);
+  font-weight: 600;
+  margin-bottom: .5rem;
+}
+/* grupos-actions com 3 botões */
+.groups-actions {
+  display: flex;
+  gap: .6rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.groups-actions > button { flex: 1; min-width: 120px; }
 
 .modal h2 {
   font-family: 'Fredoka One', cursive;
