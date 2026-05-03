@@ -14,7 +14,8 @@
       "PowerShell(Get-Command gh -ErrorAction SilentlyContinue)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp"
     ]
   }
 }
