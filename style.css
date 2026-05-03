@@ -3224,6 +3224,43 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
 /* =============================================
    AMIGOS
    ============================================= */
+.friends-action-row {
+  display: flex;
+  gap: .75rem;
+  margin-bottom: 1.25rem;
+}
+.friends-action-row .btn-primary,
+.friends-action-row .btn-secondary {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  font-size: .9rem;
+  padding: .65rem .75rem;
+  position: relative;
+}
+.notif-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 999px;
+  font-size: .7rem;
+  font-weight: 800;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  margin-left: .25rem;
+}
+.friends-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
 .friends-search-section {
   background: var(--bg-card);
   border: 1px solid var(--border);

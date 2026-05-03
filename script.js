@@ -5319,41 +5319,73 @@ async function renderFriendsPage() {
   container.innerHTML = '<div class="social-loading">Carregando amigos...</div>';
   const [friends, pendingReqs] = await Promise.all([listFriendsWithData(), listPendingRequests()]);
 
+  const pendingHtml = pendingReqs.length
+    ? pendingReqs.map(req => `<div class="friend-card">
+        <div class="friend-avatar">${req.user.avatar}</div>
+        <div class="friend-info">
+          <div class="friend-name">${escHtml(req.user.name)}</div>
+          <div class="friend-level">⚔️ Nível ${req.user.level} · ✨ ${req.user.xp} XP</div>
+        </div>
+        <div class="friend-request-btns">
+          <button class="btn-accept" onclick="handleAcceptFriend('${req.from_id}','${req.id}',this)">✓ Aceitar</button>
+          <button class="btn-reject" onclick="handleRejectFriend('${req.id}',this)">✕ Rejeitar</button>
+        </div>
+      </div>`).join('')
+    : '<div class="social-empty">Sem pedidos pendentes no momento. 😊</div>';
+
+  const friendsHtml = friends.length
+    ? friends.map(_friendCard).join('')
+    : '<div class="social-empty">Sem amigos ainda. Clique em "Adicionar Amigo" para buscar! 😊</div>';
+
   let html = `
     <div class="page-header"><h1>👥 Amigos</h1></div>
-    <div class="friends-search-section">
-      <p class="friends-search-hint">Digite o nome de um usuário para encontrá-lo e adicionar como amigo.</p>
+
+    <div class="friends-action-row">
+      <button class="btn-primary" id="btn-buscar-amigo">🔍 Adicionar Amigo</button>
+      <button class="btn-secondary" id="btn-pedidos">
+        📨 Pedidos Pendentes${pendingReqs.length ? `<span class="notif-badge">${pendingReqs.length}</span>` : ''}
+      </button>
+    </div>
+
+    <!-- Painel de busca (fechado por padrão) -->
+    <div id="add-friend-section" class="friends-panel" style="display:none">
       <div class="friends-search-bar">
         <input type="text" id="friend-search-input" placeholder="🔍 Nome do usuário..." autocomplete="off">
         <button class="btn-primary" id="friend-search-btn">Buscar</button>
       </div>
       <div id="friend-search-results"></div>
     </div>
+
+    <!-- Painel de pedidos pendentes (fechado por padrão) -->
+    <div id="pending-section" class="friends-panel" style="display:none">
+      <div class="social-section-title">📨 Pedidos Recebidos (${pendingReqs.length})</div>
+      ${pendingHtml}
+    </div>
+
+    <div class="social-section-title">👥 Meus Amigos (${friends.length})</div>
+    ${friendsHtml}
   `;
 
-  if (pendingReqs.length) {
-    html += `<div class="social-section-title">📨 Pedidos Recebidos (${pendingReqs.length})</div>`;
-    html += pendingReqs.map(req => `<div class="friend-card">
-      <div class="friend-avatar">${req.user.avatar}</div>
-      <div class="friend-info">
-        <div class="friend-name">${escHtml(req.user.name)}</div>
-        <div class="friend-level">⚔️ Nível ${req.user.level} · ✨ ${req.user.xp} XP</div>
-      </div>
-      <div class="friend-request-btns">
-        <button class="btn-accept" onclick="handleAcceptFriend('${req.from_id}','${req.id}',this)">✓ Aceitar</button>
-        <button class="btn-reject" onclick="handleRejectFriend('${req.id}',this)">✕ Rejeitar</button>
-      </div>
-    </div>`).join('');
-  }
-
-  html += `<div class="social-section-title">👥 Meus Amigos (${friends.length})</div>`;
-  if (friends.length) {
-    html += friends.map(_friendCard).join('');
-  } else {
-    html += '<div class="social-empty">Sem amigos ainda. Busque pelo nome acima e clique em "+ Adicionar"! 😊</div>';
-  }
-
   container.innerHTML = html;
+
+  // Toggle: Adicionar Amigo
+  document.getElementById('btn-buscar-amigo').addEventListener('click', () => {
+    const s = document.getElementById('add-friend-section');
+    const p = document.getElementById('pending-section');
+    const opening = s.style.display === 'none';
+    s.style.display = opening ? 'block' : 'none';
+    p.style.display = 'none';
+    if (opening) document.getElementById('friend-search-input').focus();
+  });
+
+  // Toggle: Pedidos Pendentes
+  document.getElementById('btn-pedidos').addEventListener('click', () => {
+    const s = document.getElementById('add-friend-section');
+    const p = document.getElementById('pending-section');
+    const opening = p.style.display === 'none';
+    p.style.display = opening ? 'block' : 'none';
+    s.style.display = 'none';
+  });
 
   document.getElementById('friend-search-btn').addEventListener('click', doFriendSearch);
   document.getElementById('friend-search-input').addEventListener('keydown', e => {
@@ -5463,27 +5495,40 @@ function generateInviteCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-async function createGroup(name, description) {
-  if (!sb || !authUserId) return null;
-  try {
-    const inviteCode = generateInviteCode();
-    const { data, error } = await sb.from('study_groups').insert({
-      name, description, creator_id: authUserId, invite_code: inviteCode,
-    }).select().single();
-    if (error || !data) return null;
-    await sb.from('group_members').insert({ group_id: data.id, user_id: authUserId, role: 'creator' });
-    return data;
-  } catch (e) { return null; }
+// Usa os primeiros 6 chars do UUID como código de convite (sem coluna extra)
+function _groupCode(id) {
+  return id ? id.replace(/-/g, '').substring(0, 6).toUpperCase() : '';
 }
 
-async function joinGroupByCode(inviteCode) {
+async function createGroup(name) {
   if (!sb || !authUserId) return null;
   try {
-    const { data: group, error } = await sb.from('study_groups').select('*').eq('invite_code', inviteCode.toUpperCase().trim()).single();
-    if (error || !group) return null;
-    // Check already member
-    const { data: existing } = await sb.from('group_members').select('*').eq('group_id', group.id).eq('user_id', authUserId).single();
-    if (existing) return group; // already in
+    const { data, error } = await sb.from('study_groups').insert({
+      name,
+      created_by: authUserId,
+    }).select().single();
+    if (error || !data) {
+      console.warn('[Grupo] Erro ao criar:', error?.message);
+      return null;
+    }
+    await sb.from('group_members').insert({ group_id: data.id, user_id: authUserId });
+    return data;
+  } catch (e) {
+    console.warn('[Grupo] Exceção ao criar:', e);
+    return null;
+  }
+}
+
+async function joinGroupByCode(code) {
+  if (!sb || !authUserId) return null;
+  const clean = code.trim().toUpperCase();
+  try {
+    // Busca grupos cujo id começa com o código (primeiros 6 chars sem hífens)
+    const { data: groups } = await sb.from('study_groups').select('*');
+    const group = (groups || []).find(g => _groupCode(g.id) === clean);
+    if (!group) return null;
+    const { data: existing } = await sb.from('group_members').select('id').eq('group_id', group.id).eq('user_id', authUserId).maybeSingle();
+    if (existing) return group;
     await sb.from('group_members').insert({ group_id: group.id, user_id: authUserId });
     return group;
   } catch (e) { return null; }
@@ -5497,21 +5542,28 @@ async function leaveGroup(groupId) {
 async function loadMyGroups() {
   if (!sb || !authUserId) return [];
   try {
-    const { data } = await sb.from('group_members').select('role, group:study_groups(*)').eq('user_id', authUserId);
-    return data || [];
+    const { data: memberships } = await sb.from('group_members').select('group_id').eq('user_id', authUserId);
+    if (!memberships || !memberships.length) return [];
+    const ids = memberships.map(m => m.group_id);
+    const { data: groups } = await sb.from('study_groups').select('*').in('id', ids);
+    if (!groups) return [];
+    return groups.map(g => ({
+      group: g,
+      isCreator: g.created_by === authUserId,
+    }));
   } catch (e) { return []; }
 }
 
 async function loadGroupMembers(groupId) {
   if (!sb) return [];
   try {
-    const { data: members } = await sb.from('group_members').select('role, user_id').eq('group_id', groupId);
+    const { data: members } = await sb.from('group_members').select('user_id').eq('group_id', groupId);
     if (!members || !members.length) return [];
     const ids = members.map(m => m.user_id);
     const { data: users } = await sb.from('users').select('id, name, xp, level, data').in('id', ids);
     const userMap = {};
     (users || []).forEach(u => { userMap[u.id] = _parseUserRow(u); });
-    return members.map(m => ({ role: m.role, profile: userMap[m.user_id] }));
+    return members.map(m => ({ profile: userMap[m.user_id] }));
   } catch (e) { return []; }
 }
 
@@ -5540,14 +5592,14 @@ async function renderGroupsPage() {
     html += myGroups.map(mg => {
       const g = mg.group;
       if (!g) return '';
+      const code = _groupCode(g.id);
       return `<div class="group-card" onclick="openGroupView('${g.id}')">
         <div class="group-icon">🏰</div>
         <div class="group-info">
           <div class="group-name">${escHtml(g.name)}</div>
-          <div class="group-desc">${g.description ? escHtml(g.description) : 'Sem descrição'}</div>
-          <div class="group-code">Código: <strong>${g.invite_code}</strong></div>
+          <div class="group-code">Código: <strong>${code}</strong></div>
         </div>
-        <div class="group-role">${mg.role === 'creator' ? '👑' : '👤'}</div>
+        <div class="group-role">${mg.isCreator ? '👑' : '👤'}</div>
       </div>`;
     }).join('');
   } else {
@@ -5567,21 +5619,22 @@ async function openGroupView(groupId) {
   // Store groupId for leave action
   document.getElementById('modal-group-view').dataset.groupId = groupId;
 
-  // Try get group info from members data
   const { data: group } = sb ? await sb.from('study_groups').select('*').eq('id', groupId).single() : { data: null };
   if (group) {
+    const code = _groupCode(group.id);
     document.getElementById('group-view-title').textContent = group.name;
-    document.getElementById('group-view-code').textContent  = `Código de convite: ${group.invite_code}`;
-    document.getElementById('copy-invite-code-btn').dataset.code = group.invite_code;
+    document.getElementById('group-view-code').textContent  = `Código de convite: ${code}`;
+    document.getElementById('copy-invite-code-btn').dataset.code = code;
   }
 
   document.getElementById('group-view-members').innerHTML = members.map(m => {
     const p = m.profile;
     if (!p) return '';
+    const isCreator = group && group.created_by === p.id;
     return `<div class="friend-card" onclick="openFriendProfile('${p.id}')">
       <div class="friend-avatar">${p.avatar}</div>
       <div class="friend-info">
-        <div class="friend-name">${escHtml(p.name)} ${m.role === 'creator' ? '👑' : ''}</div>
+        <div class="friend-name">${escHtml(p.name)} ${isCreator ? '👑' : ''}</div>
         <div class="friend-level">⚔️ Nível ${p.level} · ✨ ${p.xp} XP</div>
         ${p.favoriteSubject ? `<div class="friend-fav">❤️ ${escHtml(p.favoriteSubject)}</div>` : ''}
       </div>
@@ -5591,17 +5644,17 @@ async function openGroupView(groupId) {
 
 async function handleCreateGroup() {
   const name = document.getElementById('create-group-name').value.trim();
-  const desc = document.getElementById('create-group-desc').value.trim();
   if (!name) return showNotification('Digite o nome do grupo!', 'warning');
   const btn = document.getElementById('confirm-create-group-btn');
   btn.disabled = true; btn.textContent = 'Criando...';
-  const group = await createGroup(name, desc);
+  const group = await createGroup(name);
   btn.disabled = false; btn.textContent = 'Criar Grupo';
   if (group) {
-    showNotification('🏰 Grupo "' + name + '" criado! Código: ' + group.invite_code, 'success');
+    const code = _groupCode(group.id);
+    showNotification(`🏰 Grupo "${name}" criado! Código: ${code}`, 'success');
     closeModal('modal-create-group');
     document.getElementById('create-group-name').value = '';
-    document.getElementById('create-group-desc').value = '';
+    if (document.getElementById('create-group-desc')) document.getElementById('create-group-desc').value = '';
     renderGroupsPage();
   } else {
     showNotification('Erro ao criar grupo. Tente novamente.', 'error');
