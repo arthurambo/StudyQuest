@@ -5731,24 +5731,26 @@ async function handleJoinGroup() {
 async function loadGroupTasks(groupId) {
   if (!sb) return [];
   try {
-    const { data: tasks } = await sb
+    const { data: tasks, error: tasksErr } = await sb
       .from('group_tasks')
       .select('*')
       .eq('group_id', groupId)
       .order('created_at', { ascending: false });
+    if (tasksErr) { console.error('[GroupTask] Erro ao carregar tarefas:', tasksErr.message, tasksErr); return []; }
     if (!tasks || !tasks.length) return [];
 
     const taskIds = tasks.map(t => t.id);
-    const { data: progress } = await sb
+    const { data: progress, error: progErr } = await sb
       .from('group_task_progress')
       .select('task_id, user_id, reward_received')
       .in('task_id', taskIds);
+    if (progErr) console.warn('[GroupTask] Erro ao carregar progresso:', progErr.message, progErr);
 
     return tasks.map(t => ({
       ...t,
       progress: (progress || []).filter(p => p.task_id === t.id),
     }));
-  } catch (e) { return []; }
+  } catch (e) { console.error('[GroupTask] Exceção em loadGroupTasks:', e); return []; }
 }
 
 async function createGroupTask(groupId, title, difficulty) {
@@ -5764,9 +5766,9 @@ async function createGroupTask(groupId, title, difficulty) {
       coins_reward: coinsReward,
       created_by:   authUserId,
     }).select().single();
-    if (error) { console.warn('[GroupTask] Erro ao criar:', error.message); return null; }
+    if (error) { console.error('[GroupTask] Erro ao criar:', error.message, error); return null; }
     return data;
-  } catch (e) { return null; }
+  } catch (e) { console.error('[GroupTask] Exceção ao criar:', e); return null; }
 }
 
 /** Dá a recompensa ao usuário atual e marca como recebida no banco */
@@ -5802,13 +5804,13 @@ async function markGroupTaskDone(taskId, groupId, memberCount, btn) {
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
 
   try {
-    // Registra conclusão (UNIQUE task_id + user_id, ignora duplicatas)
-    const { error } = await sb.from('group_task_progress').upsert(
-      { task_id: taskId, user_id: authUserId, reward_received: false },
-      { onConflict: 'task_id,user_id', ignoreDuplicates: true }
-    );
-    if (error) {
-      console.warn('[GroupTask] Erro ao marcar progresso:', error.message);
+    // Registra conclusão — INSERT ignorando se já existe (não sobrescreve reward_received=true)
+    const { error } = await sb.from('group_task_progress').insert(
+      { task_id: taskId, user_id: authUserId, reward_received: false }
+    ).select().maybeSingle();
+    // Ignora erro de unicidade (código 23505 = duplicate key); outros erros são bloqueantes
+    if (error && error.code !== '23505') {
+      console.error('[GroupTask] Erro ao marcar progresso:', error.message, error);
       if (btn) { btn.disabled = false; btn.textContent = '✓ Marcar como feita'; }
       return;
     }
