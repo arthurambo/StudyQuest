@@ -5318,10 +5318,13 @@ async function searchUserByCode(code) {
   const clean = code.trim().toLowerCase();
   if (clean.length !== 8) return [];
   try {
-    // UUID começa com esses 8 chars seguidos de '-'
-    const { data } = await sb.from('users').select('id, name, xp, level, data').ilike('id', `${clean}-%`);
+    // UUID é tipo uuid no Postgres — precisa cast para text para usar LIKE
+    const { data, error } = await sb.from('users')
+      .select('id, name, xp, level, data')
+      .filter('id::text', 'ilike', `${clean}-%`);
+    if (error) console.error('[FriendCode] Erro na busca por código:', error.message, error);
     return (data || []).map(_parseUserRow).filter(Boolean);
-  } catch (e) { return []; }
+  } catch (e) { console.error('[FriendCode] Exceção:', e); return []; }
 }
 
 /** Amigos de amigos (sugestões) — exclui quem já é amigo ou tem pedido pendente */
