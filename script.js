@@ -5776,21 +5776,16 @@ async function _giveGroupTaskReward(taskId, xpReward, coinsReward) {
   const xp    = Math.max(1, xpReward    || 20);
   const coins = Math.max(1, coinsReward || 10);
 
-  state.xp            = (state.xp            || 0) + xp;
-  state.coins         = (state.coins          || 0) + coins;
-  state.totalXpEarned = (state.totalXpEarned  || 0) + xp;
-  checkLevelUp();
-  saveState();
-  updateAllUI();
+  addXp(xp);      // usa o sistema oficial de XP (level-up, histórico, missões)
+  addCoins(coins);
   showNotification(`🏆 Recompensa em grupo! +${xp} XP · +${coins} 🪙`, 'success');
 
   if (sb && authUserId) {
-    // Upsert garante que a linha existe E marca reward_received = true,
-    // mesmo que o usuário nunca tenha marcado a tarefa como feita.
-    await sb.from('group_task_progress').upsert(
+    const { error } = await sb.from('group_task_progress').upsert(
       { task_id: taskId, user_id: authUserId, reward_received: true },
       { onConflict: 'task_id,user_id' }
     );
+    if (error) console.error('[GroupTask] Erro ao marcar recompensa recebida:', error.message, error);
   }
 }
 
