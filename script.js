@@ -610,7 +610,7 @@ async function saveUserData(data) {
         xp:    data.xp    || 0,
         level: data.level || 1,
         coins: data.coins || 0,
-        data:  data,        // state completo como JSONB (inclui streak)
+        data:  { ...data, friendCode: _friendCode(uid) }, // friendCode embutido para busca
       });
     if (error) console.warn('[Supabase] ❌ Erro ao salvar (código:', error.code, '):', error.message);
     else       console.log('[Supabase] ✅ State salvo — XP:', data.xp, '| Nível:', data.level, '| Nome:', data.name);
@@ -5315,13 +5315,13 @@ async function listSentRequests() {
 /** Busca usuário pelo código de amizade (8 hex chars) */
 async function searchUserByCode(code) {
   if (!sb) return [];
-  const clean = code.trim().toLowerCase();
+  const clean = code.trim().toUpperCase();
   if (clean.length !== 8) return [];
   try {
-    // UUID é tipo uuid no Postgres — precisa cast para text para usar LIKE
+    // Busca pelo campo friendCode salvo no JSONB data
     const { data, error } = await sb.from('users')
       .select('id, name, xp, level, data')
-      .filter('id::text', 'ilike', `${clean}-%`);
+      .filter('data->>friendCode', 'eq', clean);
     if (error) console.error('[FriendCode] Erro na busca por código:', error.message, error);
     return (data || []).map(_parseUserRow).filter(Boolean);
   } catch (e) { console.error('[FriendCode] Exceção:', e); return []; }
