@@ -5237,31 +5237,40 @@ function equipCosmetic(type, id) {
 function renderCosmeticsShop() {
   const container = document.getElementById('cosmetics-shop');
   if (!container) return;
+  const c = state.cosmetics;
 
-  function sectionHtml(title, items, type, owned, equipped) {
-    return `<div class="shop-section-title">${title}</div>` +
-      items.map(item => {
-        const isOwned    = owned.includes(item.id);
-        const isEquipped = equipped === item.id;
-        return `<div class="shop-item cosmetic-item">
-          <span class="shop-icon">${item.icon}</span>
-          <div class="shop-name">${item.name}</div>
-          <div class="shop-desc">${item.desc}</div>
-          ${isOwned
-            ? `<button class="shop-buy-btn ${isEquipped ? 'btn-equipped' : ''}" onclick="equipCosmetic('${type}','${item.id}')">
-                ${isEquipped ? '✅ Equipado' : '🎨 Equipar'}
-               </button>`
-            : `<button class="shop-buy-btn" onclick="buyCosmetic('${type}','${item.id}')" ${state.coins < item.cost ? 'disabled' : ''}>
-                💰 ${item.cost} moedas
-               </button>`}
-        </div>`;
-      }).join('');
+  function itemsHtml(items, type, owned, equipped) {
+    return items.map(item => {
+      const isOwned    = owned.includes(item.id);
+      const isEquipped = equipped === item.id;
+      // Prévia visual para banners
+      const preview = type === 'banner'
+        ? `<div class="cosmetic-banner-preview ${item.id}"></div>`
+        : `<span class="shop-icon">${item.icon}</span>`;
+      return `<div class="shop-item cosmetic-item">
+        ${preview}
+        <div class="shop-name">${item.name}</div>
+        <div class="shop-desc">${item.desc}</div>
+        ${isOwned
+          ? `<button class="shop-buy-btn ${isEquipped ? 'btn-equipped' : ''}" onclick="equipCosmetic('${type}','${item.id}')">
+              ${isEquipped ? '✅ Equipado' : '🎨 Equipar'}
+             </button>`
+          : `<button class="shop-buy-btn" onclick="buyCosmetic('${type}','${item.id}')" ${state.coins < item.cost ? 'disabled' : ''}>
+              💰 ${item.cost} moedas
+             </button>`}
+      </div>`;
+    }).join('');
   }
 
-  const c = state.cosmetics;
-  container.innerHTML =
-    sectionHtml('🖼️ Molduras de Perfil', COSMETIC_FRAMES, 'frame', c.ownedFrames, c.equippedFrame) +
-    sectionHtml('🎨 Banners de Perfil',  COSMETIC_BANNERS, 'banner', c.ownedBanners, c.equippedBanner);
+  container.innerHTML = `
+    <div class="cosmetics-section">
+      <div class="shop-section-title">🖼️ Molduras de Perfil</div>
+      <div class="shop-grid">${itemsHtml(COSMETIC_FRAMES, 'frame', c.ownedFrames, c.equippedFrame)}</div>
+    </div>
+    <div class="cosmetics-section">
+      <div class="shop-section-title">🎨 Banners de Perfil</div>
+      <div class="shop-grid">${itemsHtml(COSMETIC_BANNERS, 'banner', c.ownedBanners, c.equippedBanner)}</div>
+    </div>`;
 }
 
 // ============================================================

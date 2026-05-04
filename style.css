@@ -3374,12 +3374,79 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
   margin-bottom: 1rem;
   padding: .75rem;
   background: var(--bg-secondary, rgba(255,255,255,.04));
+  position: relative;
+  overflow: hidden;
 }
-.profile-page-banner.banner_purple { background: linear-gradient(135deg,#4c1d95,#7c3aed); }
-.profile-page-banner.banner_fire   { background: linear-gradient(135deg,#7c1a00,#ff4500); }
-.profile-page-banner.banner_ocean  { background: linear-gradient(135deg,#023e8a,#00b4d8); }
-.profile-page-banner.banner_forest { background: linear-gradient(135deg,#1b4332,#52b788); }
-.profile-page-banner.banner_galaxy { background: linear-gradient(135deg,#10002b,#7b2fff); }
+
+/* Aurora Roxa */
+.profile-page-banner.banner_purple {
+  background:
+    radial-gradient(ellipse at 25% 60%, rgba(200,80,255,.45) 0%, transparent 55%),
+    radial-gradient(ellipse at 75% 30%, rgba(100,0,220,.4)   0%, transparent 50%),
+    radial-gradient(ellipse at 55% 95%, rgba(160,30,200,.3)  0%, transparent 45%),
+    linear-gradient(160deg, #09001f 0%, #2a0060 40%, #5300b0 70%, #8a00d4 100%);
+}
+
+/* Chamas vivas */
+.profile-page-banner.banner_fire {
+  background:
+    radial-gradient(ellipse at 50% 110%, rgba(255,220,50,.5)  0%, transparent 45%),
+    radial-gradient(ellipse at 20%  80%, rgba(255,120,0,.4)   0%, transparent 40%),
+    radial-gradient(ellipse at 80%  70%, rgba(200,30,0,.35)   0%, transparent 40%),
+    linear-gradient(175deg, #1a0200 0%, #6b0f00 25%, #c43200 55%, #ff6a00 80%, #ffb800 100%);
+}
+
+/* Oceano profundo */
+.profile-page-banner.banner_ocean {
+  background:
+    radial-gradient(ellipse at 50%  -5%, rgba(100,240,255,.35) 0%, transparent 50%),
+    radial-gradient(ellipse at 15%  50%, rgba(0,180,255,.2)    0%, transparent 40%),
+    radial-gradient(ellipse at 85%  70%, rgba(0,60,160,.3)     0%, transparent 45%),
+    linear-gradient(175deg, #000d1a 0%, #002255 30%, #004e9a 55%, #0090c5 78%, #00c8e8 100%);
+}
+
+/* Floresta profunda */
+.profile-page-banner.banner_forest {
+  background:
+    radial-gradient(ellipse at 50%  -5%, rgba(120,255,160,.3)  0%, transparent 50%),
+    radial-gradient(ellipse at 20%  60%, rgba(30,180,80,.25)   0%, transparent 45%),
+    radial-gradient(ellipse at 80%  40%, rgba(10,100,30,.3)    0%, transparent 40%),
+    linear-gradient(170deg, #010e01 0%, #0a2a0a 25%, #1a5e28 50%, #30914a 72%, #5bc870 100%);
+}
+
+/* Galáxia estrelada */
+.profile-page-banner.banner_galaxy {
+  background:
+    radial-gradient(ellipse at 30%  40%, rgba(160,0,255,.5)   0%, transparent 45%),
+    radial-gradient(ellipse at 70%  60%, rgba(0,80,200,.4)    0%, transparent 50%),
+    radial-gradient(ellipse at 50%  20%, rgba(120,40,255,.35) 0%, transparent 40%),
+    radial-gradient(ellipse at 15%  75%, rgba(80,0,160,.3)    0%, transparent 35%),
+    radial-gradient(ellipse at 85%  20%, rgba(0,120,255,.25)  0%, transparent 35%),
+    linear-gradient(145deg, #00000e 0%, #05001a 30%, #0d0035 55%, #1a0050 75%, #0a0020 100%);
+}
+/* Estrelas sobre a galáxia via pseudo-element */
+.profile-page-banner.banner_galaxy::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    radial-gradient(1px 1px at  8%  12%, #fff 100%, transparent),
+    radial-gradient(1px 1px at 22%  35%, #ddf 100%, transparent),
+    radial-gradient(1px 1px at 38%  18%, #fff 100%, transparent),
+    radial-gradient(1px 1px at 55%  42%, #fff 100%, transparent),
+    radial-gradient(1px 1px at 67%   8%, #ccf 100%, transparent),
+    radial-gradient(1px 1px at 74%  55%, #fff 100%, transparent),
+    radial-gradient(1px 1px at 85%  28%, #ddf 100%, transparent),
+    radial-gradient(1px 1px at 92%  72%, #fff 100%, transparent),
+    radial-gradient(1px 1px at 14%  68%, #fff 100%, transparent),
+    radial-gradient(1px 1px at 45%  78%, #ccf 100%, transparent),
+    radial-gradient(2px 2px at 30%  55%, rgba(200,200,255,.8) 100%, transparent),
+    radial-gradient(2px 2px at 60%  25%, rgba(255,255,255,.7) 100%, transparent),
+    radial-gradient(2px 2px at 78%  82%, rgba(200,180,255,.9) 100%, transparent);
+  border-radius: 14px;
+  pointer-events: none;
+}
+/* Garante que o conteúdo do banner fica acima das estrelas */
+.profile-page-banner.banner_galaxy .profile-page-hero { position: relative; z-index: 1; }
 
 /* ── Cosméticos na loja ─────────────────────────────────────── */
 .shop-tabs { display:flex; gap:.5rem; margin-bottom:1rem; }
@@ -3390,12 +3457,61 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
   transition: background .2s, color .2s;
 }
 .shop-tab-btn.active { background: var(--primary,#7c3aed); color: #fff; }
+.cosmetics-section { margin-bottom: 1.5rem; }
 .shop-section-title {
-  font-weight: 700; font-size: .85rem; color: var(--text-secondary,#a0a0b0);
-  text-transform: uppercase; letter-spacing: .05em;
-  margin: 1rem 0 .5rem;
+  font-weight: 700; font-size: .9rem; color: var(--text,#e0e0f0);
+  text-transform: uppercase; letter-spacing: .06em;
+  padding: .4rem .65rem; margin-bottom: .75rem;
+  border-left: 3px solid var(--primary,#7c3aed);
+  background: rgba(124,58,237,.08);
+  border-radius: 0 8px 8px 0;
 }
 .btn-equipped { background: var(--success,#22c55e) !important; color: #fff !important; }
+
+/* Prévia de banner na loja */
+.cosmetic-banner-preview {
+  width: 100%; height: 52px;
+  border-radius: 8px; margin-bottom: .4rem;
+  overflow: hidden; position: relative;
+}
+.cosmetic-banner-preview.banner_purple {
+  background:
+    radial-gradient(ellipse at 25% 60%, rgba(200,80,255,.45) 0%, transparent 55%),
+    radial-gradient(ellipse at 75% 30%, rgba(100,0,220,.4)   0%, transparent 50%),
+    linear-gradient(160deg,#09001f 0%,#2a0060 40%,#8a00d4 100%);
+}
+.cosmetic-banner-preview.banner_fire {
+  background:
+    radial-gradient(ellipse at 50% 110%, rgba(255,220,50,.5) 0%, transparent 45%),
+    radial-gradient(ellipse at 20%  80%, rgba(255,120,0,.4)  0%, transparent 40%),
+    linear-gradient(175deg,#1a0200 0%,#c43200 55%,#ffb800 100%);
+}
+.cosmetic-banner-preview.banner_ocean {
+  background:
+    radial-gradient(ellipse at 50% -5%, rgba(100,240,255,.35) 0%, transparent 50%),
+    linear-gradient(175deg,#000d1a 0%,#004e9a 55%,#00c8e8 100%);
+}
+.cosmetic-banner-preview.banner_forest {
+  background:
+    radial-gradient(ellipse at 50% -5%, rgba(120,255,160,.3) 0%, transparent 50%),
+    linear-gradient(170deg,#010e01 0%,#1a5e28 50%,#5bc870 100%);
+}
+.cosmetic-banner-preview.banner_galaxy {
+  background:
+    radial-gradient(ellipse at 30% 40%, rgba(160,0,255,.5)  0%, transparent 45%),
+    radial-gradient(ellipse at 70% 60%, rgba(0,80,200,.4)   0%, transparent 50%),
+    linear-gradient(145deg,#00000e 0%,#0d0035 55%,#0a0020 100%);
+  /* mini estrelas */
+  background-image:
+    radial-gradient(1px 1px at  10%  20%, #fff 100%, transparent),
+    radial-gradient(1px 1px at  30%  50%, #ddf 100%, transparent),
+    radial-gradient(1px 1px at  55%  15%, #fff 100%, transparent),
+    radial-gradient(1px 1px at  75%  70%, #fff 100%, transparent),
+    radial-gradient(1px 1px at  88%  35%, #ccf 100%, transparent),
+    radial-gradient(ellipse at 30% 40%, rgba(160,0,255,.5)  0%, transparent 45%),
+    radial-gradient(ellipse at 70% 60%, rgba(0,80,200,.4)   0%, transparent 50%),
+    linear-gradient(145deg,#00000e 0%,#0d0035 55%,#0a0020 100%);
+}
 
 /* ── Notificações ────────────────────────────────────────────── */
 .notif-bell-badge {
