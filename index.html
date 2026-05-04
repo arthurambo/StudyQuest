@@ -207,6 +207,9 @@
       <a class="nav-item" data-page="stats">📊 Estatísticas</a>
       <a class="nav-item" data-page="calendar">📅 Calendário</a>
       <a class="nav-item" data-page="settings">⚙️ Configurações</a>
+      <a class="nav-item" id="sidebar-notif-btn" onclick="openNotifPanel()" style="position:relative;cursor:pointer">
+        🔔 Notificações<span class="notif-bell-badge" style="display:none"></span>
+      </a>
     </div>
     <div class="sidebar-bottom">
       <button class="theme-toggle" id="theme-toggle">🌙 Modo Claro</button>
@@ -434,7 +437,12 @@
         <h1>🛒 Loja de Magia</h1>
         <span class="coins-display">💰 <span id="shop-coins">0</span> moedas</span>
       </div>
+      <div class="shop-tabs">
+        <button class="shop-tab-btn active" data-tab="items"     onclick="renderShop('items')">⚡ Itens</button>
+        <button class="shop-tab-btn"        data-tab="cosmetics" onclick="renderShop('cosmetics')">🎨 Cosméticos</button>
+      </div>
       <div id="shop-list" class="shop-grid"></div>
+      <div id="cosmetics-shop" class="shop-grid" style="display:none"></div>
     </div>
 
     <!-- ===== ESTATÍSTICAS ===== -->
@@ -825,6 +833,10 @@
       <span class="bn-icon">🏰</span>
       <span class="bn-label">Grupos</span>
     </button>
+    <button class="bottom-nav-item" onclick="openNotifPanel()" style="position:relative">
+      <span class="bn-icon">🔔<span class="notif-bell-badge" style="display:none"></span></span>
+      <span class="bn-label">Notif.</span>
+    </button>
     <button class="bottom-nav-item" id="bottom-nav-more">
       <span class="bn-icon">☰</span>
       <span class="bn-label">Mais</span>
@@ -871,7 +883,20 @@
     </div>
 
     <div class="profile-field">
-      <label class="grades-label">🎭 Escolher Avatar</label>
+      <label class="grades-label">🖼️ Tipo de Foto</label>
+      <div class="avatar-type-row">
+        <button class="avatar-type-btn active" data-type="emoji"   id="avatar-type-emoji"  onclick="selectAvatarType('emoji')">😊 Emoji</button>
+        <button class="avatar-type-btn"        data-type="google"  id="avatar-type-google" onclick="selectAvatarType('google')" style="display:none">📷 Google</button>
+        <button class="avatar-type-btn"        data-type="url"     id="avatar-type-url"    onclick="selectAvatarType('url')">🔗 URL</button>
+      </div>
+      <div id="avatar-url-row" class="friends-search-bar" style="display:none;margin-top:.5rem">
+        <input type="url" id="profile-url-input" placeholder="https://..." style="flex:1">
+      </div>
+    </div>
+
+    <div id="profile-avatar-grid-wrap">
+    <div class="profile-field">
+      <label class="grades-label">🎭 Escolher Emoji</label>
       <div class="avatar-grid" id="profile-avatar-grid">
         <span class="avatar-opt" data-av="🧙">🧙</span>
         <span class="avatar-opt" data-av="🦸">🦸</span>
@@ -899,6 +924,7 @@
         <span class="avatar-opt" data-av="🔮">🔮</span>
       </div>
     </div>
+    </div><!-- end profile-avatar-grid-wrap -->
 
     <div class="profile-field">
       <label class="grades-label">❤️ Matéria Favorita</label>
@@ -928,10 +954,50 @@
     </div>
     <div id="friend-profile-fav" style="margin:.5rem 0;font-size:.9rem"></div>
     <div id="friend-profile-best" style="margin:.25rem 0 .75rem;font-size:.9rem"></div>
+    <div id="friend-profile-actions" class="friend-profile-actions"></div>
     <div style="font-weight:700;margin-bottom:.5rem">🏅 Conquistas</div>
     <div class="profile-ach-grid" id="friend-profile-achs"></div>
     <div class="modal-btns">
       <button class="btn-secondary" data-close="modal-friend-profile">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Notificações -->
+<div class="modal-overlay" id="modal-notif-panel">
+  <div class="modal modal-wide">
+    <h2>🔔 Notificações</h2>
+    <div id="notif-panel-content"><div class="social-loading">Carregando...</div></div>
+    <div class="modal-btns">
+      <button class="btn-secondary" data-close="modal-notif-panel">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Enviar Motivação -->
+<div class="modal-overlay" id="modal-send-motivation">
+  <div class="modal">
+    <h2>💪 Motivar <span id="motivation-target-name"></span></h2>
+    <input type="hidden" id="motivation-target-id">
+    <p style="font-size:.85rem;opacity:.7;margin-bottom:.75rem">Escolha uma frase motivacional:</p>
+    <div id="motivation-phrase-list" class="motivation-phrase-list"></div>
+    <div class="modal-btns">
+      <button class="btn-secondary" data-close="modal-send-motivation">Cancelar</button>
+      <button class="btn-primary" id="send-motivation-btn" onclick="handleSendMotivation()">💪 Enviar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Dar Presente -->
+<div class="modal-overlay" id="modal-send-gift">
+  <div class="modal">
+    <h2>🎁 Presentear <span id="gift-target-name"></span></h2>
+    <input type="hidden" id="gift-target-id">
+    <p style="font-size:.85rem;opacity:.7;margin-bottom:.75rem">Escolha um item (20% mais caro ao presentear):</p>
+    <div id="gift-item-list" class="gift-item-list"></div>
+    <div class="modal-btns">
+      <button class="btn-secondary" data-close="modal-send-gift">Cancelar</button>
+      <button class="btn-primary" id="send-gift-btn" onclick="handleSendGift()">🎁 Enviar Presente</button>
     </div>
   </div>
 </div>

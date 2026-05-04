@@ -164,6 +164,38 @@ const SHOP_ITEMS = [
   { id: 'lootbox', name: 'Caixa Misteriosa', icon: '🎁', desc: 'Recompensa surpresa aleatória!', cost: 35, type: 'lootbox', charges: 1 },
 ];
 
+// ── Cosméticos ────────────────────────────────────────────────
+const COSMETIC_FRAMES = [
+  { id: 'frame_silver',  name: 'Moldura Prata',     icon: '⬜', cost: 100, desc: 'Um toque elegante de prata.' },
+  { id: 'frame_gold',    name: 'Moldura Ouro',      icon: '🟡', cost: 250, desc: 'Brilho de campeão.' },
+  { id: 'frame_diamond', name: 'Moldura Diamante',  icon: '💎', cost: 500, desc: 'Para os verdadeiros estudiosos.' },
+  { id: 'frame_fire',    name: 'Moldura de Fogo',   icon: '🔥', cost: 350, desc: 'Arde com determinação.' },
+  { id: 'frame_rainbow', name: 'Moldura Arco-íris', icon: '🌈', cost: 700, desc: 'Raro e deslumbrante.' },
+];
+const COSMETIC_BANNERS = [
+  { id: 'banner_purple', name: 'Banner Roxo',    icon: '🟣', cost:  80, desc: 'Clássico StudyQuest.' },
+  { id: 'banner_fire',   name: 'Banner Chamas',  icon: '🔥', cost: 120, desc: 'Intensidade total.' },
+  { id: 'banner_ocean',  name: 'Banner Oceano',  icon: '🌊', cost: 120, desc: 'Calmo e profundo.' },
+  { id: 'banner_forest', name: 'Banner Floresta',icon: '🌿', cost: 100, desc: 'Natural e revigorante.' },
+  { id: 'banner_galaxy', name: 'Banner Galáxia', icon: '🌌', cost: 200, desc: 'Infinito e misterioso.' },
+];
+
+// ── Frases motivacionais ──────────────────────────────────────
+const MOTIVATION_PHRASES = [
+  '💪 Você consegue! Continue assim!',
+  '🔥 Tô na torcida por você!',
+  '⭐ Cada dia de estudo é uma vitória!',
+  '⚔️ Vai lá, herói! Você é capaz!',
+  '🏆 Seu esforço vai te levar longe!',
+  '🚀 Um passo de cada vez — você tá voando!',
+  '🧠 Estudar hoje é vencer amanhã!',
+  '💎 Você é mais forte do que pensa!',
+  '🌟 Orgulho de você! Segue firme!',
+  '📚 Conhecimento é o melhor investimento!',
+  '🎯 Foco total, resultado garantido!',
+  '🌈 Depois da luta, vem a glória!',
+];
+
 // Conquistas disponíveis
 const ACHIEVEMENTS_DEF = [
   { id: 'first_task', name: 'Primeiro Passo', icon: '🌱', desc: 'Conclua sua primeira tarefa', condition: s => s.totalTasksDone >= 1 },
@@ -220,6 +252,8 @@ let state = {
   setup: false,
   name: '',
   avatar: '🧙',
+  avatarType: 'emoji',  // 'emoji' | 'google' | 'url'
+  avatarUrl: '',        // URL para google photo ou foto personalizada
   xp: 0,
   totalXpEarned: 0,
   coins: 0,
@@ -251,6 +285,7 @@ let state = {
   studyItems: [],
   totalStudied: 0,
   favoriteSubject: '',
+  cosmetics: { ownedFrames: [], ownedBanners: [], equippedFrame: null, equippedBanner: null },
   settings: {
     schoolAverage:       7,       // média escolar padrão
     notificationsEnabled: true,   // notificações visuais
@@ -792,6 +827,7 @@ function navigateTo(page) {
   if (page === 'profile') renderProfilePage();
   if (page === 'friends') renderFriendsPage();
   if (page === 'groups')  renderGroupsPage();
+  if (authUserId) updateNotifBell();
 }
 
 function toggleSidebar() {
@@ -1975,22 +2011,38 @@ function initShop() {
   renderShop();
 }
 
-function renderShop() {
-  const container = document.getElementById('shop-list');
+function renderShop(tab = null) {
   document.getElementById('shop-coins').textContent = state.coins;
 
-  container.innerHTML = SHOP_ITEMS.map(item => {
-    const canBuy = state.coins >= item.cost;
-    return `
-    <div class="shop-item">
-      <span class="shop-icon">${item.icon}</span>
-      <div class="shop-name">${item.name}</div>
-      <div class="shop-desc">${item.desc}</div>
-      <button class="shop-buy-btn" onclick="buyItem('${item.id}')" ${!canBuy ? 'disabled' : ''}>
-        💰 ${item.cost} moedas
-      </button>
-    </div>`;
-  }).join('');
+  // Mantém a tab ativa se não especificado
+  if (!tab) {
+    tab = document.querySelector('.shop-tab-btn.active')?.dataset.tab || 'items';
+  }
+  document.querySelectorAll('.shop-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+
+  const itemsEl = document.getElementById('shop-list');
+  const cosmeticsEl = document.getElementById('cosmetics-shop');
+  if (!itemsEl || !cosmeticsEl) return;
+
+  if (tab === 'items') {
+    itemsEl.style.display = '';
+    cosmeticsEl.style.display = 'none';
+    itemsEl.innerHTML = SHOP_ITEMS.map(item => {
+      const canBuy = state.coins >= item.cost;
+      return `<div class="shop-item">
+        <span class="shop-icon">${item.icon}</span>
+        <div class="shop-name">${item.name}</div>
+        <div class="shop-desc">${item.desc}</div>
+        <button class="shop-buy-btn" onclick="buyItem('${item.id}')" ${!canBuy ? 'disabled' : ''}>
+          💰 ${item.cost} moedas
+        </button>
+      </div>`;
+    }).join('');
+  } else {
+    itemsEl.style.display = 'none';
+    cosmeticsEl.style.display = '';
+    renderCosmeticsShop();
+  }
 }
 
 function buyItem(itemId) {
@@ -4696,6 +4748,12 @@ async function handleSupabaseSession(session) {
   const provider = user.app_metadata?.provider || 'email';
 
   authUserId = user.id;
+  // Salva foto do Google no state para uso como avatar
+  if (provider === 'google' && user.user_metadata?.picture) {
+    state.googleAvatarUrl = user.user_metadata.picture;
+  } else if (provider === 'google' && user.user_metadata?.avatar_url) {
+    state.googleAvatarUrl = user.user_metadata.avatar_url;
+  }
   console.log('[Auth] Sessão ativa:', user.email, '| provider:', provider, '| ID:', user.id);
 
   setAuthUser({ email: user.email, id: user.id, createdAt: Date.now(), provider });
@@ -4926,6 +4984,20 @@ function openEditProfile() {
     el.classList.toggle('selected', el.dataset.av === state.avatar);
   });
 
+  // Foto personalizada
+  const urlInput = document.getElementById('profile-url-input');
+  if (urlInput) urlInput.value = (state.avatarType === 'url' ? state.avatarUrl : '') || '';
+
+  // Botão de foto do Google (só aparece se logou com Google)
+  const gBtn = document.getElementById('profile-google-photo-btn');
+  if (gBtn) {
+    gBtn.style.display = state.googleAvatarUrl ? 'flex' : 'none';
+    gBtn.classList.toggle('active', state.avatarType === 'google');
+  }
+
+  // Destaca tipo ativo
+  _updateAvatarTypeUI(state.avatarType);
+
   // Populate favorite subject select
   const sel = document.getElementById('profile-fav-subject');
   if (sel) {
@@ -4935,6 +5007,16 @@ function openEditProfile() {
 
   updateProfilePreview();
   openModal('modal-edit-profile');
+}
+
+function _updateAvatarTypeUI(type) {
+  document.getElementById('avatar-type-emoji')?.classList.toggle('active', type === 'emoji');
+  document.getElementById('avatar-type-google')?.classList.toggle('active', type === 'google');
+  document.getElementById('avatar-type-url')?.classList.toggle('active', type === 'url');
+  const urlRow = document.getElementById('avatar-url-row');
+  if (urlRow) urlRow.style.display = type === 'url' ? 'flex' : 'none';
+  const emojiRow = document.getElementById('profile-avatar-grid-wrap');
+  if (emojiRow) emojiRow.style.display = type === 'emoji' ? '' : 'none';
 }
 
 function updateProfilePreview() {
@@ -4978,6 +5060,15 @@ function saveProfile() {
   const avatar = selAv ? selAv.dataset.av : state.avatar;
   const favSel = document.getElementById('profile-fav-subject');
   const favoriteSubject = favSel ? favSel.value : state.favoriteSubject;
+
+  // Avatar type
+  const activeTypeBtn = document.querySelector('.avatar-type-btn.active');
+  const avatarType = activeTypeBtn?.dataset.type || 'emoji';
+  let avatarUrl = '';
+  if (avatarType === 'google') avatarUrl = state.googleAvatarUrl || '';
+  if (avatarType === 'url') avatarUrl = document.getElementById('profile-url-input')?.value.trim() || '';
+  state.avatarType = avatarType;
+  state.avatarUrl  = avatarUrl;
 
   if (!name) return showNotification('Digite seu nome de herói!', 'warning');
 
@@ -5106,9 +5197,284 @@ function computeBestSubject() {
 }
 
 async function syncPublicProfile() {
-  // Garante que o state completo (incluindo avatar, favoriteSubject, achievements)
-  // está salvo na tabela users — fonte de verdade para o sistema de amigos.
   await saveUserData(state);
+}
+
+// ============================================================
+// COSMÉTICOS — armazenados em state.cosmetics (sem tabela extra)
+// ============================================================
+
+function buyCosmetic(type, id) {
+  if (!authUserId) return showNotification('Faça login para comprar cosméticos.', 'warning');
+  const list = type === 'frame' ? COSMETIC_FRAMES : COSMETIC_BANNERS;
+  const item = list.find(i => i.id === id);
+  if (!item) return;
+
+  const owned = type === 'frame' ? state.cosmetics.ownedFrames : state.cosmetics.ownedBanners;
+  if (owned.includes(id)) return showNotification('Você já possui este item!', 'info');
+  if (state.coins < item.cost) return showNotification('Moedas insuficientes! 🪙', 'warning');
+
+  state.coins -= item.cost;
+  owned.push(id);
+  saveState();
+  showNotification(`✅ ${item.icon} "${item.name}" comprado!`, 'success');
+  renderCosmeticsShop();
+  updateDashboard();
+}
+
+function equipCosmetic(type, id) {
+  if (type === 'frame') {
+    state.cosmetics.equippedFrame  = state.cosmetics.equippedFrame  === id ? null : id;
+  } else {
+    state.cosmetics.equippedBanner = state.cosmetics.equippedBanner === id ? null : id;
+  }
+  saveState();
+  showNotification('🎨 Visual atualizado!', 'success');
+  renderCosmeticsShop();
+  renderProfilePage();
+}
+
+function renderCosmeticsShop() {
+  const container = document.getElementById('cosmetics-shop');
+  if (!container) return;
+
+  function sectionHtml(title, items, type, owned, equipped) {
+    return `<div class="shop-section-title">${title}</div>` +
+      items.map(item => {
+        const isOwned    = owned.includes(item.id);
+        const isEquipped = equipped === item.id;
+        return `<div class="shop-item cosmetic-item">
+          <span class="shop-icon">${item.icon}</span>
+          <div class="shop-name">${item.name}</div>
+          <div class="shop-desc">${item.desc}</div>
+          ${isOwned
+            ? `<button class="shop-buy-btn ${isEquipped ? 'btn-equipped' : ''}" onclick="equipCosmetic('${type}','${item.id}')">
+                ${isEquipped ? '✅ Equipado' : '🎨 Equipar'}
+               </button>`
+            : `<button class="shop-buy-btn" onclick="buyCosmetic('${type}','${item.id}')" ${state.coins < item.cost ? 'disabled' : ''}>
+                💰 ${item.cost} moedas
+               </button>`}
+        </div>`;
+      }).join('');
+  }
+
+  const c = state.cosmetics;
+  container.innerHTML =
+    sectionHtml('🖼️ Molduras de Perfil', COSMETIC_FRAMES, 'frame', c.ownedFrames, c.equippedFrame) +
+    sectionHtml('🎨 Banners de Perfil',  COSMETIC_BANNERS, 'banner', c.ownedBanners, c.equippedBanner);
+}
+
+// ============================================================
+// MOTIVAÇÕES — tabela: motivations (id, from_id, to_id, phrase, read, created_at)
+// ============================================================
+
+async function sendMotivation(toId, phrase) {
+  if (!sb || !authUserId) return false;
+  try {
+    const { error } = await sb.from('motivations').insert({ from_id: authUserId, to_id: toId, phrase });
+    if (error) { console.error('[Motiv] Erro ao enviar:', error.message); return false; }
+    return true;
+  } catch (e) { return false; }
+}
+
+async function listMyMotivations() {
+  if (!sb || !authUserId) return [];
+  try {
+    const { data: rows } = await sb.from('motivations')
+      .select('id, from_id, phrase, read, created_at')
+      .eq('to_id', authUserId).order('created_at', { ascending: false }).limit(20);
+    if (!rows?.length) return [];
+    const ids = [...new Set(rows.map(r => r.from_id))];
+    const { data: users } = await sb.from('users').select('id, name, data').in('id', ids);
+    const uMap = {}; (users || []).forEach(u => { uMap[u.id] = _parseUserRow(u); });
+    return rows.map(r => ({ ...r, sender: uMap[r.from_id] || { name: 'Alguém', avatar: '🧙' } }));
+  } catch (e) { return []; }
+}
+
+async function markMotivationsRead() {
+  if (!sb || !authUserId) return;
+  try { await sb.from('motivations').update({ read: true }).eq('to_id', authUserId).eq('read', false); } catch (e) {}
+}
+
+// ============================================================
+// PRESENTES — tabela: gifts (id, from_id, to_id, item_id, item_name, item_icon, status, created_at)
+// ============================================================
+
+async function sendGift(toId, itemId) {
+  if (!sb || !authUserId) return false;
+  const item = SHOP_ITEMS.find(i => i.id === itemId);
+  if (!item) return false;
+  const cost = Math.floor(item.cost * 1.2); // 20% mais caro para presentear
+  if (state.coins < cost) { showNotification(`Precisa de ${cost} moedas para presentear! 🪙`, 'warning'); return false; }
+  try {
+    const { error } = await sb.from('gifts').insert({
+      from_id: authUserId, to_id: toId,
+      item_id: item.id, item_name: item.name, item_icon: item.icon,
+    });
+    if (error) { console.error('[Gift] Erro ao enviar:', error.message); return false; }
+    state.coins -= cost;
+    saveState();
+    updateDashboard();
+    return true;
+  } catch (e) { return false; }
+}
+
+async function listMyGifts() {
+  if (!sb || !authUserId) return [];
+  try {
+    const { data: rows } = await sb.from('gifts')
+      .select('id, from_id, item_id, item_name, item_icon, status, created_at')
+      .eq('to_id', authUserId).eq('status', 'pending').order('created_at', { ascending: false });
+    if (!rows?.length) return [];
+    const ids = [...new Set(rows.map(r => r.from_id))];
+    const { data: users } = await sb.from('users').select('id, name, data').in('id', ids);
+    const uMap = {}; (users || []).forEach(u => { uMap[u.id] = _parseUserRow(u); });
+    return rows.map(r => ({ ...r, sender: uMap[r.from_id] || { name: 'Alguém', avatar: '🧙' } }));
+  } catch (e) { return []; }
+}
+
+async function acceptGift(giftId, itemId) {
+  if (!sb || !authUserId) return false;
+  try {
+    await sb.from('gifts').update({ status: 'accepted' }).eq('id', giftId);
+    const item = SHOP_ITEMS.find(i => i.id === itemId);
+    if (item) {
+      state.boosts.push({ ...item, name: item.name, icon: item.icon });
+      saveState();
+      showNotification(`🎁 Você recebeu "${item.name}"!`, 'success');
+    }
+    return true;
+  } catch (e) { return false; }
+}
+
+async function declineGift(giftId) {
+  if (!sb || !authUserId) return;
+  try { await sb.from('gifts').update({ status: 'declined' }).eq('id', giftId); } catch (e) {}
+}
+
+// ============================================================
+// NOTIFICAÇÕES — painel com pedidos, motivações e presentes
+// ============================================================
+
+async function loadNotifCount() {
+  if (!sb || !authUserId) return 0;
+  try {
+    const [{ count: reqCount }, { count: motivCount }, { count: giftCount }] = await Promise.all([
+      sb.from('friend_requests').select('*', { count: 'exact', head: true }).eq('to_id', authUserId).eq('status', 'pending'),
+      sb.from('motivations').select('*', { count: 'exact', head: true }).eq('to_id', authUserId).eq('read', false),
+      sb.from('gifts').select('*', { count: 'exact', head: true }).eq('to_id', authUserId).eq('status', 'pending'),
+    ]);
+    return (reqCount || 0) + (motivCount || 0) + (giftCount || 0);
+  } catch (e) { return 0; }
+}
+
+async function updateNotifBell() {
+  const count = await loadNotifCount();
+  document.querySelectorAll('.notif-bell-badge').forEach(el => {
+    el.textContent = count > 0 ? count : '';
+    el.style.display = count > 0 ? 'flex' : 'none';
+  });
+}
+
+async function renderNotifPanel() {
+  const container = document.getElementById('notif-panel-content');
+  if (!container) return;
+  container.innerHTML = '<div class="social-loading">Carregando...</div>';
+
+  const [pendingReqs, motivations, gifts] = await Promise.all([
+    listPendingRequests(), listMyMotivations(), listMyGifts(),
+  ]);
+  markMotivationsRead();
+
+  let html = '';
+
+  // Pedidos de amizade
+  if (pendingReqs.length) {
+    html += `<div class="notif-section-title">👥 Pedidos de Amizade (${pendingReqs.length})</div>`;
+    html += pendingReqs.map(req => `<div class="notif-card">
+      ${_avatarHtml(req.user || { avatar: '🧙', avatarType: 'emoji' })}
+      <div class="notif-info">
+        <div class="notif-name">${escHtml(req.user?.name || '?')}</div>
+        <div class="notif-sub">Quer ser seu amigo!</div>
+      </div>
+      <div class="notif-btns">
+        <button class="btn-accept" onclick="handleAcceptFriend('${req.from_id}','${req.id}',this);updateNotifBell()">✓</button>
+        <button class="btn-reject" onclick="handleRejectFriend('${req.id}',this);updateNotifBell()">✕</button>
+      </div>
+    </div>`).join('');
+  }
+
+  // Presentes
+  if (gifts.length) {
+    html += `<div class="notif-section-title">🎁 Presentes (${gifts.length})</div>`;
+    html += gifts.map(g => `<div class="notif-card">
+      ${_avatarHtml(g.sender)}
+      <div class="notif-info">
+        <div class="notif-name">${escHtml(g.sender.name)}</div>
+        <div class="notif-sub">${g.item_icon} ${escHtml(g.item_name)}</div>
+      </div>
+      <div class="notif-btns">
+        <button class="btn-accept" onclick="handleAcceptGift('${g.id}','${g.item_id}',this)">🎁 Pegar</button>
+        <button class="btn-reject" onclick="handleDeclineGift('${g.id}',this)">✕</button>
+      </div>
+    </div>`).join('');
+  }
+
+  // Motivações
+  if (motivations.length) {
+    html += `<div class="notif-section-title">💪 Motivações (${motivations.length})</div>`;
+    html += motivations.map(m => `<div class="notif-card notif-motivation">
+      ${_avatarHtml(m.sender)}
+      <div class="notif-info">
+        <div class="notif-name">${escHtml(m.sender.name)}</div>
+        <div class="notif-sub">"${escHtml(m.phrase)}"</div>
+      </div>
+    </div>`).join('');
+  }
+
+  if (!html) html = '<div class="social-empty" style="padding:1.5rem 0">Nenhuma notificação. 🎉</div>';
+  container.innerHTML = html;
+  updateNotifBell();
+}
+
+async function handleAcceptGift(giftId, itemId, btn) {
+  if (btn) btn.disabled = true;
+  const ok = await acceptGift(giftId, itemId);
+  if (ok) { renderNotifPanel(); updateNotifBell(); }
+  else showNotification('Erro ao aceitar presente.', 'error');
+}
+
+async function handleDeclineGift(giftId, btn) {
+  if (btn) btn.disabled = true;
+  await declineGift(giftId);
+  showNotification('Presente recusado.', 'info');
+  renderNotifPanel();
+  updateNotifBell();
+}
+
+function openNotifPanel() {
+  closeSidebar();
+  openModal('modal-notif-panel');
+  renderNotifPanel();
+}
+
+function selectAvatarType(type) {
+  _updateAvatarTypeUI(type);
+  // Sync preview
+  if (type === 'google' && state.googleAvatarUrl) {
+    document.getElementById('profile-preview-avatar').innerHTML =
+      `<img src="${state.googleAvatarUrl}" class="avatar-img" style="width:100%;height:100%;border-radius:50%">`;
+  } else if (type === 'url') {
+    const url = document.getElementById('profile-url-input')?.value.trim();
+    if (url) document.getElementById('profile-preview-avatar').innerHTML =
+      `<img src="${url}" class="avatar-img" style="width:100%;height:100%;border-radius:50%">`;
+    document.getElementById('profile-url-input')?.addEventListener('input', e => {
+      if (e.target.value.trim()) document.getElementById('profile-preview-avatar').innerHTML =
+        `<img src="${escHtml(e.target.value.trim())}" class="avatar-img" style="width:100%;height:100%;border-radius:50%">`;
+    }, { once: true });
+  } else {
+    updateProfilePreview();
+  }
 }
 
 function renderProfilePage() {
@@ -5134,15 +5500,21 @@ function renderProfilePage() {
     </div>` : '',
   ].filter(Boolean).join('');
 
+  const myUser = { avatar: state.avatar, avatarType: state.avatarType, avatarUrl: state.avatarUrl,
+                    equippedFrame: state.cosmetics?.equippedFrame, name: state.name };
+  const bannerClass = state.cosmetics?.equippedBanner || '';
+
   container.innerHTML = `
     <div class="page-header"><h1>👤 Meu Perfil</h1></div>
-    <div class="profile-page-hero">
-      <div class="profile-page-avatar">${state.avatar || '🧙'}</div>
-      <div class="profile-page-info">
-        <h2>${escHtml(state.name || 'Herói')}</h2>
-        <div class="profile-page-level">⚔️ Nível ${state.level}</div>
-        <div class="xp-bar-wrap"><div class="xp-bar-fill" style="width:${xpPct}%"></div></div>
-        <div class="profile-page-xptext">${state.xp} / ${xpNext} XP para o próximo nível</div>
+    <div class="profile-page-banner ${bannerClass}">
+      <div class="profile-page-hero">
+        ${_avatarHtml(myUser, 'profile-page-avatar-wrap')}
+        <div class="profile-page-info">
+          <h2>${escHtml(state.name || 'Herói')}</h2>
+          <div class="profile-page-level">⚔️ Nível ${state.level}</div>
+          <div class="xp-bar-wrap"><div class="xp-bar-fill" style="width:${xpPct}%"></div></div>
+          <div class="profile-page-xptext">${state.xp} / ${xpNext} XP para o próximo nível</div>
+        </div>
       </div>
     </div>
     ${authUserId ? `<div class="friend-code-box">
@@ -5171,15 +5543,31 @@ function renderProfilePage() {
 /** Extrai dados públicos de uma linha da tabela users */
 function _parseUserRow(row) {
   if (!row) return null;
+  const d = row.data || {};
   return {
     id:              row.id,
-    name:            row.name            || 'Herói',
-    level:           row.level           || 1,
-    xp:              row.xp              || 0,
-    avatar:          row.data?.avatar    || '🧙',
-    favoriteSubject: row.data?.favoriteSubject || '',
-    achievements:    row.data?.achievements    || [],
+    name:            row.name   || 'Herói',
+    level:           row.level  || 1,
+    xp:              row.xp     || 0,
+    avatar:          d.avatar   || '🧙',
+    avatarType:      d.avatarType || 'emoji',
+    avatarUrl:       d.avatarUrl  || '',
+    equippedFrame:   d.cosmetics?.equippedFrame  || null,
+    equippedBanner:  d.cosmetics?.equippedBanner || null,
+    favoriteSubject: d.favoriteSubject || '',
+    achievements:    d.achievements    || [],
   };
+}
+
+/** Retorna o HTML do avatar de um usuário (foto ou emoji) com moldura se tiver */
+function _avatarHtml(user, extraClass = '') {
+  const frame = user.equippedFrame || null;
+  const frameClass = frame ? ` avatar-frame ${frame}` : '';
+  const cls = `friend-avatar${frameClass}${extraClass ? ' ' + extraClass : ''}`;
+  if ((user.avatarType === 'google' || user.avatarType === 'url') && user.avatarUrl) {
+    return `<img class="${cls} avatar-img" src="${escHtml(user.avatarUrl)}" alt="${escHtml(user.name)}" onerror="this.outerHTML='<div class=\'${cls}\'>${user.avatar||'🧙'}</div>'">`;
+  }
+  return `<div class="${cls}">${user.avatar || '🧙'}</div>`;
 }
 
 /** Busca dados de um único usuário pela tabela users */
@@ -5352,7 +5740,7 @@ async function loadFriendSuggestions(myFriendIds, sentIds) {
 
 function _friendCard(user) {
   return `<div class="friend-card" onclick="openFriendProfile('${user.id}')">
-    <div class="friend-avatar">${user.avatar}</div>
+    ${_avatarHtml(user)}
     <div class="friend-info">
       <div class="friend-name">${escHtml(user.name)}</div>
       <div class="friend-level">⚔️ Nível ${user.level} · ✨ ${user.xp} XP</div>
@@ -5630,14 +6018,97 @@ async function openFriendProfile(userId) {
     return def ? `<div class="profile-ach-badge" title="${def.name}">${def.icon}</div>` : '';
   }).join('');
 
-  document.getElementById('friend-profile-avatar').textContent = user.avatar;
+  const avatarEl = document.getElementById('friend-profile-avatar');
+  avatarEl.innerHTML = _avatarHtml(user, 'friend-profile-avatar-inner');
+
   document.getElementById('friend-profile-name').textContent   = user.name;
   document.getElementById('friend-profile-level').textContent  = `⚔️ Nível ${user.level}`;
   document.getElementById('friend-profile-xp').textContent     = `✨ ${user.xp} XP`;
   document.getElementById('friend-profile-fav').textContent    = user.favoriteSubject ? `❤️ Favorita: ${user.favoriteSubject}` : '';
   document.getElementById('friend-profile-best').textContent   = '';
   document.getElementById('friend-profile-achs').innerHTML     = achs || '<em>Sem conquistas ainda.</em>';
+
+  // Botões de interação (só para amigos reais logados)
+  const actionsEl = document.getElementById('friend-profile-actions');
+  if (actionsEl && authUserId && userId !== authUserId) {
+    actionsEl.innerHTML = `
+      <button class="btn-secondary btn-sm" onclick="openMotivationModal('${userId}','${escHtml(user.name)}')">💪 Motivar</button>
+      <button class="btn-secondary btn-sm" onclick="openGiftModal('${userId}','${escHtml(user.name)}')">🎁 Dar Presente</button>
+    `;
+  } else if (actionsEl) {
+    actionsEl.innerHTML = '';
+  }
+
   openModal('modal-friend-profile');
+}
+
+function openMotivationModal(toId, toName) {
+  document.getElementById('motivation-target-name').textContent = toName;
+  document.getElementById('motivation-target-id').value = toId;
+  const list = document.getElementById('motivation-phrase-list');
+  list.innerHTML = MOTIVATION_PHRASES.map((p, i) =>
+    `<button class="motivation-phrase-btn" onclick="selectPhrase(this)" data-index="${i}">${escHtml(p)}</button>`
+  ).join('');
+  openModal('modal-send-motivation');
+}
+
+function selectPhrase(btn) {
+  document.querySelectorAll('.motivation-phrase-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+async function handleSendMotivation() {
+  const toId  = document.getElementById('motivation-target-id').value;
+  const active = document.querySelector('.motivation-phrase-btn.active');
+  if (!active) return showNotification('Selecione uma frase!', 'warning');
+  const phrase = active.textContent;
+  const btn = document.getElementById('send-motivation-btn');
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  const ok = await sendMotivation(toId, phrase);
+  btn.disabled = false; btn.textContent = '💪 Enviar';
+  if (ok) {
+    showNotification('💪 Motivação enviada!', 'success');
+    closeModal('modal-send-motivation');
+  } else {
+    showNotification('Erro ao enviar. Tente novamente.', 'error');
+  }
+}
+
+function openGiftModal(toId, toName) {
+  document.getElementById('gift-target-name').textContent = toName;
+  document.getElementById('gift-target-id').value = toId;
+  const list = document.getElementById('gift-item-list');
+  list.innerHTML = SHOP_ITEMS.map(item => {
+    const cost = Math.floor(item.cost * 1.2);
+    const canAfford = state.coins >= cost;
+    return `<div class="gift-item ${canAfford ? '' : 'gift-item-disabled'}" onclick="${canAfford ? `selectGiftItem(this,'${item.id}')` : ''}">
+      <span class="gift-item-icon">${item.icon}</span>
+      <div class="gift-item-name">${item.name}</div>
+      <div class="gift-item-cost">💰 ${cost} moedas</div>
+    </div>`;
+  }).join('');
+  openModal('modal-send-gift');
+}
+
+function selectGiftItem(el, itemId) {
+  document.querySelectorAll('.gift-item').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  el.dataset.itemId = itemId;
+}
+
+async function handleSendGift() {
+  const toId = document.getElementById('gift-target-id').value;
+  const active = document.querySelector('.gift-item.active');
+  if (!active) return showNotification('Selecione um item para presentear!', 'warning');
+  const itemId = active.dataset.itemId;
+  const btn = document.getElementById('send-gift-btn');
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  const ok = await sendGift(toId, itemId);
+  btn.disabled = false; btn.textContent = '🎁 Enviar Presente';
+  if (ok) {
+    showNotification('🎁 Presente enviado!', 'success');
+    closeModal('modal-send-gift');
+  }
 }
 
 // ============================================================
