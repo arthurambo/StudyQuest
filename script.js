@@ -7375,11 +7375,9 @@ function isCalculo(text) {
 
 /** Extrai e avalia expressão matemática de forma segura (sem eval direto) */
 function calcular(text) {
-  // Extrai a expressão: mantém só dígitos, operadores e parênteses
   let expr = text.replace(/[^0-9+\-*/().]/g, ' ').replace(/\s+/g, '').trim();
   if (!expr || !/\d/.test(expr) || !(/[+\-*/]/.test(expr))) return null;
   if (!/^[0-9+\-*/.()]+$/.test(expr)) return null;
-  // Previne divisão por zero e sequências inválidas
   if (/\/0(?!\.)/.test(expr)) return null;
   try {
     // eslint-disable-next-line no-new-func
@@ -7387,6 +7385,89 @@ function calcular(text) {
     if (typeof result !== 'number' || !isFinite(result)) return null;
     return Number.isInteger(result) ? result : Math.round(result * 100000) / 100000;
   } catch { return null; }
+}
+
+/** Detecta a intenção do usuário: 'prova' | 'resumo' | 'explicar' */
+function detectarIntencao(text) {
+  const n = normalizeText(text);
+  if (/\b(cri[ae]|gere?|faca|quiz|prova|questoes?|exercicios?|teste)\b/.test(n)) return 'prova';
+  if (/\b(resum[eo]|sintetize?|em poucas palavras)\b/.test(n)) return 'resumo';
+  return 'explicar';
+}
+
+/** Gera perguntas simples a partir de um título e texto */
+function gerarProva(titulo, texto) {
+  const frases = texto
+    .replace(/\n+/g, ' ')
+    .split(/[.!?]+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 40)
+    .slice(0, 3);
+
+  const perguntas = [
+    `**1.** O que é ${titulo}?`,
+    `**2.** Qual a importância de ${titulo}?`,
+    `**3.** Cite pelo menos duas características de ${titulo}.`,
+    ...frases.map((f, i) => `**${i + 4}.** Com base no texto, explique: *"${f.slice(0, 90)}…"*`),
+  ].slice(0, 5);
+
+  return `📋 **Mini-prova: ${titulo}**\n\n${perguntas.join('\n\n')}\n\n---\n📖 *Material de referência:*\n${texto.slice(0, 250)}${texto.length > 250 ? '…' : ''}`;
+}
+
+/** Extrai o termo de busca principal da pergunta (remove stopwords) */
+function extrairTermoBusca(question) {
+  const stopwords = new Set([
+    'o','a','os','as','um','uma','de','do','da','dos','das','em','no','na','nos','nas',
+    'que','e','ou','por','para','com','sem','sobre','qual','quais','como','quando',
+    'onde','quem','quanto','me','te','se','nos','lhe','isso','isto','esse','essa',
+    'este','esta','explique','explica','defina','define','resumo','resuma','crie',
+    'criar','gerar','gere','faca','prova','quiz','questoes','questao','o que',
+    'qual e','voce','pode','seria','poderia','falar','dizer','sobre','acerca',
+  ]);
+  const norm  = normalizeText(question);
+  const words = norm.split(' ').filter(w => w.length > 2 && !stopwords.has(w));
+  return words.slice(0, 4).join(' ') || norm.slice(0, 40);
+}
+
+/** Busca na Wikipédia em português (resumo, sem texto completo) */
+async function buscarWikipedia(question) {
+  const termo = extrairTermoBusca(question);
+  if (!termo) return null;
+
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), 6000);
+
+  try {
+    // 1. Pesquisa pelo título mais próximo
+    const searchUrl =
+      `https://pt.wikipedia.org/w/api.php?action=query&list=search` +
+      `&srsearch=${encodeURIComponent(termo)}&format=json&origin=*&srlimit=1&srnamespace=0`;
+    const sResp = await fetch(searchUrl, { signal: controller.signal });
+    if (!sResp.ok) { clearTimeout(tid); return { error: 'wiki_unavailable' }; }
+    const sData  = await sResp.json();
+    const hit    = sData.query?.search?.[0];
+    if (!hit) { clearTimeout(tid); return null; }
+
+    // 2. Busca o resumo da página encontrada
+    const pageTitle  = encodeURIComponent(hit.title);
+    const sumUrl     = `https://pt.wikipedia.org/api/rest_v1/page/summary/${pageTitle}`;
+    const sumResp    = await fetch(sumUrl, { signal: controller.signal });
+    clearTimeout(tid);
+    if (!sumResp.ok) return null;
+    const sumData = await sumResp.json();
+    if (!sumData.extract) return null;
+
+    return {
+      title:       sumData.title,
+      description: sumData.description || '',
+      extract:     sumData.extract.slice(0, 700),
+      url:         sumData.content_urls?.desktop?.page || '',
+    };
+  } catch (e) {
+    clearTimeout(tid);
+    if (e.name === 'AbortError') return { error: 'wiki_timeout' };
+    return { error: 'wiki_error' };
+  }
 }
 
 /** Carrega artigos da base de conhecimento do Supabase */
@@ -7419,10 +7500,10 @@ async function buscarNoBanco(question) {
       const tTags    = (art.tags || []).map(t => normalizeText(t));
 
       for (const w of words) {
-        if (tTitle.includes(w))           score += 4;
-        if (tSubject.includes(w))         score += 3;
-        if (tTags.some(t => t.includes(w))) score += 3;
-        if (tContent.includes(w))         score += 1;
+        if (tTitle.includes(w))              score += 4;
+        if (tSubject.includes(w))            score += 3;
+        if (tTags.some(t => t.includes(w)))  score += 3;
+        if (tContent.includes(w))            score += 1;
       }
 
       if (score > bestScore) { bestScore = score; best = art; }
@@ -7432,8 +7513,9 @@ async function buscarNoBanco(question) {
   } catch { return null; }
 }
 
-/** Tenta responder localmente: calculadora → banco → null */
+/** Fluxo principal local: calculadora → banco → Wikipédia → null */
 async function responderLocalAI(question) {
+  // 1. Calculadora
   if (isCalculo(question)) {
     const res = calcular(question);
     if (res !== null) {
@@ -7441,15 +7523,37 @@ async function responderLocalAI(question) {
     }
   }
 
+  const intencao = detectarIntencao(question);
+
+  // 2. Base de conhecimento local
   const art = await buscarNoBanco(question);
   if (art) {
-    const tagsLine = art.tags?.length ? `\n*Tags: ${art.tags.join(', ')}*` : '';
-    return {
-      ok: true,
-      answer: `📚 **${art.title}**\n\n${art.content}${tagsLine}`,
-      cost: 0,
-      source: 'kb',
-    };
+    const tagsLine = art.tags?.length ? `\n\n*Tags: ${art.tags.join(', ')}*` : '';
+    const body = intencao === 'prova'
+      ? gerarProva(art.title, art.content)
+      : intencao === 'resumo'
+        ? `📚 **${art.title}** — Resumo\n\n${art.content.slice(0, 400)}${art.content.length > 400 ? '…' : ''}${tagsLine}`
+        : `📚 **${art.title}**\n\n${art.content}${tagsLine}`;
+    return { ok: true, answer: body, cost: 0, source: 'kb' };
+  }
+
+  // 3. Wikipédia
+  const wiki = await buscarWikipedia(question);
+
+  if (wiki?.error === 'wiki_unavailable' || wiki?.error === 'wiki_timeout') {
+    return { ok: false, error: 'Wikipédia temporariamente indisponível. Tente novamente mais tarde.', source: 'wiki_err' };
+  }
+  if (wiki?.error) {
+    return { ok: false, error: 'Não consegui acessar a Wikipédia. Verifique sua conexão.', source: 'wiki_err' };
+  }
+  if (wiki) {
+    const linkLine = wiki.url ? `\n\n🔗 [Ver artigo completo na Wikipédia](${wiki.url})` : '';
+    const body = intencao === 'prova'
+      ? gerarProva(wiki.title, wiki.extract)
+      : intencao === 'resumo'
+        ? `🌐 **${wiki.title}** — Resumo\n\n${wiki.extract.slice(0, 400)}${wiki.extract.length > 400 ? '…' : ''}${linkLine}`
+        : `🌐 **${wiki.title}**\n\n${wiki.extract}${linkLine}`;
+    return { ok: true, answer: body, cost: 0, source: 'wikipedia' };
   }
 
   return null;
@@ -7457,30 +7561,32 @@ async function responderLocalAI(question) {
 
 /** Função principal da IA: IA local → cache Gemini → API Gemini */
 async function askAI(question, mode) {
-  // 1. IA local (sempre grátis, sem IACoin)
+  // 1. IA local gratuita (calculadora → banco → Wikipédia)
   const local = await responderLocalAI(question);
-  if (local) return local;
+  if (local?.ok) return local; // encontrou resposta local → devolve direto
 
-  // 2. Verificar saldo antes de chamar Gemini
+  // 2. Verificar saldo para Gemini
   const cost = IA_COSTS[mode] || 1;
   if ((state.iacoins || 0) < cost) {
-    return { ok: false, error: `Não encontrei na base local. Saldo insuficiente para IA avançada: precisa de ${cost} 🧠, você tem ${state.iacoins || 0} 🧠.` };
+    // Se a Wikipédia retornou erro, inclui isso no aviso
+    const extra = local?.error ? ` (${local.error})` : '';
+    return { ok: false, error: `Não encontrei resposta gratuita${extra}. Saldo insuficiente para IA avançada: precisa de ${cost} 🧠, você tem ${state.iacoins || 0} 🧠.` };
   }
 
   // 3. Cache Gemini
   const cached = await checkKnowledgeBase(question, mode);
   if (cached) {
-    return { ok: true, answer: cached, fromCache: true, cost: 0, source: 'gemini_cache' };
+    return { ok: true, answer: cached, cost: 0, source: 'gemini_cache' };
   }
 
-  // 4. Chamar API Gemini
+  // 4. API Gemini
   try {
     const answer = await callGeminiAPI(question, mode);
     spendIACoins(cost);
     await saveToKnowledgeBase(question, answer, mode);
-    return { ok: true, answer, fromCache: false, cost, source: 'gemini' };
+    return { ok: true, answer, cost, source: 'gemini' };
   } catch (e) {
-    if (e.message === 'NO_KEY') return { ok: false, error: 'Não encontrei na base local. Configure a chave Gemini no painel Admin para respostas avançadas.' };
+    if (e.message === 'NO_KEY') return { ok: false, error: 'Não encontrei resposta local nem na Wikipédia. Configure a chave Gemini no painel Admin para respostas avançadas.' };
     return { ok: false, error: `Erro da IA: ${e.message}` };
   }
 }
@@ -7514,10 +7620,11 @@ function renderAIPage() {
   const history = (state.aiHistory || []).map(msg => `
     <div class="ia-msg ia-msg-${msg.role}">
       <div class="ia-msg-bubble">${msg.role === 'ai' ? marked(msg.content) : escHtml(msg.content)}</div>
-      ${msg.source === 'kb'           ? '<span class="ia-source-tag ia-src-kb">📚 base local</span>'   : ''}
-      ${msg.source === 'calc'         ? '<span class="ia-source-tag ia-src-calc">🧮 calculadora</span>' : ''}
-      ${msg.source === 'gemini_cache' ? '<span class="ia-source-tag ia-src-cache">📦 cache</span>'     : ''}
-      ${msg.source === 'gemini'       ? '<span class="ia-source-tag ia-src-gemini">🤖 Gemini</span>'   : ''}
+      ${msg.source === 'kb'           ? '<span class="ia-source-tag ia-src-kb">📚 base local</span>'    : ''}
+      ${msg.source === 'calc'         ? '<span class="ia-source-tag ia-src-calc">🧮 calculadora</span>'  : ''}
+      ${msg.source === 'wikipedia'    ? '<span class="ia-source-tag ia-src-wiki">🌐 Wikipédia</span>'    : ''}
+      ${msg.source === 'gemini_cache' ? '<span class="ia-source-tag ia-src-cache">📦 cache</span>'      : ''}
+      ${msg.source === 'gemini'       ? '<span class="ia-source-tag ia-src-gemini">🤖 Gemini</span>'    : ''}
       ${msg.cost ? `<span class="ia-cost-tag">-${msg.cost} 🧠</span>` : ''}
     </div>`).join('');
 
@@ -7582,7 +7689,7 @@ async function handleAISubmit() {
   state.aiHistory = state.aiHistory || [];
   state.aiHistory.push({ role: 'user', content: question });
   renderAIPage();
-  document.getElementById('ia-chat-history').innerHTML += '<div class="ia-msg ia-msg-loading">⏳ Consultando IA...</div>';
+  document.getElementById('ia-chat-history').innerHTML += '<div class="ia-msg ia-msg-loading">⏳ Buscando resposta (base local → Wikipédia → Gemini)…</div>';
 
   const result = await askAI(question, _aiCurrentMode);
 
