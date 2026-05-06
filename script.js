@@ -2092,19 +2092,21 @@ function initShop() {
 function renderShop(tab = null) {
   document.getElementById('shop-coins').textContent = state.coins;
 
-  // Mantém a tab ativa se não especificado
   if (!tab) {
     tab = document.querySelector('.shop-tab-btn.active')?.dataset.tab || 'items';
   }
   document.querySelectorAll('.shop-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
 
-  const itemsEl = document.getElementById('shop-list');
+  const itemsEl     = document.getElementById('shop-list');
   const cosmeticsEl = document.getElementById('cosmetics-shop');
+  const redeemEl    = document.getElementById('shop-redeem');
   if (!itemsEl || !cosmeticsEl) return;
 
+  itemsEl.style.display     = tab === 'items'     ? '' : 'none';
+  cosmeticsEl.style.display = tab === 'cosmetics' ? '' : 'none';
+  if (redeemEl) redeemEl.style.display = tab === 'redeem' ? '' : 'none';
+
   if (tab === 'items') {
-    itemsEl.style.display = '';
-    cosmeticsEl.style.display = 'none';
     itemsEl.innerHTML = SHOP_ITEMS.map(item => {
       const canBuy = state.coins >= item.cost;
       return `<div class="shop-item">
@@ -2116,11 +2118,10 @@ function renderShop(tab = null) {
         </button>
       </div>`;
     }).join('');
-  } else {
-    itemsEl.style.display = 'none';
-    cosmeticsEl.style.display = '';
+  } else if (tab === 'cosmetics') {
     renderCosmeticsShop();
   }
+  // aba redeem não precisa renderizar — HTML é estático
 }
 
 function buyItem(itemId) {
@@ -5087,6 +5088,10 @@ function initSettingsPage() {
   const darkToggle = document.getElementById('cfg-dark-mode');
   if (darkToggle) darkToggle.checked = document.documentElement.dataset.theme === 'dark';
 
+  // Seção de IA só para admin
+  const aiSection = document.getElementById('ai-settings-section');
+  if (aiSection) aiSection.style.display = state.isAdmin ? '' : 'none';
+
   // Gemini API key
   const geminiInput   = document.getElementById('cfg-gemini-key');
   const geminiSaveBtn = document.getElementById('cfg-gemini-save-btn');
@@ -7362,7 +7367,7 @@ async function callGeminiAPI(question, mode) {
   };
 
   const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -7707,7 +7712,9 @@ async function adminDeleteCode(codeId) {
   try { await sb.from('redeem_codes').delete().eq('id', codeId); } catch {}
 }
 
-async function renderAdminPage() {
+let _adminTab = 'usuarios';
+
+async function renderAdminPage(tab) {
   const page = document.getElementById('page-admin');
   if (!page) return;
 
@@ -7716,136 +7723,194 @@ async function renderAdminPage() {
     return;
   }
 
-  page.innerHTML = `<div class="page-header"><h1>👑 Painel Admin</h1><p class="page-subtitle">Moderação e gerenciamento</p></div>
-    <div class="social-loading">Carregando dados...</div>`;
+  if (tab) _adminTab = tab;
 
-  const [suspects, history, allUsers, codes] = await Promise.all([
-    loadSuspects(), loadAdminHistory(), loadAllUsers(), loadRedeemCodes(),
-  ]);
+  // Skeleton enquanto carrega
+  page.innerHTML = `
+    <div class="page-header"><h1>👑 Painel Admin</h1><p class="page-subtitle">Moderação e gerenciamento</p></div>
+    <div class="admin-tabs">
+      <button class="admin-tab-btn ${_adminTab==='usuarios'?'active':''}" onclick="renderAdminPage('usuarios')">👥 Usuários</button>
+      <button class="admin-tab-btn ${_adminTab==='codigos' ?'active':''}" onclick="renderAdminPage('codigos')">🎟️ Códigos</button>
+      <button class="admin-tab-btn ${_adminTab==='ia'      ?'active':''}" onclick="renderAdminPage('ia')">🤖 IA</button>
+    </div>
+    <div id="admin-tab-content"><div class="social-loading">Carregando...</div></div>`;
 
-  // ── Criar código ─────────────────────────────────────────────
-  const createCodeHtml = `
-    <div class="admin-create-code-form">
-      <div class="admin-form-row">
-        <input id="adm-code-val"   placeholder="CÓDIGO (ex: BONUS2025)" style="text-transform:uppercase;letter-spacing:.05em;font-weight:700">
-        <select id="adm-code-type">
-          <option value="coins">💰 Moedas</option>
-          <option value="iacoins">🧠 IACoin</option>
-          <option value="xp">✨ XP</option>
-          <option value="admin">👑 Admin</option>
-        </select>
-        <input id="adm-code-amount" type="number" placeholder="Valor" min="0" value="100" style="width:90px">
-        <input id="adm-code-uses"   type="number" placeholder="Usos" min="1" value="1" style="width:70px">
-        <input id="adm-code-exp"    type="datetime-local" title="Expira em (opcional)">
+  const content = document.getElementById('admin-tab-content');
+
+  if (_adminTab === 'usuarios') {
+    const [allUsers, suspects, history] = await Promise.all([
+      loadAllUsers(), loadSuspects(), loadAdminHistory(),
+    ]);
+
+    const _userCard = (u, highlight = false) => {
+      const d = u.data || {};
+      const badges = [
+        u.is_admin    ? '<span class="admin-badge-tag admin-tag-admin">👑 admin</span>'    : '',
+        u.is_suspect  ? '<span class="admin-badge-tag admin-tag-suspect">⚠️ suspeito</span>' : '',
+        u.penalty_type? `<span class="admin-badge-tag admin-tag-limit">🔒 ${u.penalty_type}</span>` : '',
+      ].filter(Boolean).join('');
+      return `
+      <div class="admin-user-card${highlight ? ' admin-card-danger' : ''}">
+        <div class="admin-user-info">
+          <div class="admin-user-avatar">${d.avatar || '🧙'}</div>
+          <div style="flex:1;min-width:0">
+            <div class="admin-user-name">${escHtml(u.name || 'Sem nome')} ${badges}</div>
+            <div class="admin-user-stats">Nv ${u.level} · ${u.xp} XP · ${u.coins} 💰 · ${u.iacoins || 0} 🧠</div>
+            <div class="admin-user-id">${u.id}</div>
+          </div>
+        </div>
+        <div class="admin-actions">
+          ${u.is_suspect ? `<button class="btn-admin-ok" onclick="handleAdminAction('${u.id}','ok','Verificado')">✅ OK</button>` : ''}
+          <button class="btn-admin-warn"  onclick="adminPromptAction('${u.id}','warn')">⚠️ Avisar</button>
+          <button class="btn-admin-limit" onclick="adminPromptAction('${u.id}','limit')">🔒 Limitar</button>
+          <button class="btn-admin-reset" onclick="adminPromptAction('${u.id}','reset')">♻️ Resetar</button>
+          ${u.penalty_type ? `<button class="btn-admin-remove" onclick="handleAdminAction('${u.id}','remove_penalty','')">🔓 Remover punição</button>` : ''}
+          <button class="btn-sm btn-ghost" onclick="showUserFlags('${u.id}')">🚩 Flags</button>
+        </div>
+      </div>`;
+    };
+
+    const histHtml = history.length ? history.map(a => `
+      <div class="admin-history-row">
+        <span class="admin-hist-action admin-act-${a.action}">${a.action}</span>
+        <span class="admin-hist-user">${a.user_id.slice(0,8)}…</span>
+        <span class="admin-hist-reason">${escHtml(a.reason || '—')}</span>
+        <span class="admin-hist-date">${new Date(a.created_at).toLocaleDateString('pt-BR')}</span>
+      </div>`).join('') : '<div class="social-empty">Sem histórico ainda.</div>';
+
+    content.innerHTML = `
+      <div class="admin-section-title">🚨 Suspeitos (${suspects.length})</div>
+      <div class="admin-suspects">
+        ${suspects.length ? suspects.map(u => _userCard(u, true)).join('') : '<div class="social-empty">Nenhum usuário suspeito. ✅</div>'}
       </div>
-      <button class="btn-primary" onclick="handleAdminCreateCode()" style="margin-top:.5rem;width:100%">➕ Criar Código</button>
-      <div id="adm-code-result" style="margin-top:.4rem;font-size:.82rem;font-weight:700"></div>
-    </div>`;
 
-  // ── Lista de códigos ──────────────────────────────────────────
-  const codesHtml = codes.length ? `
-    <div class="admin-codes-table">
-      <div class="admin-codes-header">
-        <span>Código</span><span>Tipo</span><span>Valor</span><span>Usos</span><span>Expira</span><span></span>
+      <div class="admin-section-title" style="margin-top:1.5rem">👥 Todos os Usuários (${allUsers.length})</div>
+      <div class="admin-suspects">${allUsers.length ? allUsers.map(u => _userCard(u)).join('') : '<div class="social-empty">Nenhum usuário ainda.</div>'}</div>
+
+      <div class="admin-section-title" style="margin-top:1.5rem">📜 Histórico de Ações</div>
+      <div class="admin-history">${histHtml}</div>`;
+
+  } else if (_adminTab === 'codigos') {
+    const codes = await loadRedeemCodes();
+
+    const codesHtml = codes.length ? `
+      <div class="admin-codes-table">
+        <div class="admin-codes-header">
+          <span>Código</span><span>Tipo</span><span>Valor</span><span>Usos</span><span>Expira</span><span></span>
+        </div>
+        ${codes.map(c => `
+        <div class="admin-codes-row">
+          <span class="admin-code-val">${escHtml(c.code)}</span>
+          <span class="admin-code-type admin-type-${c.type}">${c.type}</span>
+          <span>${c.value}</span>
+          <span>${c.uses_current}/${c.uses_max > 0 ? c.uses_max : '∞'}</span>
+          <span style="font-size:.72rem">${c.expires_at ? new Date(c.expires_at).toLocaleDateString('pt-BR') : '—'}</span>
+          <button class="btn-sm btn-ghost" style="color:#f87171" onclick="handleAdminDeleteCode('${c.id}')">🗑️</button>
+        </div>`).join('')}
+      </div>` : '<div class="social-empty">Nenhum código criado ainda.</div>';
+
+    content.innerHTML = `
+      <div class="admin-section-title">➕ Criar Novo Código</div>
+      <div class="admin-create-code-form">
+        <div class="admin-form-row">
+          <input id="adm-code-val" placeholder="CÓDIGO (ex: BONUS2025)" style="text-transform:uppercase;letter-spacing:.05em;font-weight:700;flex:2">
+          <select id="adm-code-type">
+            <option value="coins">💰 Moedas</option>
+            <option value="iacoins">🧠 IACoin</option>
+            <option value="xp">✨ XP</option>
+            <option value="admin">👑 Admin</option>
+          </select>
+        </div>
+        <div class="admin-form-row" style="margin-top:.5rem">
+          <input id="adm-code-amount" type="number" placeholder="Valor" min="0" value="100">
+          <input id="adm-code-uses"   type="number" placeholder="Nº de usos" min="1" value="1">
+          <input id="adm-code-exp"    type="datetime-local" placeholder="Expira em (opcional)">
+        </div>
+        <button class="btn-primary" onclick="handleAdminCreateCode()" style="margin-top:.75rem;width:100%">➕ Criar Código</button>
+        <div id="adm-code-result" style="margin-top:.5rem;font-size:.85rem;font-weight:700"></div>
       </div>
-      ${codes.map(c => `
-      <div class="admin-codes-row">
-        <span class="admin-code-val">${escHtml(c.code)}</span>
-        <span class="admin-code-type admin-type-${c.type}">${c.type}</span>
-        <span>${c.value}</span>
-        <span>${c.uses_current}/${c.uses_max > 0 ? c.uses_max : '∞'}</span>
-        <span style="font-size:.72rem">${c.expires_at ? new Date(c.expires_at).toLocaleDateString('pt-BR') : '—'}</span>
-        <button class="btn-sm btn-ghost" style="color:#f87171;font-size:.72rem" onclick="handleAdminDeleteCode('${c.id}')">🗑️</button>
-      </div>`).join('')}
-    </div>` : '<div class="social-empty" style="margin:.5rem 0">Nenhum código criado ainda.</div>';
 
-  // ── Usuários cadastrados ──────────────────────────────────────
-  const usersHtml = allUsers.length ? allUsers.map(u => {
-    const d = u.data || {};
-    const badges = [
-      u.is_admin   ? '<span class="admin-badge-tag admin-tag-admin">👑 admin</span>'   : '',
-      u.is_suspect ? '<span class="admin-badge-tag admin-tag-suspect">⚠️ suspeito</span>' : '',
-      u.penalty_type ? `<span class="admin-badge-tag admin-tag-limit">🔒 ${u.penalty_type}</span>` : '',
-    ].filter(Boolean).join('');
-    return `
-    <div class="admin-user-card">
-      <div class="admin-user-info">
-        <div class="admin-user-avatar">${d.avatar || '🧙'}</div>
-        <div style="flex:1;min-width:0">
-          <div class="admin-user-name">${escHtml(u.name || 'Sem nome')} ${badges}</div>
-          <div class="admin-user-stats">Nv ${u.level} · ${u.xp} XP · ${u.coins} 💰 · ${u.iacoins || 0} 🧠</div>
-          <div style="font-size:.68rem;color:var(--text-muted);word-break:break-all">${u.id}</div>
+      <div class="admin-section-title" style="margin-top:1.5rem">📋 Códigos Existentes (${codes.length})</div>
+      ${codesHtml}`;
+
+  } else if (_adminTab === 'ia') {
+    const key = localStorage.getItem(_GEMINI_LS) || '';
+    let kbCount = 0;
+    try {
+      const { count } = await sb.from('knowledge_base').select('*', { count: 'exact', head: true });
+      kbCount = count || 0;
+    } catch {}
+
+    content.innerHTML = `
+      <div class="admin-section-title">🔑 Chave da API Gemini</div>
+      <div class="admin-create-code-form">
+        <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:.75rem">
+          Obtenha sua chave gratuitamente em <strong>aistudio.google.com</strong> → "Get API Key"
+        </p>
+        <div style="display:flex;gap:.5rem;align-items:center">
+          <input type="password" id="adm-gemini-key" placeholder="AIza..." value="${escHtml(key)}" style="flex:1;font-size:.85rem">
+          <button class="btn-primary" onclick="handleAdminSaveGeminiKey()">💾 Salvar</button>
+          ${key ? `<button class="btn-sm btn-ghost" onclick="handleAdminRemoveGeminiKey()">🗑️ Remover</button>` : ''}
+        </div>
+        <div id="adm-gemini-status" style="margin-top:.5rem;font-size:.8rem;font-weight:700;color:${key?'#34d399':'#f59e0b'}">
+          ${key ? '✅ Chave configurada' : '⚠️ Nenhuma chave configurada'}
         </div>
       </div>
-      <div class="admin-actions" style="margin-top:.5rem">
-        ${u.is_suspect ? `<button class="btn-admin-ok" onclick="handleAdminAction('${u.id}','ok','Verificado')">✅ OK</button>` : ''}
-        <button class="btn-admin-warn"   onclick="adminPromptAction('${u.id}','warn')">⚠️ Avisar</button>
-        <button class="btn-admin-limit"  onclick="adminPromptAction('${u.id}','limit')">🔒 Limitar</button>
-        ${u.penalty_type ? `<button class="btn-admin-remove" onclick="handleAdminAction('${u.id}','remove_penalty','')">🔓 Remover punição</button>` : ''}
-        <button class="btn-sm btn-ghost" onclick="showUserFlags('${u.id}')">🚩 Flags</button>
+
+      <div class="admin-section-title" style="margin-top:1.5rem">📦 Cache de Respostas (knowledge_base)</div>
+      <div class="admin-create-code-form">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-weight:800;font-size:1.1rem">${kbCount} respostas em cache</div>
+            <div style="font-size:.78rem;color:var(--text-muted);margin-top:.2rem">Perguntas repetidas respondem grátis sem gastar IACoin</div>
+          </div>
+          <button class="btn-sm btn-ghost" style="color:#f87171" onclick="handleAdminClearKB()">🗑️ Limpar cache</button>
+        </div>
       </div>
-    </div>`;
-  }).join('') : '<div class="social-empty">Nenhum usuário encontrado.</div>';
 
-  // ── Histórico ─────────────────────────────────────────────────
-  const histHtml = history.length ? history.map(a => `
-    <div class="admin-history-row">
-      <span class="admin-hist-action admin-act-${a.action}">${a.action}</span>
-      <span class="admin-hist-user">${a.user_id.slice(0,8)}…</span>
-      <span class="admin-hist-reason">${escHtml(a.reason || '—')}</span>
-      <span class="admin-hist-date">${new Date(a.created_at).toLocaleDateString('pt-BR')}</span>
-    </div>`).join('') : '<div class="social-empty">Sem histórico de ações.</div>';
+      <div class="admin-section-title" style="margin-top:1.5rem">💰 Modelo Gemini Ativo</div>
+      <div class="admin-create-code-form" style="font-size:.85rem">
+        <code style="color:#a78bfa">gemini-2.0-flash</code> via Google AI Studio API v1beta
+        <div style="font-size:.75rem;color:var(--text-muted);margin-top:.35rem">Custos por modo: Chat 1🧠 · Explicar 5🧠 · Resumo 5🧠 · Quiz 5🧠 · Prova 10🧠</div>
+      </div>`;
+  }
+}
 
-  page.innerHTML = `
-    <div class="page-header">
-      <h1>👑 Painel Admin</h1>
-      <p class="page-subtitle">Moderação e gerenciamento</p>
-    </div>
+function handleAdminSaveGeminiKey() {
+  const key = document.getElementById('adm-gemini-key')?.value?.trim();
+  if (key) {
+    localStorage.setItem(_GEMINI_LS, key);
+    showNotification('✅ Chave Gemini salva!', 'success');
+  } else {
+    localStorage.removeItem(_GEMINI_LS);
+    showNotification('Chave removida.', 'info');
+  }
+  renderAdminPage('ia');
+}
 
-    <div class="admin-section-title">🎟️ Criar Código de Resgate</div>
-    ${createCodeHtml}
+function handleAdminRemoveGeminiKey() {
+  if (!confirm('Remover a chave Gemini?')) return;
+  localStorage.removeItem(_GEMINI_LS);
+  showNotification('Chave removida.', 'info');
+  renderAdminPage('ia');
+}
 
-    <div class="admin-section-title" style="margin-top:1.5rem">📋 Códigos Existentes (${codes.length})</div>
-    ${codesHtml}
-
-    <div class="admin-section-title" style="margin-top:1.5rem">👥 Usuários Cadastrados (${allUsers.length})</div>
-    <div class="admin-suspects">${usersHtml}</div>
-
-    <div class="admin-section-title" style="margin-top:1.5rem">🚨 Usuários Suspeitos (${suspects.length})</div>
-    <div class="admin-suspects">${suspects.length
-      ? suspects.map(u => {
-          const d = u.data || {};
-          return `<div class="admin-user-card" style="border-color:rgba(239,68,68,.4)">
-            <div class="admin-user-info">
-              <div class="admin-user-avatar">${d.avatar||'🧙'}</div>
-              <div><div class="admin-user-name">${escHtml(u.name||'?')}</div>
-              <div class="admin-user-stats">Nv ${u.level} · ${u.xp} XP</div></div>
-            </div>
-            <div class="admin-actions">
-              <button class="btn-admin-ok"     onclick="handleAdminAction('${u.id}','ok','Verificado')">✅ OK</button>
-              <button class="btn-admin-warn"   onclick="adminPromptAction('${u.id}','warn')">⚠️ Avisar</button>
-              <button class="btn-admin-limit"  onclick="adminPromptAction('${u.id}','limit')">🔒 Limitar</button>
-              <button class="btn-admin-reset"  onclick="adminPromptAction('${u.id}','reset')">♻️ Resetar</button>
-              <button class="btn-admin-remove" onclick="handleAdminAction('${u.id}','remove_penalty','')">🔓 Remover</button>
-              <button class="btn-sm btn-ghost" onclick="showUserFlags('${u.id}')">🚩 Flags</button>
-            </div>
-          </div>`;
-        }).join('')
-      : '<div class="social-empty">Nenhum usuário suspeito. ✅</div>'
-    }</div>
-
-    <div class="admin-section-title" style="margin-top:1.5rem">📜 Histórico de Ações</div>
-    <div class="admin-history">${histHtml}</div>
-  `;
+async function handleAdminClearKB() {
+  if (!confirm('Limpar todo o cache de respostas da IA? Isso não afeta usuários.')) return;
+  try {
+    await sb.from('knowledge_base').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    showNotification('Cache limpo.', 'success');
+  } catch (e) { showNotification('Erro ao limpar cache.', 'error'); }
+  renderAdminPage('ia');
 }
 
 async function handleAdminCreateCode() {
-  const code    = document.getElementById('adm-code-val')?.value;
-  const type    = document.getElementById('adm-code-type')?.value;
-  const value   = document.getElementById('adm-code-amount')?.value;
-  const uses    = document.getElementById('adm-code-uses')?.value;
-  const exp     = document.getElementById('adm-code-exp')?.value;
-  const result  = document.getElementById('adm-code-result');
+  const code   = document.getElementById('adm-code-val')?.value;
+  const type   = document.getElementById('adm-code-type')?.value;
+  const value  = document.getElementById('adm-code-amount')?.value;
+  const uses   = document.getElementById('adm-code-uses')?.value;
+  const exp    = document.getElementById('adm-code-exp')?.value;
+  const result = document.getElementById('adm-code-result');
 
   if (!code?.trim()) {
     if (result) { result.textContent = '⚠️ Digite o código.'; result.style.color = '#f59e0b'; }
@@ -7858,8 +7923,8 @@ async function handleAdminCreateCode() {
     result.style.color  = res.ok ? '#34d399' : '#f87171';
   }
   if (res.ok) {
-    showNotification('✅ Código criado com sucesso!', 'success');
-    setTimeout(() => renderAdminPage(), 1000);
+    showNotification('✅ Código criado!', 'success');
+    setTimeout(() => renderAdminPage('codigos'), 1200);
   }
 }
 
@@ -7867,7 +7932,7 @@ async function handleAdminDeleteCode(codeId) {
   if (!confirm('Deletar este código?')) return;
   await adminDeleteCode(codeId);
   showNotification('Código deletado.', 'info');
-  renderAdminPage();
+  renderAdminPage('codigos');
 }
 
 async function handleAdminAction(userId, action, defaultReason) {
@@ -7967,6 +8032,25 @@ async function handleRedeemSubmit() {
   if (!inp || !res) return;
 
   const btn = document.getElementById('redeem-submit-btn');
+  if (btn) btn.disabled = true;
+
+  const result = await redeemCode(inp.value);
+  res.textContent = result.msg;
+  res.className   = 'redeem-result ' + (result.ok ? 'redeem-ok' : 'redeem-err');
+
+  if (result.ok) {
+    showNotification(result.msg, 'success');
+    inp.value = '';
+  }
+  if (btn) btn.disabled = false;
+}
+
+async function handleShopRedeemSubmit() {
+  const inp = document.getElementById('shop-redeem-input');
+  const res = document.getElementById('shop-redeem-result');
+  if (!inp || !res) return;
+
+  const btn = inp.parentElement?.querySelector('button');
   if (btn) btn.disabled = true;
 
   const result = await redeemCode(inp.value);

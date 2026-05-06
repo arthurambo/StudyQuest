@@ -212,7 +212,7 @@
       <a class="nav-item nav-item-notif" id="sidebar-notif-btn" onclick="openNotifPanel()" style="cursor:pointer">
         🔔 Notificações<span class="notif-bell-badge notif-badge-sidebar" style="display:none"></span>
       </a>
-      <a class="nav-item" onclick="openRedeemModal()" style="cursor:pointer">🎟️ Resgatar Código</a>
+      <a class="nav-item" data-page="shop" onclick="navigateTo('shop');setTimeout(()=>renderShop('redeem'),50)">🎟️ Resgatar Código</a>
     </div>
     <div class="sidebar-bottom">
       <button class="theme-toggle" id="theme-toggle">🌙 Modo Claro</button>
@@ -453,9 +453,20 @@
       <div class="shop-tabs">
         <button class="shop-tab-btn active" data-tab="items"     onclick="renderShop('items')">⚡ Itens</button>
         <button class="shop-tab-btn"        data-tab="cosmetics" onclick="renderShop('cosmetics')">🎨 Cosméticos</button>
+        <button class="shop-tab-btn"        data-tab="redeem"    onclick="renderShop('redeem')">🎟️ Resgatar</button>
       </div>
       <div id="shop-list" class="shop-grid"></div>
       <div id="cosmetics-shop" style="display:none"></div>
+      <div id="shop-redeem" style="display:none">
+        <div class="redeem-inline-card">
+          <div style="font-size:2.5rem;text-align:center">🎟️</div>
+          <h3 style="text-align:center;margin:0.5rem 0">Resgatar Código</h3>
+          <p style="text-align:center;color:var(--text-secondary);margin:0 0 1rem">Ganhe moedas, IACoin e itens especiais com códigos exclusivos.</p>
+          <input type="text" id="shop-redeem-input" placeholder="DIGITE SEU CÓDIGO" style="text-transform:uppercase;width:100%;box-sizing:border-box">
+          <div id="shop-redeem-result" class="redeem-result" style="margin-top:0.5rem"></div>
+          <button class="btn-primary" onclick="handleShopRedeemSubmit()" style="width:100%;margin-top:0.75rem">🎁 Resgatar</button>
+        </div>
+      </div>
     </div>
 
     <!-- ===== ESTATÍSTICAS ===== -->
@@ -754,8 +765,8 @@
         </div>
       </div>
 
-      <!-- SEÇÃO: IA EDUCACIONAL -->
-      <div class="settings-section">
+      <!-- SEÇÃO: IA EDUCACIONAL (só admin) -->
+      <div class="settings-section" id="ai-settings-section" style="display:none">
         <div class="settings-section-title">🧠 IA Educacional</div>
         <div class="settings-card">
           <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:.6rem">

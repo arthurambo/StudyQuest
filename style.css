@@ -4249,3 +4249,57 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
   .admin-codes-header span:nth-child(5),
   .admin-codes-row  span:nth-child(5) { display: none; }
 }
+
+/* ── Admin: tabs ─────────────────────────────────────────────── */
+.admin-tabs {
+  display: flex;
+  gap: .5rem;
+  margin-bottom: 1.25rem;
+  background: var(--bg-card, rgba(255,255,255,.04));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: .35rem;
+}
+.admin-tab-btn {
+  flex: 1;
+  padding: .5rem .75rem;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 700;
+  font-size: .85rem;
+  cursor: pointer;
+  transition: background .18s, color .18s;
+}
+.admin-tab-btn:hover { background: rgba(124,58,237,.12); color: var(--text-primary); }
+.admin-tab-btn.active {
+  background: linear-gradient(135deg,#7c3aed,#6d28d9);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(124,58,237,.35);
+}
+
+/* ── Admin: user card ────────────────────────────────────────── */
+.admin-user-id {
+  font-size: .7rem;
+  color: var(--text-muted);
+  font-family: monospace;
+  word-break: break-all;
+}
+.admin-card-danger {
+  border-color: rgba(239,68,68,.35) !important;
+  background: rgba(239,68,68,.04) !important;
+}
+
+/* ── Loja: card de resgate inline ────────────────────────────── */
+.redeem-inline-card {
+  max-width: 440px;
+  margin: 2rem auto;
+  background: var(--bg-card, rgba(255,255,255,.05));
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 2rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
