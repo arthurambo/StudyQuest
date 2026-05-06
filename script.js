@@ -5749,13 +5749,50 @@ async function removeFriend(friendId) {
 
 // ── Pedidos de amizade ────────────────────────────────────────
 
-/** Envia pedido de amizade */
+/** Envia pedido de amizade — retorna { ok, reason } */
 async function sendFriendRequest(toId) {
-  if (!sb || !authUserId) return false;
+  if (!sb || !authUserId) return { ok: false, reason: 'not_logged_in' };
   try {
-    const { error } = await sb.from('friend_requests').insert({ from_id: authUserId, to_id: toId, status: 'pending' });
-    return !error;
-  } catch (e) { return false; }
+    // 1) Já são amigos?
+    const { data: alreadyFriend } = await sb.from('friends')
+      .select('friend_id', { count: 'exact', head: true })
+      .eq('user_id', authUserId).eq('friend_id', toId);
+    if (alreadyFriend !== null && alreadyFriend !== undefined) {
+      // head:true → data é null quando vazio, objeto quando tem
+    }
+    const { count: friendCount } = await sb.from('friends')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', authUserId).eq('friend_id', toId);
+    if (friendCount > 0) return { ok: false, reason: 'already_friends' };
+
+    // 2) Já existe pedido pendente enviado por mim?
+    const { count: sentCount } = await sb.from('friend_requests')
+      .select('*', { count: 'exact', head: true })
+      .eq('from_id', authUserId).eq('to_id', toId).eq('status', 'pending');
+    if (sentCount > 0) return { ok: false, reason: 'already_sent' };
+
+    // 3) A outra pessoa já me mandou pedido? → aceita automaticamente
+    const { data: incoming } = await sb.from('friend_requests')
+      .select('id').eq('from_id', toId).eq('to_id', authUserId).eq('status', 'pending').maybeSingle();
+    if (incoming) {
+      await acceptFriendRequest(toId, incoming.id);
+      return { ok: true, reason: 'auto_accepted' };
+    }
+
+    // 4) Insere pedido
+    const { error } = await sb.from('friend_requests')
+      .insert({ from_id: authUserId, to_id: toId, status: 'pending' });
+    if (error) {
+      console.error('[sendFriendRequest] Supabase error:', error);
+      // Violação de unique constraint → pedido já existe
+      if (error.code === '23505') return { ok: false, reason: 'already_sent' };
+      return { ok: false, reason: error.message || 'insert_error' };
+    }
+    return { ok: true, reason: 'sent' };
+  } catch (e) {
+    console.error('[sendFriendRequest] Exception:', e);
+    return { ok: false, reason: e.message || 'unknown' };
+  }
 }
 
 /** Lista IDs para quem eu já enviei pedido pendente */
@@ -5785,13 +5822,23 @@ async function listPendingRequests() {
 async function acceptFriendRequest(fromId, requestId) {
   if (!sb || !authUserId) return false;
   try {
-    await sb.from('friends').insert([
+    // upsert evita erro de constraint duplicada se o registro já existir
+    await sb.from('friends').upsert([
       { user_id: authUserId, friend_id: fromId },
       { user_id: fromId, friend_id: authUserId },
-    ]);
-    await sb.from('friend_requests').delete().eq('id', requestId);
+    ], { onConflict: 'user_id,friend_id', ignoreDuplicates: true });
+    // Deleta pedido pelo id se tiver, senão pelo par from/to
+    if (requestId) {
+      await sb.from('friend_requests').delete().eq('id', requestId);
+    } else {
+      await sb.from('friend_requests').delete()
+        .eq('from_id', fromId).eq('to_id', authUserId);
+    }
     return true;
-  } catch (e) { return false; }
+  } catch (e) {
+    console.error('[acceptFriendRequest] erro:', e);
+    return false;
+  }
 }
 
 /** Rejeita pedido: deleta o pedido */
@@ -6096,13 +6143,26 @@ async function handleCancelFriendRequest(requestId, btn) {
 
 async function handleAddFriend(friendId, btn) {
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
-  const ok = await sendFriendRequest(friendId);
+  const { ok, reason } = await sendFriendRequest(friendId);
   if (ok) {
-    if (btn) btn.outerHTML = '<span class="friend-tag pending-tag">⏳ Pedido enviado</span>';
-    showNotification('✉️ Pedido de amizade enviado!', 'success');
+    if (reason === 'auto_accepted') {
+      if (btn) btn.outerHTML = '<span class="friend-tag">✅ Amigos!</span>';
+      showNotification('🎉 Vocês já são amigos agora!', 'success');
+      renderFriendsPage();
+    } else {
+      if (btn) btn.outerHTML = '<span class="friend-tag pending-tag">⏳ Pedido enviado</span>';
+      showNotification('✉️ Pedido de amizade enviado!', 'success');
+    }
   } else {
     if (btn) { btn.disabled = false; btn.textContent = '+ Adicionar'; }
-    showNotification('Erro ao enviar pedido. Tente novamente.', 'error');
+    if (reason === 'already_friends') {
+      showNotification('Vocês já são amigos! 😄', 'info');
+    } else if (reason === 'already_sent') {
+      if (btn) btn.outerHTML = '<span class="friend-tag pending-tag">⏳ Pedido enviado</span>';
+      showNotification('Você já enviou um pedido para essa pessoa.', 'info');
+    } else {
+      showNotification(`Erro ao enviar pedido: ${reason}`, 'error');
+    }
   }
 }
 
