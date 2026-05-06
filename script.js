@@ -7352,26 +7352,135 @@ async function callGeminiAPI(question, mode) {
   return json.candidates?.[0]?.content?.parts?.[0]?.text || 'Sem resposta da IA.';
 }
 
-/** Função principal da IA: verifica cache → chama API → desconta IACoin */
-async function askAI(question, mode) {
-  const cost = IA_COSTS[mode] || 1;
+/* ── IA LOCAL ────────────────────────────────────────────────────────────── */
 
-  if ((state.iacoins || 0) < cost) {
-    return { ok: false, error: `Saldo insuficiente. Custo: ${cost} 🧠 | Saldo: ${state.iacoins || 0} 🧠` };
+/** Remove acentos, lowercase, pontuação */
+function normalizeText(text) {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Detecta se a pergunta é um cálculo */
+function isCalculo(text) {
+  const n = normalizeText(text);
+  const palavras = ['calcular','calcula','calcule','quanto e','quanto vale','resultado de','quanto fica','me diz quanto','conta quanto','qual e o resultado'];
+  if (palavras.some(p => n.includes(p))) return true;
+  return /\d[\d\s]*[+\-*/]\s*\d/.test(text);
+}
+
+/** Extrai e avalia expressão matemática de forma segura (sem eval direto) */
+function calcular(text) {
+  // Extrai a expressão: mantém só dígitos, operadores e parênteses
+  let expr = text.replace(/[^0-9+\-*/().]/g, ' ').replace(/\s+/g, '').trim();
+  if (!expr || !/\d/.test(expr) || !(/[+\-*/]/.test(expr))) return null;
+  if (!/^[0-9+\-*/.()]+$/.test(expr)) return null;
+  // Previne divisão por zero e sequências inválidas
+  if (/\/0(?!\.)/.test(expr)) return null;
+  try {
+    // eslint-disable-next-line no-new-func
+    const result = new Function('"use strict"; return (' + expr + ')')();
+    if (typeof result !== 'number' || !isFinite(result)) return null;
+    return Number.isInteger(result) ? result : Math.round(result * 100000) / 100000;
+  } catch { return null; }
+}
+
+/** Carrega artigos da base de conhecimento do Supabase */
+async function loadKBArticles() {
+  if (!sb) return [];
+  try {
+    const { data } = await sb.from('kb_articles').select('*').order('created_at', { ascending: false });
+    return data || [];
+  } catch { return []; }
+}
+
+/** Busca o artigo mais relevante no banco para a pergunta */
+async function buscarNoBanco(question) {
+  if (!sb) return null;
+  try {
+    const articles = await loadKBArticles();
+    if (!articles.length) return null;
+
+    const norm  = normalizeText(question);
+    const words = norm.split(' ').filter(w => w.length > 2);
+    if (!words.length) return null;
+
+    let best = null, bestScore = 0;
+
+    for (const art of articles) {
+      let score = 0;
+      const tTitle   = normalizeText(art.title   || '');
+      const tSubject = normalizeText(art.subject  || '');
+      const tContent = normalizeText(art.content  || '');
+      const tTags    = (art.tags || []).map(t => normalizeText(t));
+
+      for (const w of words) {
+        if (tTitle.includes(w))           score += 4;
+        if (tSubject.includes(w))         score += 3;
+        if (tTags.some(t => t.includes(w))) score += 3;
+        if (tContent.includes(w))         score += 1;
+      }
+
+      if (score > bestScore) { bestScore = score; best = art; }
+    }
+
+    return bestScore >= 3 ? best : null;
+  } catch { return null; }
+}
+
+/** Tenta responder localmente: calculadora → banco → null */
+async function responderLocalAI(question) {
+  if (isCalculo(question)) {
+    const res = calcular(question);
+    if (res !== null) {
+      return { ok: true, answer: `🧮 **Resultado: ${res}**`, cost: 0, source: 'calc' };
+    }
   }
 
+  const art = await buscarNoBanco(question);
+  if (art) {
+    const tagsLine = art.tags?.length ? `\n*Tags: ${art.tags.join(', ')}*` : '';
+    return {
+      ok: true,
+      answer: `📚 **${art.title}**\n\n${art.content}${tagsLine}`,
+      cost: 0,
+      source: 'kb',
+    };
+  }
+
+  return null;
+}
+
+/** Função principal da IA: IA local → cache Gemini → API Gemini */
+async function askAI(question, mode) {
+  // 1. IA local (sempre grátis, sem IACoin)
+  const local = await responderLocalAI(question);
+  if (local) return local;
+
+  // 2. Verificar saldo antes de chamar Gemini
+  const cost = IA_COSTS[mode] || 1;
+  if ((state.iacoins || 0) < cost) {
+    return { ok: false, error: `Não encontrei na base local. Saldo insuficiente para IA avançada: precisa de ${cost} 🧠, você tem ${state.iacoins || 0} 🧠.` };
+  }
+
+  // 3. Cache Gemini
   const cached = await checkKnowledgeBase(question, mode);
   if (cached) {
-    return { ok: true, answer: cached, fromCache: true, cost: 0 };
+    return { ok: true, answer: cached, fromCache: true, cost: 0, source: 'gemini_cache' };
   }
 
+  // 4. Chamar API Gemini
   try {
     const answer = await callGeminiAPI(question, mode);
     spendIACoins(cost);
     await saveToKnowledgeBase(question, answer, mode);
-    return { ok: true, answer, fromCache: false, cost };
+    return { ok: true, answer, fromCache: false, cost, source: 'gemini' };
   } catch (e) {
-    if (e.message === 'NO_KEY') return { ok: false, error: 'Configure sua chave Gemini nas ⚙️ Configurações.' };
+    if (e.message === 'NO_KEY') return { ok: false, error: 'Não encontrei na base local. Configure a chave Gemini no painel Admin para respostas avançadas.' };
     return { ok: false, error: `Erro da IA: ${e.message}` };
   }
 }
@@ -7405,7 +7514,10 @@ function renderAIPage() {
   const history = (state.aiHistory || []).map(msg => `
     <div class="ia-msg ia-msg-${msg.role}">
       <div class="ia-msg-bubble">${msg.role === 'ai' ? marked(msg.content) : escHtml(msg.content)}</div>
-      ${msg.fromCache ? '<span class="ia-cache-tag">📦 cache</span>' : ''}
+      ${msg.source === 'kb'           ? '<span class="ia-source-tag ia-src-kb">📚 base local</span>'   : ''}
+      ${msg.source === 'calc'         ? '<span class="ia-source-tag ia-src-calc">🧮 calculadora</span>' : ''}
+      ${msg.source === 'gemini_cache' ? '<span class="ia-source-tag ia-src-cache">📦 cache</span>'     : ''}
+      ${msg.source === 'gemini'       ? '<span class="ia-source-tag ia-src-gemini">🤖 Gemini</span>'   : ''}
       ${msg.cost ? `<span class="ia-cost-tag">-${msg.cost} 🧠</span>` : ''}
     </div>`).join('');
 
@@ -7477,8 +7589,8 @@ async function handleAISubmit() {
   state.aiHistory.push({
     role: 'ai',
     content: result.ok ? result.answer : `❌ ${result.error}`,
-    fromCache: result.fromCache,
-    cost: result.cost,
+    source: result.source || null,
+    cost: result.cost || 0,
   });
 
   if (state.aiHistory.length > 40) state.aiHistory = state.aiHistory.slice(-40);
@@ -7825,43 +7937,65 @@ async function renderAdminPage(tab) {
 
   } else if (_adminTab === 'ia') {
     const key = localStorage.getItem(_GEMINI_LS) || '';
-    let kbCount = 0;
+    let cacheCount = 0;
     try {
       const { count } = await sb.from('knowledge_base').select('*', { count: 'exact', head: true });
-      kbCount = count || 0;
+      cacheCount = count || 0;
     } catch {}
+    const articles = await loadKBArticles();
+
+    const articlesHtml = articles.length ? articles.map(a => `
+      <div class="admin-kb-row">
+        <div class="admin-kb-info">
+          <div class="admin-kb-title">${escHtml(a.title)}</div>
+          <div class="admin-kb-meta">
+            ${a.subject ? `<span class="admin-kb-subject">${escHtml(a.subject)}</span>` : ''}
+            ${(a.tags || []).map(t => `<span class="admin-kb-tag">${escHtml(t)}</span>`).join('')}
+          </div>
+          <div class="admin-kb-preview">${escHtml((a.content || '').slice(0, 120))}${a.content?.length > 120 ? '…' : ''}</div>
+        </div>
+        <button class="btn-sm btn-ghost" style="color:#f87171;flex-shrink:0" onclick="handleAdminDeleteKBArticle('${a.id}')">🗑️</button>
+      </div>`).join('') : '<div class="social-empty">Nenhum artigo na base ainda.</div>';
 
     content.innerHTML = `
-      <div class="admin-section-title">🔑 Chave da API Gemini</div>
+      <div class="admin-section-title">📝 Adicionar ao Conhecimento</div>
+      <div class="admin-create-code-form">
+        <div class="admin-form-row">
+          <input id="adm-kb-title"   placeholder="Título (ex: Equações do 2º grau)" style="flex:2">
+          <input id="adm-kb-subject" placeholder="Matéria (ex: Matemática)">
+        </div>
+        <textarea id="adm-kb-content" placeholder="Conteúdo completo do artigo..." rows="5"
+          style="width:100%;box-sizing:border-box;margin-top:.5rem;border-radius:8px;padding:.6rem;font-size:.85rem;resize:vertical"></textarea>
+        <input id="adm-kb-tags" placeholder="Tags separadas por vírgula (ex: algebra, equação, bhaskara)"
+          style="margin-top:.5rem;width:100%;box-sizing:border-box">
+        <button class="btn-primary" onclick="handleAdminSaveKBArticle()" style="margin-top:.75rem;width:100%">➕ Salvar Artigo</button>
+        <div id="adm-kb-result" style="margin-top:.5rem;font-size:.85rem;font-weight:700"></div>
+      </div>
+
+      <div class="admin-section-title" style="margin-top:1.5rem">📚 Base de Conhecimento (${articles.length} artigos)</div>
+      <div class="admin-kb-list">${articlesHtml}</div>
+
+      <div class="admin-section-title" style="margin-top:1.5rem">🔑 Chave da API Gemini (modo avançado)</div>
       <div class="admin-create-code-form">
         <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:.75rem">
-          Obtenha sua chave gratuitamente em <strong>aistudio.google.com</strong> → "Get API Key"
+          Usada como fallback quando a base local não tem resposta. Obtenha em <strong>aistudio.google.com</strong>
         </p>
         <div style="display:flex;gap:.5rem;align-items:center">
           <input type="password" id="adm-gemini-key" placeholder="AIza..." value="${escHtml(key)}" style="flex:1;font-size:.85rem">
           <button class="btn-primary" onclick="handleAdminSaveGeminiKey()">💾 Salvar</button>
           ${key ? `<button class="btn-sm btn-ghost" onclick="handleAdminRemoveGeminiKey()">🗑️ Remover</button>` : ''}
         </div>
-        <div id="adm-gemini-status" style="margin-top:.5rem;font-size:.8rem;font-weight:700;color:${key?'#34d399':'#f59e0b'}">
-          ${key ? '✅ Chave configurada' : '⚠️ Nenhuma chave configurada'}
+        <div style="margin-top:.5rem;font-size:.8rem;font-weight:700;color:${key?'#34d399':'#f59e0b'}">
+          ${key ? '✅ Chave configurada — modo Gemini ativo' : '⚠️ Sem chave — só a base local funcionará'}
         </div>
       </div>
 
-      <div class="admin-section-title" style="margin-top:1.5rem">📦 Cache de Respostas (knowledge_base)</div>
+      <div class="admin-section-title" style="margin-top:1.5rem">📦 Cache Gemini (${cacheCount} respostas)</div>
       <div class="admin-create-code-form">
         <div style="display:flex;align-items:center;justify-content:space-between">
-          <div>
-            <div style="font-weight:800;font-size:1.1rem">${kbCount} respostas em cache</div>
-            <div style="font-size:.78rem;color:var(--text-muted);margin-top:.2rem">Perguntas repetidas respondem grátis sem gastar IACoin</div>
-          </div>
-          <button class="btn-sm btn-ghost" style="color:#f87171" onclick="handleAdminClearKB()">🗑️ Limpar cache</button>
+          <div style="font-size:.78rem;color:var(--text-muted)">Respostas Gemini repetidas são servidas grátis do cache.</div>
+          <button class="btn-sm btn-ghost" style="color:#f87171" onclick="handleAdminClearKB()">🗑️ Limpar</button>
         </div>
-      </div>
-
-      <div class="admin-section-title" style="margin-top:1.5rem">💰 Modelo Gemini Ativo</div>
-      <div class="admin-create-code-form" style="font-size:.85rem">
-        <code style="color:#a78bfa">gemini-2.0-flash</code> via Google AI Studio API v1beta
-        <div style="font-size:.75rem;color:var(--text-muted);margin-top:.35rem">Custos por modo: Chat 1🧠 · Explicar 5🧠 · Resumo 5🧠 · Quiz 5🧠 · Prova 10🧠</div>
       </div>`;
   }
 }
@@ -7892,6 +8026,49 @@ async function handleAdminClearKB() {
     showNotification('Cache limpo.', 'success');
   } catch (e) { showNotification('Erro ao limpar cache.', 'error'); }
   renderAdminPage('ia');
+}
+
+/* ── Admin: base de conhecimento (kb_articles) ─────────────────────────── */
+
+async function handleAdminSaveKBArticle() {
+  const title   = document.getElementById('adm-kb-title')?.value?.trim();
+  const subject = document.getElementById('adm-kb-subject')?.value?.trim() || '';
+  const content = document.getElementById('adm-kb-content')?.value?.trim();
+  const tagsRaw = document.getElementById('adm-kb-tags')?.value?.trim() || '';
+  const result  = document.getElementById('adm-kb-result');
+
+  if (!title || !content) {
+    if (result) { result.textContent = '⚠️ Título e conteúdo são obrigatórios.'; result.style.color = '#f59e0b'; }
+    return;
+  }
+
+  const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim().toLowerCase()).filter(Boolean) : [];
+
+  try {
+    const { error } = await sb.from('kb_articles').insert({
+      title, subject, content, tags, created_by: authUserId,
+    });
+    if (error) throw error;
+    if (result) { result.textContent = `✅ "${title}" salvo!`; result.style.color = '#34d399'; }
+    showNotification('✅ Artigo salvo na base!', 'success');
+    setTimeout(() => renderAdminPage('ia'), 1000);
+  } catch (e) {
+    if (result) { result.textContent = `❌ ${e.message}`; result.style.color = '#f87171'; }
+    console.error('[handleAdminSaveKBArticle]', e);
+  }
+}
+
+async function handleAdminDeleteKBArticle(id) {
+  if (!confirm('Remover este artigo da base de conhecimento?')) return;
+  try {
+    const { error } = await sb.from('kb_articles').delete().eq('id', id);
+    if (error) throw error;
+    showNotification('Artigo removido.', 'info');
+    renderAdminPage('ia');
+  } catch (e) {
+    showNotification('❌ Erro ao remover: ' + e.message, 'error');
+    console.error('[handleAdminDeleteKBArticle]', e);
+  }
 }
 
 async function handleAdminCreateCode() {
