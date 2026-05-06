@@ -386,20 +386,21 @@ select option { background: var(--bg-card); }
 /* Bell da topbar — visível só no mobile */
 .topbar-notif-btn {
   position: relative;
-  background: rgba(124,58,237,.15);
-  border: 1.5px solid rgba(124,58,237,.35);
-  border-radius: 10px;
-  color: var(--text);
+  background: linear-gradient(135deg, #7c3aed, #a855f7);
+  border: none;
+  border-radius: 12px;
+  color: #fff;
   font-size: 1.15rem;
-  width: 36px; height: 36px;
+  width: 38px; height: 38px;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
-  transition: background 0.2s, transform 0.15s;
+  transition: transform 0.15s, box-shadow 0.2s;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(124,58,237,.45);
 }
-.topbar-notif-btn:active { transform: scale(0.9); }
-.topbar-notif-btn:hover  { background: rgba(124,58,237,.28); }
-.topbar-notif-btn .notif-bell-badge { top: -4px; right: -5px; }
+.topbar-notif-btn:active { transform: scale(0.88); }
+.topbar-notif-btn:hover  { box-shadow: 0 4px 14px rgba(124,58,237,.6); transform: translateY(-1px); }
+.topbar-notif-btn .notif-bell-badge { top: -5px; right: -6px; }
 
 /* Bell do dashboard — visível só no desktop */
 .dash-notif-btn {
@@ -1674,19 +1675,20 @@ input[type="range"] {
     align-items: center;
     justify-content: center;
     position: relative;
-    background: rgba(124,58,237,.12);
-    border: 1.5px solid rgba(124,58,237,.3);
-    border-radius: 12px;
-    color: var(--text);
-    font-size: 1.25rem;
-    width: 42px; height: 42px;
+    background: linear-gradient(135deg, #7c3aed, #a855f7);
+    border: none;
+    border-radius: 14px;
+    color: #fff;
+    font-size: 1.3rem;
+    width: 46px; height: 46px;
     cursor: pointer;
-    transition: background 0.2s, transform 0.15s;
+    transition: transform 0.15s, box-shadow 0.2s;
     flex-shrink: 0;
+    box-shadow: 0 3px 12px rgba(124,58,237,.45);
   }
-  .dash-notif-btn:hover  { background: rgba(124,58,237,.25); }
-  .dash-notif-btn:active { transform: scale(0.92); }
-  .dash-notif-btn .notif-bell-badge { top: -5px; right: -5px; }
+  .dash-notif-btn:hover  { box-shadow: 0 5px 18px rgba(124,58,237,.6); transform: translateY(-1px); }
+  .dash-notif-btn:active { transform: scale(0.91); }
+  .dash-notif-btn .notif-bell-badge { top: -6px; right: -6px; }
 }
 
 @media (max-width: 768px) {
@@ -3585,6 +3587,21 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
     radial-gradient(ellipse at 30% 40%, rgba(160,0,255,.5)  0%, transparent 45%),
     radial-gradient(ellipse at 70% 60%, rgba(0,80,200,.4)   0%, transparent 50%),
     linear-gradient(145deg,#00000e 0%,#0d0035 55%,#0a0020 100%);
+}
+
+/* ── Animação de sino com notificações ─────────────────────── */
+@keyframes bell-ring {
+  0%,100% { transform: rotate(0deg); }
+  15%      { transform: rotate(18deg); }
+  30%      { transform: rotate(-16deg); }
+  45%      { transform: rotate(12deg); }
+  60%      { transform: rotate(-8deg); }
+  75%      { transform: rotate(4deg); }
+}
+.topbar-notif-btn.has-notif,
+.dash-notif-btn.has-notif {
+  animation: bell-ring 1.8s ease infinite;
+  animation-delay: 0.5s;
 }
 
 /* ── Notificações ────────────────────────────────────────────── */

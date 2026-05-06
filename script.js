@@ -5522,6 +5522,10 @@ async function updateNotifBell() {
     el.textContent = count > 0 ? count : '';
     el.style.display = count > 0 ? 'flex' : 'none';
   });
+  // Anima o sino quando tem notificações pendentes
+  document.querySelectorAll('.topbar-notif-btn, .dash-notif-btn').forEach(btn => {
+    btn.classList.toggle('has-notif', count > 0);
+  });
 }
 
 async function renderNotifPanel() {
