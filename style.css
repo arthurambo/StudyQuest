@@ -312,6 +312,15 @@ select option { background: var(--bg-card); }
   border-left-color: var(--primary);
 }
 
+/* Badge do item de notificações no sidebar */
+.nav-item-notif { position: relative; }
+.notif-badge-sidebar {
+  position: static;
+  margin-left: auto;
+  transform: none;
+  top: unset; right: unset;
+}
+
 .sidebar-bottom {
   padding: 1rem 1.5rem;
   border-top: 1px solid var(--border);
@@ -360,11 +369,48 @@ select option { background: var(--bg-card); }
   flex: 1;
 }
 
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-left: auto;
+}
+
 .topbar-stats {
   display: flex;
   gap: 1rem;
   font-weight: 800;
   font-size: 0.9rem;
+}
+
+/* Bell da topbar — visível só no mobile */
+.topbar-notif-btn {
+  position: relative;
+  background: rgba(124,58,237,.15);
+  border: 1.5px solid rgba(124,58,237,.35);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 1.15rem;
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+  flex-shrink: 0;
+}
+.topbar-notif-btn:active { transform: scale(0.9); }
+.topbar-notif-btn:hover  { background: rgba(124,58,237,.28); }
+.topbar-notif-btn .notif-bell-badge { top: -4px; right: -5px; }
+
+/* Bell do dashboard — visível só no desktop */
+.dash-notif-btn {
+  display: none; /* visível no desktop via media query */
+}
+
+/* Linha do header do dashboard (h1 + bell) */
+.dash-header-top {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
 }
 
 .install-btn-topbar {
@@ -1619,10 +1665,38 @@ input[type="range"] {
 }
 
 /* === RESPONSIVE === */
+/* ── Notif bell — desktop (>768px) ─────────────────────────── */
+@media (min-width: 769px) {
+  .topbar-notif-btn { display: none !important; }
+
+  .dash-notif-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    background: rgba(124,58,237,.12);
+    border: 1.5px solid rgba(124,58,237,.3);
+    border-radius: 12px;
+    color: var(--text);
+    font-size: 1.25rem;
+    width: 42px; height: 42px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.15s;
+    flex-shrink: 0;
+  }
+  .dash-notif-btn:hover  { background: rgba(124,58,237,.25); }
+  .dash-notif-btn:active { transform: scale(0.92); }
+  .dash-notif-btn .notif-bell-badge { top: -5px; right: -5px; }
+}
+
 @media (max-width: 768px) {
   /* Topbar */
   .topbar { display: flex; }
   .topbar-stats { gap: 0.75rem; font-size: 0.85rem; }
+
+  /* Bell mobile: aparece na topbar, some no dashboard */
+  .topbar-notif-btn { display: flex; }
+  .dash-notif-btn   { display: none !important; }
 
   /* Sidebar */
   .sidebar {

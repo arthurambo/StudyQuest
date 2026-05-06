@@ -207,8 +207,8 @@
       <a class="nav-item" data-page="stats">📊 Estatísticas</a>
       <a class="nav-item" data-page="calendar">📅 Calendário</a>
       <a class="nav-item" data-page="settings">⚙️ Configurações</a>
-      <a class="nav-item" id="sidebar-notif-btn" onclick="openNotifPanel()" style="position:relative;cursor:pointer">
-        🔔 Notificações<span class="notif-bell-badge" style="display:none"></span>
+      <a class="nav-item nav-item-notif" id="sidebar-notif-btn" onclick="openNotifPanel()" style="cursor:pointer">
+        🔔 Notificações<span class="notif-bell-badge notif-badge-sidebar" style="display:none"></span>
       </a>
     </div>
     <div class="sidebar-bottom">
@@ -220,9 +220,14 @@
   <div class="topbar">
     <button class="menu-btn" id="menu-btn">☰</button>
     <span class="topbar-logo">⚔️ StudyQuest</span>
-    <div class="topbar-stats">
-      <span>🔥 <span id="top-streak">0</span></span>
-      <span>💰 <span id="top-coins">0</span></span>
+    <div class="topbar-right">
+      <button class="topbar-notif-btn" onclick="openNotifPanel()" title="Notificações">
+        🔔<span class="notif-bell-badge" style="display:none"></span>
+      </button>
+      <div class="topbar-stats">
+        <span>🔥 <span id="top-streak">0</span></span>
+        <span>💰 <span id="top-coins">0</span></span>
+      </div>
     </div>
     <button class="install-btn-topbar" id="install-btn-topbar" style="display:none" title="Instalar app">📲</button>
   </div>
@@ -239,7 +244,12 @@
     <!-- ===== DASHBOARD ===== -->
     <div id="page-dashboard" class="page active">
       <div class="page-header">
-        <h1>Olá, <span id="dash-name">Herói</span>! 👋</h1>
+        <div class="dash-header-top">
+          <h1>Olá, <span id="dash-name">Herói</span>! 👋</h1>
+          <button class="dash-notif-btn" onclick="openNotifPanel()" title="Notificações">
+            🔔<span class="notif-bell-badge" style="display:none"></span>
+          </button>
+        </div>
         <p class="page-subtitle" id="dash-feedback">Continue sua jornada épica!</p>
       </div>
 
@@ -832,10 +842,6 @@
     <button class="bottom-nav-item" data-page="groups">
       <span class="bn-icon">🏰</span>
       <span class="bn-label">Grupos</span>
-    </button>
-    <button class="bottom-nav-item" onclick="openNotifPanel()" style="position:relative">
-      <span class="bn-icon">🔔<span class="notif-bell-badge" style="display:none"></span></span>
-      <span class="bn-label">Notif.</span>
     </button>
     <button class="bottom-nav-item" id="bottom-nav-more">
       <span class="bn-icon">☰</span>
