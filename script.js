@@ -296,11 +296,13 @@ let state = {
   },
 };
 
-let pomodoroTimer = null;
-let pomodoroSeconds = POMODORO_FOCUS;
-let pomodoroRunning = false;
-let pomodoroIsBreak = false;
-let pomodoroAngle = 0;
+let pomodoroTimer    = null;
+let pomodoroSeconds  = POMODORO_FOCUS;
+let pomodoroRunning  = false;
+let pomodoroIsBreak  = false;
+let pomodoroAngle    = 0;
+let _pomodoroEndTime = null;   // timestamp (ms) em que a fase atual termina
+const _POMO_LS = 'sq_pomo_v1';
 let calDate = new Date();
 let currentFilter = 'all';
 let focusMode = false;
@@ -2136,65 +2138,176 @@ function showStudyTip() {
 // POMODORO
 // ============================================================
 
+// ── Helpers de persistência ──────────────────────────────────
+function _savePomodoroLS() {
+  try {
+    localStorage.setItem(_POMO_LS, JSON.stringify({
+      endTime  : _pomodoroEndTime,
+      isBreak  : pomodoroIsBreak,
+      running  : pomodoroRunning,
+    }));
+  } catch (_) {}
+}
+
+function _clearPomodoroLS() {
+  try { localStorage.removeItem(_POMO_LS); } catch (_) {}
+}
+
+function _restorePomodoroState() {
+  try {
+    const raw = localStorage.getItem(_POMO_LS);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    if (!saved || !saved.endTime) return;
+
+    pomodoroIsBreak  = !!saved.isBreak;
+    _pomodoroEndTime = saved.endTime;
+
+    const remaining = Math.ceil((_pomodoroEndTime - Date.now()) / 1000);
+
+    if (saved.running && remaining > 0) {
+      // Timer estava rodando e ainda não terminou → retoma
+      pomodoroSeconds = remaining;
+      pomodoroRunning = true;
+      document.getElementById('pomo-start').textContent = '⏸ Pausar';
+      document.getElementById('pomodoro-circle').classList.add('active');
+      document.getElementById('pomodoro-mode').textContent = pomodoroIsBreak ? 'PAUSA' : 'FOCO';
+      pomodoroTimer = setInterval(tickPomodoro, 500);
+    } else if (saved.running && remaining <= 0) {
+      // Terminou enquanto estava em segundo plano → conclui a fase
+      pomodoroSeconds = 0;
+      _completePomodoroPhase();
+    } else {
+      // Estava pausado → restaura tempo restante
+      pomodoroSeconds = Math.max(0, remaining);
+      pomodoroRunning = false;
+      document.getElementById('pomodoro-mode').textContent = pomodoroIsBreak ? 'PAUSA' : 'FOCO';
+    }
+  } catch (_) {}
+}
+
+// ── Conclusão de fase (foco ou pausa) ───────────────────────
+function _completePomodoroPhase() {
+  clearInterval(pomodoroTimer);
+  pomodoroTimer   = null;
+  pomodoroRunning = false;
+  document.getElementById('pomo-start').textContent = '▶ Iniciar';
+  document.getElementById('pomodoro-circle').classList.remove('active');
+
+  if (!pomodoroIsBreak) {
+    // Sessão de foco concluída
+    state.totalPomodoros = (state.totalPomodoros || 0) + 1;
+    addXp(15);
+    addCoins(8);
+    updateMissionProgress('pomodorosToday', 1);
+    markStudyToday();
+    showNotification('⏱️ Sessão de foco completa! +15 XP 🎉', 'success');
+    playSound('complete');
+    checkAchievements();
+
+    // Passa para pausa
+    pomodoroIsBreak  = true;
+    pomodoroSeconds  = POMODORO_BREAK;
+    _pomodoroEndTime = null;
+    document.getElementById('pomodoro-mode').textContent = 'PAUSA';
+  } else {
+    // Pausa concluída
+    pomodoroIsBreak  = false;
+    pomodoroSeconds  = POMODORO_FOCUS;
+    _pomodoroEndTime = null;
+    document.getElementById('pomodoro-mode').textContent = 'FOCO';
+    showNotification('☕ Pausa terminada! Hora de focar!', 'info');
+  }
+
+  _clearPomodoroLS();
+  updatePomodoroDisplay();
+  saveState();
+}
+
+// ── Funções principais ───────────────────────────────────────
 function initPomodoro() {
   document.getElementById('pomo-start').addEventListener('click', togglePomodoro);
   document.getElementById('pomo-reset').addEventListener('click', resetPomodoro);
+
+  // Restaura estado salvo (timer rodando em background ou pausado)
+  _restorePomodoroState();
+  updatePomodoroDisplay();
+
+  // Quando o usuário volta para a aba, recalcula o tempo restante
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (!pomodoroRunning || !_pomodoroEndTime) return;
+
+    const remaining = Math.ceil((_pomodoroEndTime - Date.now()) / 1000);
+    if (remaining <= 0) {
+      pomodoroSeconds = 0;
+      _completePomodoroPhase();
+    } else {
+      pomodoroSeconds = remaining;
+      updatePomodoroDisplay();
+    }
+  });
 }
 
 function togglePomodoro() {
   if (pomodoroRunning) {
+    // ── Pausar ──
     clearInterval(pomodoroTimer);
-    pomodoroRunning = false;
+    pomodoroTimer    = null;
+    pomodoroRunning  = false;
+
+    // Guarda quantos segundos restavam quando pausou
+    if (_pomodoroEndTime) {
+      pomodoroSeconds = Math.max(0, Math.ceil((_pomodoroEndTime - Date.now()) / 1000));
+    }
+    _pomodoroEndTime = null;
+
     document.getElementById('pomo-start').textContent = '▶ Iniciar';
     document.getElementById('pomodoro-circle').classList.remove('active');
+    _savePomodoroLS();          // salva estado pausado
   } else {
-    pomodoroRunning = true;
+    // ── Iniciar / Retomar ──
+    pomodoroRunning  = true;
+    _pomodoroEndTime = Date.now() + pomodoroSeconds * 1000;
+
     document.getElementById('pomo-start').textContent = '⏸ Pausar';
     document.getElementById('pomodoro-circle').classList.add('active');
-    pomodoroTimer = setInterval(tickPomodoro, 1000);
+
+    _savePomodoroLS();          // salva antes de iniciar (proteção contra crash)
+    pomodoroTimer = setInterval(tickPomodoro, 500);
   }
 }
 
 function tickPomodoro() {
-  pomodoroSeconds--;
-  updatePomodoroDisplay();
+  if (!_pomodoroEndTime) return;
 
-  if (pomodoroSeconds <= 0) {
-    clearInterval(pomodoroTimer);
-    pomodoroRunning = false;
-    document.getElementById('pomo-start').textContent = '▶ Iniciar';
-    document.getElementById('pomodoro-circle').classList.remove('active');
+  const remaining = Math.ceil((_pomodoroEndTime - Date.now()) / 1000);
 
-    if (!pomodoroIsBreak) {
-      // Sessão de foco completa
-      state.totalPomodoros++;
-      addXp(15);
-      addCoins(8);
-      updateMissionProgress('pomodorosToday', 1);
-      markStudyToday();
-      showNotification('⏱️ Sessão de foco completa! +15 XP 🎉', 'success');
-      playSound('complete');
-      checkAchievements();
+  if (remaining <= 0) {
+    pomodoroSeconds = 0;
+    updatePomodoroDisplay();
+    _completePomodoroPhase();
+    return;
+  }
 
-      // Começar pausa
-      pomodoroIsBreak = true;
-      pomodoroSeconds = POMODORO_BREAK;
-      document.getElementById('pomodoro-mode').textContent = 'PAUSA';
-    } else {
-      pomodoroIsBreak = false;
-      pomodoroSeconds = POMODORO_FOCUS;
-      document.getElementById('pomodoro-mode').textContent = 'FOCO';
-      showNotification('☕ Pausa terminada! Hora de focar!', 'info');
-    }
-    saveState();
+  if (remaining !== pomodoroSeconds) {
+    pomodoroSeconds = remaining;
+    updatePomodoroDisplay();
+    // Persiste a cada 5 s para não sobrecarregar o storage
+    if (remaining % 5 === 0) _savePomodoroLS();
   }
 }
 
 function resetPomodoro() {
   clearInterval(pomodoroTimer);
-  pomodoroRunning = false;
-  pomodoroIsBreak = false;
-  pomodoroSeconds = POMODORO_FOCUS;
+  pomodoroTimer    = null;
+  pomodoroRunning  = false;
+  pomodoroIsBreak  = false;
+  pomodoroSeconds  = POMODORO_FOCUS;
+  _pomodoroEndTime = null;
+
+  _clearPomodoroLS();
+
   document.getElementById('pomo-start').textContent = '▶ Iniciar';
   document.getElementById('pomodoro-mode').textContent = 'FOCO';
   document.getElementById('pomodoro-circle').classList.remove('active');
@@ -2202,13 +2315,14 @@ function resetPomodoro() {
 }
 
 function updatePomodoroDisplay() {
-  const mins = Math.floor(pomodoroSeconds / 60).toString().padStart(2, '0');
-  const secs = (pomodoroSeconds % 60).toString().padStart(2, '0');
+  const s    = Math.max(0, pomodoroSeconds);
+  const mins = Math.floor(s / 60).toString().padStart(2, '0');
+  const secs = (s % 60).toString().padStart(2, '0');
   document.getElementById('pomodoro-time').textContent = `${mins}:${secs}`;
 
   const total = pomodoroIsBreak ? POMODORO_BREAK : POMODORO_FOCUS;
-  const pct = 1 - (pomodoroSeconds / total);
-  const deg = Math.round(pct * 360);
+  const pct   = 1 - (s / total);
+  const deg   = Math.round(pct * 360);
   document.getElementById('pomodoro-circle').style.background =
     `conic-gradient(var(--primary) ${deg}deg, var(--bg-base) ${deg}deg)`;
 }
