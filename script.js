@@ -5088,40 +5088,6 @@ function initSettingsPage() {
   const darkToggle = document.getElementById('cfg-dark-mode');
   if (darkToggle) darkToggle.checked = document.documentElement.dataset.theme === 'dark';
 
-  // Seção de IA só para admin
-  const aiSection = document.getElementById('ai-settings-section');
-  if (aiSection) aiSection.style.display = state.isAdmin ? '' : 'none';
-
-  // Gemini API key
-  const geminiInput   = document.getElementById('cfg-gemini-key');
-  const geminiSaveBtn = document.getElementById('cfg-gemini-save-btn');
-  const geminiStatus  = document.getElementById('cfg-gemini-status');
-  if (geminiInput && !geminiInput._bound) {
-    geminiInput._bound = true;
-    const stored = localStorage.getItem(_GEMINI_LS) || '';
-    geminiInput.value = stored;
-    if (geminiStatus) {
-      geminiStatus.textContent = stored ? '✅ Chave configurada' : '⚠️ Chave não configurada';
-      geminiStatus.style.color  = stored ? '#34d399' : '#f59e0b';
-    }
-    if (geminiSaveBtn) {
-      geminiSaveBtn.addEventListener('click', () => {
-        const key = geminiInput.value.trim();
-        if (key) {
-          localStorage.setItem(_GEMINI_LS, key);
-          geminiStatus.textContent = '✅ Chave salva com sucesso!';
-          geminiStatus.style.color  = '#34d399';
-          showNotification('✅ Chave Gemini salva! A IA já está disponível.', 'success');
-        } else {
-          localStorage.removeItem(_GEMINI_LS);
-          geminiStatus.textContent = '⚠️ Chave removida';
-          geminiStatus.style.color  = '#f59e0b';
-          showNotification('Chave Gemini removida.', 'info');
-        }
-      });
-    }
-  }
-
   // Export / Import (moved from sidebar)
   const exportBtn = document.getElementById('export-btn');
   const importBtn = document.getElementById('import-btn');
