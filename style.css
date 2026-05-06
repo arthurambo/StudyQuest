@@ -4348,3 +4348,8 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
   font-size: .78rem; color: var(--text-muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.admin-kb-row-editing {
+  border-color: rgba(124,58,237,.45) !important;
+  background: rgba(124,58,237,.05) !important;
+  flex-direction: column;
+}

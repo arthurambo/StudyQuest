@@ -7944,7 +7944,28 @@ async function renderAdminPage(tab) {
     } catch {}
     const articles = await loadKBArticles();
 
-    const articlesHtml = articles.length ? articles.map(a => `
+    const articlesHtml = articles.length ? articles.map(a => {
+      const editing = _kbEditingId === a.id;
+      if (editing) return `
+      <div class="admin-kb-row admin-kb-row-editing">
+        <div class="admin-kb-info" style="width:100%">
+          <div class="admin-form-row" style="margin-bottom:.4rem">
+            <input id="adm-kb-edit-title"   value="${escHtml(a.title)}"   placeholder="Título" style="flex:2">
+            <input id="adm-kb-edit-subject" value="${escHtml(a.subject || '')}" placeholder="Matéria">
+          </div>
+          <textarea id="adm-kb-edit-content" rows="5"
+            style="width:100%;box-sizing:border-box;border-radius:8px;padding:.6rem;font-size:.85rem;resize:vertical"
+          >${escHtml(a.content)}</textarea>
+          <input id="adm-kb-edit-tags" value="${escHtml((a.tags || []).join(', '))}"
+            placeholder="Tags separadas por vírgula" style="margin-top:.4rem;width:100%;box-sizing:border-box">
+          <div style="display:flex;gap:.5rem;margin-top:.6rem">
+            <button class="btn-primary" style="flex:1" onclick="handleAdminUpdateKBArticle('${a.id}')">💾 Salvar</button>
+            <button class="btn-sm btn-ghost" onclick="_kbEditingId=null;renderAdminPage('ia')">✖ Cancelar</button>
+          </div>
+          <div id="adm-kb-edit-result" style="margin-top:.4rem;font-size:.82rem;font-weight:700"></div>
+        </div>
+      </div>`;
+      return `
       <div class="admin-kb-row">
         <div class="admin-kb-info">
           <div class="admin-kb-title">${escHtml(a.title)}</div>
@@ -7954,8 +7975,12 @@ async function renderAdminPage(tab) {
           </div>
           <div class="admin-kb-preview">${escHtml((a.content || '').slice(0, 120))}${a.content?.length > 120 ? '…' : ''}</div>
         </div>
-        <button class="btn-sm btn-ghost" style="color:#f87171;flex-shrink:0" onclick="handleAdminDeleteKBArticle('${a.id}')">🗑️</button>
-      </div>`).join('') : '<div class="social-empty">Nenhum artigo na base ainda.</div>';
+        <div style="display:flex;flex-direction:column;gap:.35rem;flex-shrink:0">
+          <button class="btn-sm btn-ghost" onclick="_kbEditingId='${a.id}';renderAdminPage('ia')">✏️ Editar</button>
+          <button class="btn-sm btn-ghost" style="color:#f87171" onclick="handleAdminDeleteKBArticle('${a.id}')">🗑️</button>
+        </div>
+      </div>`;
+    }).join('') : '<div class="social-empty">Nenhum artigo na base ainda.</div>';
 
     content.innerHTML = `
       <div class="admin-section-title">📝 Adicionar ao Conhecimento</div>
@@ -8030,6 +8055,8 @@ async function handleAdminClearKB() {
 
 /* ── Admin: base de conhecimento (kb_articles) ─────────────────────────── */
 
+let _kbEditingId = null;
+
 async function handleAdminSaveKBArticle() {
   const title   = document.getElementById('adm-kb-title')?.value?.trim();
   const subject = document.getElementById('adm-kb-subject')?.value?.trim() || '';
@@ -8058,11 +8085,38 @@ async function handleAdminSaveKBArticle() {
   }
 }
 
+async function handleAdminUpdateKBArticle(id) {
+  const title   = document.getElementById('adm-kb-edit-title')?.value?.trim();
+  const subject = document.getElementById('adm-kb-edit-subject')?.value?.trim() || '';
+  const content = document.getElementById('adm-kb-edit-content')?.value?.trim();
+  const tagsRaw = document.getElementById('adm-kb-edit-tags')?.value?.trim() || '';
+  const result  = document.getElementById('adm-kb-edit-result');
+
+  if (!title || !content) {
+    if (result) { result.textContent = '⚠️ Título e conteúdo são obrigatórios.'; result.style.color = '#f59e0b'; }
+    return;
+  }
+
+  const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim().toLowerCase()).filter(Boolean) : [];
+
+  try {
+    const { error } = await sb.from('kb_articles').update({ title, subject, content, tags }).eq('id', id);
+    if (error) throw error;
+    _kbEditingId = null;
+    showNotification('✅ Artigo atualizado!', 'success');
+    renderAdminPage('ia');
+  } catch (e) {
+    if (result) { result.textContent = `❌ ${e.message}`; result.style.color = '#f87171'; }
+    console.error('[handleAdminUpdateKBArticle]', e);
+  }
+}
+
 async function handleAdminDeleteKBArticle(id) {
   if (!confirm('Remover este artigo da base de conhecimento?')) return;
   try {
     const { error } = await sb.from('kb_articles').delete().eq('id', id);
     if (error) throw error;
+    _kbEditingId = null;
     showNotification('Artigo removido.', 'info');
     renderAdminPage('ia');
   } catch (e) {
