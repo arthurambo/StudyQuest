@@ -5777,9 +5777,9 @@ async function sendFriendRequest(toId) {
     const { error } = await sb.from('friend_requests')
       .insert({ from_id: authUserId, to_id: toId, status: 'pending' });
     if (error) {
-      console.error('[sendFriendRequest] Supabase error:', error);
-      // Violação de unique constraint → pedido já existe
+      console.error('[sendFriendRequest] código:', error.code, '| mensagem:', error.message, '| detalhes:', error.details, '| hint:', error.hint);
       if (error.code === '23505') return { ok: false, reason: 'already_sent' };
+      if (error.code === '42501') return { ok: false, reason: 'permission_denied' };
       return { ok: false, reason: error.message || 'insert_error' };
     }
     return { ok: true, reason: 'sent' };
@@ -6154,6 +6154,8 @@ async function handleAddFriend(friendId, btn) {
     } else if (reason === 'already_sent') {
       if (btn) btn.outerHTML = '<span class="friend-tag pending-tag">⏳ Pedido enviado</span>';
       showNotification('Você já enviou um pedido para essa pessoa.', 'info');
+    } else if (reason === 'permission_denied') {
+      showNotification('Permissão negada. Verifique as configurações do banco.', 'error');
     } else {
       showNotification(`Erro ao enviar pedido: ${reason}`, 'error');
     }
