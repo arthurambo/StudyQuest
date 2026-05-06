@@ -7708,8 +7708,18 @@ async function adminCreateCode(code, type, value, usesMax, expiresAt) {
 
 /** Deleta um código de resgate */
 async function adminDeleteCode(codeId) {
-  if (!sb || !state.isAdmin) return;
-  try { await sb.from('redeem_codes').delete().eq('id', codeId); } catch {}
+  if (!sb || !state.isAdmin) return { ok: false, msg: 'Sem permissão.' };
+  try {
+    const { error } = await sb.from('redeem_codes').delete().eq('id', codeId);
+    if (error) {
+      console.error('[adminDeleteCode]', error.code, error.message, error.hint);
+      return { ok: false, msg: error.message || 'Erro ao deletar.' };
+    }
+    return { ok: true };
+  } catch (e) {
+    console.error('[adminDeleteCode] catch:', e);
+    return { ok: false, msg: e.message || 'Erro inesperado.' };
+  }
 }
 
 let _adminTab = 'usuarios';
@@ -7930,9 +7940,14 @@ async function handleAdminCreateCode() {
 
 async function handleAdminDeleteCode(codeId) {
   if (!confirm('Deletar este código?')) return;
-  await adminDeleteCode(codeId);
-  showNotification('Código deletado.', 'info');
-  renderAdminPage('codigos');
+  const res = await adminDeleteCode(codeId);
+  if (res.ok) {
+    showNotification('Código deletado.', 'info');
+    renderAdminPage('codigos');
+  } else {
+    showNotification('❌ ' + res.msg, 'error');
+    console.error('[handleAdminDeleteCode] falhou:', res.msg);
+  }
 }
 
 async function handleAdminAction(userId, action, defaultReason) {
