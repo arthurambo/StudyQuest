@@ -7380,6 +7380,20 @@ async function askAI(question, mode) {
 function renderAIPage() {
   const page = document.getElementById('page-ai');
   if (!page) return;
+
+  if (!state.isAdmin) {
+    page.innerHTML = `
+      <div class="page-header"><h1>🧠 IA Educacional</h1></div>
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4rem 1rem;text-align:center;gap:1rem">
+        <div style="font-size:4rem">🚧</div>
+        <h2 style="margin:0">Em breve!</h2>
+        <p style="color:var(--text-secondary);max-width:340px;margin:0">
+          A IA Educacional ainda está em fase de testes. Em breve estará disponível para todos!
+        </p>
+      </div>`;
+    return;
+  }
+
   const iacoins = state.iacoins || 0;
   const hasKey  = !!localStorage.getItem(_GEMINI_LS);
 
