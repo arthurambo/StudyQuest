@@ -181,6 +181,16 @@ const COSMETIC_BANNERS = [
 ];
 
 // ── Frases motivacionais ──────────────────────────────────────
+// Presentes surpresa diários gerados pelo sistema
+const SURPRISE_GIFTS_POOL = [
+  { id: 'sg_xp_sm',    icon: '🧪', name: 'Poção de XP',         type: 'xp',    value: 50  },
+  { id: 'sg_xp_lg',    icon: '⚗️', name: 'Grande Poção de XP',  type: 'xp',    value: 150 },
+  { id: 'sg_coins_sm', icon: '💰', name: 'Saco de Moedas',       type: 'coins', value: 75  },
+  { id: 'sg_coins_lg', icon: '💎', name: 'Tesouro do Dia',       type: 'coins', value: 200 },
+  { id: 'sg_xp_boost', icon: '⚡', name: 'Boost de XP (+100)',   type: 'xp',    value: 100 },
+  { id: 'sg_coins_bonus',icon:'🪙', name: 'Moedas Bônus',        type: 'coins', value: 50  },
+];
+
 const MOTIVATION_PHRASES = [
   '💪 Você consegue! Continue assim!',
   '🔥 Tô na torcida por você!',
@@ -286,6 +296,10 @@ let state = {
   totalStudied: 0,
   favoriteSubject: '',
   cosmetics: { ownedFrames: [], ownedBanners: [], equippedFrame: null, equippedBanner: null },
+  localNotifs: [],          // [{id, icon, message, timestamp, read}] — notifs de desempenho
+  surpriseGifts: [],        // [{uid, icon, name, type, value, timestamp}] — presentes do sistema
+  lastSurpriseGiftDate: '', // 'YYYY-MM-DD' — controla 1 presente por dia
+  lastCheckedGrades: {},    // {subjectId: lastGrade} — detecta mudanças de nota
   settings: {
     schoolAverage:       7,       // média escolar padrão
     notificationsEnabled: true,   // notificações visuais
@@ -4577,6 +4591,12 @@ async function launchApp() {
     console.log('[App] App iniciado para:', state.name, '| XP:', state.xp, '| Nível:', state.level);
     // Sincroniza perfil público para que amigos possam buscar
     if (authUserId) setTimeout(syncPublicProfile, 2000);
+    // Verifica notificações de desempenho e presente surpresa
+    setTimeout(() => {
+      checkPerformanceNotifs();
+      checkSurpriseGift();
+      updateNotifBell();
+    }, 1500);
   } else {
     // Primeiro acesso → criação de herói
     console.log('[App] Novo usuário → tela de criação de herói.');
@@ -5480,15 +5500,20 @@ async function declineGift(giftId) {
 // ============================================================
 
 async function loadNotifCount() {
-  if (!sb || !authUserId) return 0;
+  // Notifs locais (desempenho + presentes surpresa)
+  const localUnread   = (state.localNotifs   || []).filter(n => !n.read).length;
+  const surprisePending = (state.surpriseGifts || []).length;
+
+  if (!sb || !authUserId) return localUnread + surprisePending;
   try {
-    const [{ count: reqCount }, { count: motivCount }, { count: giftCount }] = await Promise.all([
+    const [{ count: reqCount }, { count: motivCount }, { count: giftCount }, { count: inviteCount }] = await Promise.all([
       sb.from('friend_requests').select('*', { count: 'exact', head: true }).eq('to_id', authUserId).eq('status', 'pending'),
       sb.from('motivations').select('*', { count: 'exact', head: true }).eq('to_id', authUserId).eq('read', false),
       sb.from('gifts').select('*', { count: 'exact', head: true }).eq('to_id', authUserId).eq('status', 'pending'),
+      sb.from('group_invites').select('*', { count: 'exact', head: true }).eq('to_id', authUserId).eq('status', 'pending'),
     ]);
-    return (reqCount || 0) + (motivCount || 0) + (giftCount || 0);
-  } catch (e) { return 0; }
+    return (reqCount || 0) + (motivCount || 0) + (giftCount || 0) + (inviteCount || 0) + localUnread + surprisePending;
+  } catch (e) { return localUnread + surprisePending; }
 }
 
 async function updateNotifBell() {
@@ -5504,14 +5529,44 @@ async function renderNotifPanel() {
   if (!container) return;
   container.innerHTML = '<div class="social-loading">Carregando...</div>';
 
-  const [pendingReqs, motivations, gifts] = await Promise.all([
-    listPendingRequests(), listMyMotivations(), listMyGifts(),
+  const [pendingReqs, motivations, gifts, groupInvites] = await Promise.all([
+    listPendingRequests(), listMyMotivations(), listMyGifts(), listGroupInvites(),
   ]);
   markMotivationsRead();
 
   let html = '';
 
-  // Pedidos de amizade
+  // ── Presentes surpresa do sistema ───────────────────────────
+  const surprises = state.surpriseGifts || [];
+  if (surprises.length) {
+    html += `<div class="notif-section-title">🎁 Presente Surpresa do Sistema (${surprises.length})</div>`;
+    html += surprises.map(g => `<div class="notif-card notif-surprise">
+      <div class="notif-surprise-icon">${g.icon}</div>
+      <div class="notif-info">
+        <div class="notif-name">Presente do Sistema!</div>
+        <div class="notif-sub">${g.icon} ${escHtml(g.name)}</div>
+      </div>
+      <div class="notif-btns">
+        <button class="btn-accept" onclick="claimSurpriseGift('${g.uid}',this)">🎁 Pegar</button>
+      </div>
+    </div>`).join('');
+  }
+
+  // ── Notificações de desempenho ───────────────────────────────
+  const perfNotifs = (state.localNotifs || []).filter(n => !n.read).slice(0, 5);
+  if (perfNotifs.length) {
+    html += `<div class="notif-section-title">📊 Desempenho (${perfNotifs.length})</div>`;
+    html += perfNotifs.map(n => `<div class="notif-card notif-perf">
+      <div class="notif-surprise-icon">${n.icon}</div>
+      <div class="notif-info">
+        <div class="notif-name" style="font-size:.85rem;font-weight:600">${escHtml(n.message)}</div>
+        <div class="notif-sub">${new Date(n.timestamp).toLocaleDateString('pt-BR')}</div>
+      </div>
+      <button class="btn-notif-dismiss" onclick="dismissLocalNotif('${n.id}',this)" title="Dispensar">✕</button>
+    </div>`).join('');
+  }
+
+  // ── Pedidos de amizade ───────────────────────────────────────
   if (pendingReqs.length) {
     html += `<div class="notif-section-title">👥 Pedidos de Amizade (${pendingReqs.length})</div>`;
     html += pendingReqs.map(req => `<div class="notif-card">
@@ -5527,7 +5582,23 @@ async function renderNotifPanel() {
     </div>`).join('');
   }
 
-  // Presentes
+  // ── Convites de grupo ────────────────────────────────────────
+  if (groupInvites.length) {
+    html += `<div class="notif-section-title">🏰 Convites de Grupo (${groupInvites.length})</div>`;
+    html += groupInvites.map(inv => `<div class="notif-card">
+      <div class="notif-surprise-icon">🏰</div>
+      <div class="notif-info">
+        <div class="notif-name">${escHtml(inv.group_name)}</div>
+        <div class="notif-sub">Convidado por ${escHtml(inv.from_name)}</div>
+      </div>
+      <div class="notif-btns">
+        <button class="btn-accept" onclick="handleAcceptGroupInvite('${inv.id}','${inv.group_id}',this)">✓</button>
+        <button class="btn-reject" onclick="handleDeclineGroupInvite('${inv.id}',this)">✕</button>
+      </div>
+    </div>`).join('');
+  }
+
+  // ── Presentes de amigos ──────────────────────────────────────
   if (gifts.length) {
     html += `<div class="notif-section-title">🎁 Presentes (${gifts.length})</div>`;
     html += gifts.map(g => `<div class="notif-card">
@@ -5579,6 +5650,133 @@ function openNotifPanel() {
   closeSidebar();
   openModal('modal-notif-panel');
   renderNotifPanel();
+}
+
+// ── Handlers de convite de grupo no painel ───────────────────
+async function handleAcceptGroupInvite(inviteId, groupId, btn) {
+  if (btn) btn.disabled = true;
+  const ok = await acceptGroupInvite(inviteId, groupId);
+  if (ok) {
+    showNotification('🏰 Você entrou no grupo!', 'success');
+    renderNotifPanel(); updateNotifBell();
+    if (document.getElementById('page-groups')?.classList.contains('active')) renderGroupsPage();
+  } else {
+    showNotification('Erro ao aceitar convite.', 'error');
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function handleDeclineGroupInvite(inviteId, btn) {
+  if (btn) btn.disabled = true;
+  await declineGroupInvite(inviteId);
+  showNotification('Convite recusado.', 'info');
+  renderNotifPanel(); updateNotifBell();
+}
+
+// ── Notificações locais de desempenho ────────────────────────
+function addLocalNotif(icon, message) {
+  if (!state.localNotifs) state.localNotifs = [];
+  // Evita duplicata com mesmo ícone+mensagem no mesmo dia
+  const today = todayStr();
+  const duplicate = state.localNotifs.some(n =>
+    n.message === message && n.timestamp?.slice(0, 10) === today
+  );
+  if (duplicate) return;
+  state.localNotifs.push({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+    icon,
+    message,
+    timestamp: new Date().toISOString(),
+    read: false,
+  });
+  // Mantém no máximo 20 notifs locais
+  if (state.localNotifs.length > 20) state.localNotifs = state.localNotifs.slice(-20);
+  saveState();
+}
+
+function dismissLocalNotif(id, btn) {
+  if (btn) btn.closest('.notif-card')?.remove();
+  state.localNotifs = (state.localNotifs || []).map(n =>
+    n.id === id ? { ...n, read: true } : n
+  );
+  saveState();
+  updateNotifBell();
+}
+
+// ── Presentes surpresa do sistema ────────────────────────────
+function checkSurpriseGift() {
+  const today = todayStr();
+  if ((state.lastSurpriseGiftDate || '') === today) return; // já recebeu hoje
+
+  // 60% de chance de ganhar um presente por dia
+  if (Math.random() > 0.60) {
+    state.lastSurpriseGiftDate = today;
+    saveState();
+    return;
+  }
+
+  const pool = SURPRISE_GIFTS_POOL;
+  const gift = { ...pool[Math.floor(Math.random() * pool.length)] };
+  gift.uid = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  gift.timestamp = new Date().toISOString();
+
+  if (!state.surpriseGifts) state.surpriseGifts = [];
+  state.surpriseGifts.push(gift);
+  state.lastSurpriseGiftDate = today;
+  saveState();
+  updateNotifBell();
+  showNotification(`🎁 Você recebeu um presente surpresa: ${gift.icon} ${gift.name}!`, 'success');
+}
+
+function claimSurpriseGift(uid, btn) {
+  if (btn) btn.disabled = true;
+  const gift = (state.surpriseGifts || []).find(g => g.uid === uid);
+  if (!gift) return;
+
+  if (gift.type === 'xp')    addXp(gift.value);
+  if (gift.type === 'coins') addCoins(gift.value);
+
+  state.surpriseGifts = (state.surpriseGifts || []).filter(g => g.uid !== uid);
+  saveState();
+  showNotification(`✅ ${gift.icon} ${gift.name} resgatado! +${gift.value} ${gift.type === 'xp' ? 'XP' : 'moedas'}`, 'success');
+  renderNotifPanel();
+  updateNotifBell();
+}
+
+// ── Verificação de desempenho ao logar ───────────────────────
+function checkPerformanceNotifs() {
+  // Verifica mudanças por matéria
+  const prev = state.lastCheckedGrades || {};
+  const next  = {};
+
+  state.subjects.forEach(s => {
+    if (!s.grades || s.grades.length === 0) return;
+    const last = s.grades[s.grades.length - 1];
+    next[s.id] = last;
+    const prevGrade = prev[s.id];
+    if (prevGrade === undefined) return; // primeira vez
+    if (last > prevGrade + 0.5) {
+      addLocalNotif('📈', `Você melhorou em ${s.name}! Nota ${last} vs ${prevGrade} antes.`);
+    } else if (last < prevGrade - 0.5) {
+      addLocalNotif('📉', `Seu desempenho em ${s.name} caiu. Note ${last} vs ${prevGrade}. Hora de revisar!`);
+    }
+  });
+
+  // Verifica exames recentes
+  const recent = state.exams.slice(-3);
+  if (recent.length >= 2) {
+    const avg = recent.reduce((a, b) => a + b.grade, 0) / recent.length;
+    if (avg >= 9) addLocalNotif('🌟', 'Suas notas recentes estão excelentes! Continue assim!');
+    else if (avg < 5) addLocalNotif('⚠️', 'Suas notas recentes estão baixas. Hora de estudar mais!');
+  }
+
+  // Streak de 3, 7, 30 dias
+  if (state.streak === 3)  addLocalNotif('🔥', '3 dias de streak! Continue firme!');
+  if (state.streak === 7)  addLocalNotif('💪', '1 semana de streak! Incrível!');
+  if (state.streak === 30) addLocalNotif('🏆', '30 dias de streak! Você é uma lenda!');
+
+  state.lastCheckedGrades = next;
+  saveState();
 }
 
 function selectAvatarType(type) {
