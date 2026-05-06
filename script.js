@@ -180,6 +180,16 @@ const COSMETIC_BANNERS = [
   { id: 'banner_galaxy', name: 'Banner Galáxia', icon: '🌌', cost: 200, desc: 'Infinito e misterioso.' },
 ];
 
+// ── IA — custos por modo ─────────────────────────────────────
+const IA_COSTS = { chat_normal: 1, explicar: 5, resumo: 5, quiz: 5, prova: 10 };
+const IA_MODES = [
+  { id: 'chat_normal', label: '💬 Chat',     cost: 1  },
+  { id: 'explicar',    label: '📖 Explicar',  cost: 5  },
+  { id: 'resumo',      label: '📝 Resumo',    cost: 5  },
+  { id: 'quiz',        label: '❓ Quiz',      cost: 5  },
+  { id: 'prova',       label: '📋 Prova',     cost: 10 },
+];
+
 // ── Frases motivacionais ──────────────────────────────────────
 // Presentes surpresa diários gerados pelo sistema
 const SURPRISE_GIFTS_POOL = [
@@ -300,6 +310,11 @@ let state = {
   surpriseGifts: [],        // [{uid, icon, name, type, value, timestamp}] — presentes do sistema
   lastSurpriseGiftDate: '', // 'YYYY-MM-DD' — controla 1 presente por dia
   lastCheckedGrades: {},    // {subjectId: lastGrade} — detecta mudanças de nota
+  iacoins: 0,               // moeda para usar a IA
+  isAdmin: false,           // lido do Supabase (coluna is_admin)
+  isSuspect: false,         // lido do Supabase (coluna is_suspect)
+  penaltyType: null,        // null | 'limit' | 'warn'
+  aiHistory: [],            // histórico do chat IA [{role,content}]
   settings: {
     schoolAverage:       7,       // média escolar padrão
     notificationsEnabled: true,   // notificações visuais
@@ -620,7 +635,13 @@ async function loadUserData() {
     // `data.data` é a coluna JSONB com o state completo
     if (data.data && typeof data.data === 'object') {
       console.log('[Supabase] ✅ State completo carregado — XP:', data.data.xp, '| Setup:', data.data.setup, '| Nome:', data.data.name);
-      return data.data;
+      const merged = { ...data.data };
+      // Lê colunas de admin/penalidade que ficam fora do JSONB
+      if (data.iacoins    != null) merged.iacoins     = data.iacoins;
+      if (data.is_admin   != null) merged.isAdmin      = !!data.is_admin;
+      if (data.is_suspect != null) merged.isSuspect    = !!data.is_suspect;
+      if (data.penalty_type    )   merged.penaltyType  = data.penalty_type;
+      return merged;
     }
 
     // Fallback: coluna `data` vazia — usa só as colunas básicas
@@ -656,12 +677,13 @@ async function saveUserData(data) {
     const { error } = await sb
       .from('users')
       .upsert({
-        id:    uid,
-        name:  data.name  || '',
-        xp:    data.xp    || 0,
-        level: data.level || 1,
-        coins: data.coins || 0,
-        data:  { ...data, friendCode: _friendCode(uid) }, // friendCode embutido para busca
+        id:      uid,
+        name:    data.name    || '',
+        xp:      data.xp      || 0,
+        level:   data.level   || 1,
+        coins:   data.coins   || 0,
+        iacoins: data.iacoins || 0,
+        data:    { ...data, friendCode: _friendCode(uid) }, // friendCode embutido para busca
       });
     if (error) console.warn('[Supabase] ❌ Erro ao salvar (código:', error.code, '):', error.message);
     else       console.log('[Supabase] ✅ State salvo — XP:', data.xp, '| Nível:', data.level, '| Nome:', data.name);
@@ -843,6 +865,8 @@ function navigateTo(page) {
   if (page === 'profile') renderProfilePage();
   if (page === 'friends') renderFriendsPage();
   if (page === 'groups')  renderGroupsPage();
+  if (page === 'ai')      renderAIPage();
+  if (page === 'admin')   renderAdminPage();
   if (authUserId) updateNotifBell();
 }
 
@@ -1025,6 +1049,7 @@ function saveTask() {
   };
 
   state.tasks.push(task);
+  _recordTaskCreation(task.id); // para fraud detection
   saveState();
   closeModal('modal-task');
   document.getElementById('task-name-input').value = '';
@@ -1210,6 +1235,9 @@ function toggleTask(id) {
   task.done = true;
   task.doneAt = Date.now();
   state.totalTasksDone++;
+
+  // Fraud detection: verifica se a tarefa foi concluída muito rápido
+  _checkTaskFraud(id);
 
   let xpGain = XP_REWARDS[task.difficulty];
   let coinGain = COIN_REWARDS[task.difficulty];
@@ -1525,6 +1553,7 @@ function deleteExam(id) {
 // ============================================================
 
 function addXp(amount, bonusMsg = null) {
+  if (state.penaltyType === 'limit') amount = Math.max(1, Math.floor(amount * 0.5));
   state.xp += amount;
   state.totalXpEarned += amount;
   state.dailyXp += amount;
@@ -1556,8 +1585,41 @@ function addXp(amount, bonusMsg = null) {
 }
 
 function addCoins(amount) {
+  if (state.penaltyType === 'limit') amount = Math.max(1, Math.floor(amount * 0.5));
   state.coins += amount;
   updateDashboard();
+}
+
+// ── IACoin ────────────────────────────────────────────────────
+function addIACoins(amount) {
+  state.iacoins = (state.iacoins || 0) + amount;
+  _updateIACoinDisplay();
+  scheduleSyncToSupabase();
+}
+
+function spendIACoins(amount) {
+  if ((state.iacoins || 0) < amount) return false;
+  state.iacoins -= amount;
+  _updateIACoinDisplay();
+  scheduleSyncToSupabase();
+  return true;
+}
+
+function convertCoinsToIACoins() {
+  if (state.coins < 100) {
+    showNotification('Você precisa de pelo menos 100 💰 para converter.', 'warning');
+    return;
+  }
+  state.coins -= 100;
+  addIACoins(10);
+  showNotification('✅ Convertido: 100 💰 → 10 🧠 IACoin!', 'success');
+  saveState();
+}
+
+function _updateIACoinDisplay() {
+  document.querySelectorAll('.iacoin-count').forEach(el => {
+    el.textContent = state.iacoins || 0;
+  });
 }
 
 function levelUpSubject(subj) {
@@ -2695,6 +2757,13 @@ function updateDashboard() {
   // Top bar mobile
   _setText('top-streak', state.streak);
   _setText('top-coins',  state.coins);
+
+  // IACoin display
+  _updateIACoinDisplay();
+
+  // Link admin: só aparece se is_admin
+  const adminLink = document.getElementById('sidebar-admin-link');
+  if (adminLink) adminLink.style.display = state.isAdmin ? '' : 'none';
 
   // XP Bar
   const xpNeeded = xpForLevel(state.level);
@@ -7213,4 +7282,522 @@ function initSocialModals() {
 
 function escHtml(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ============================================================
+// IA COM IACOIN — integração Gemini API
+// ============================================================
+
+const _GEMINI_LS = 'sq_gemini_key';
+let _aiCurrentMode = 'chat_normal';
+
+/** Hash simples e determinístico para deduplicar perguntas no knowledge_base */
+function _hashStr(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) { h = Math.imul(31, h) + str.charCodeAt(i) | 0; }
+  return Math.abs(h).toString(16).padStart(8, '0');
+}
+
+/** Verifica se a pergunta já existe no cache (knowledge_base) */
+async function checkKnowledgeBase(question, mode) {
+  if (!sb) return null;
+  try {
+    const hash = _hashStr((question + '|' + mode).toLowerCase().trim());
+    const { data } = await sb.from('knowledge_base').select('answer').eq('question_hash', hash).maybeSingle();
+    return data?.answer || null;
+  } catch { return null; }
+}
+
+/** Salva resposta da IA no cache */
+async function saveToKnowledgeBase(question, answer, mode) {
+  if (!sb) return;
+  try {
+    const hash = _hashStr((question + '|' + mode).toLowerCase().trim());
+    await sb.from('knowledge_base')
+      .upsert({ question_hash: hash, question: question.trim(), answer, mode }, { onConflict: 'question_hash', ignoreDuplicates: true });
+  } catch {}
+}
+
+/** Chama a Gemini API com o prompt formatado pelo modo */
+async function callGeminiAPI(question, mode) {
+  const key = localStorage.getItem(_GEMINI_LS) || '';
+  if (!key) throw new Error('NO_KEY');
+
+  const systemMap = {
+    chat_normal: 'Você é um assistente educacional amigável e direto. Responda de forma clara e concisa em português.',
+    explicar:    'Você é um professor especialista. Explique o conceito detalhadamente com exemplos práticos e analogias em português.',
+    resumo:      'Você é um especialista em síntese. Crie um resumo estruturado em tópicos do conteúdo fornecido em português.',
+    quiz:        'Você é um professor criativo. Crie exatamente 5 questões de múltipla escolha com 4 alternativas e gabarito comentado em português.',
+    prova:       'Você é um professor rigoroso. Crie uma prova completa com 10 questões variadas (múltipla escolha, dissertativas e V/F) com gabarito detalhado em português.',
+  };
+
+  const resp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: `${systemMap[mode] || systemMap.chat_normal}\n\nTarefa: ${question}` }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
+      }),
+    }
+  );
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Erro ${resp.status}`);
+  }
+  const json = await resp.json();
+  return json.candidates?.[0]?.content?.parts?.[0]?.text || 'Sem resposta da IA.';
+}
+
+/** Função principal da IA: verifica cache → chama API → desconta IACoin */
+async function askAI(question, mode) {
+  const cost = IA_COSTS[mode] || 1;
+
+  if ((state.iacoins || 0) < cost) {
+    return { ok: false, error: `Saldo insuficiente. Custo: ${cost} 🧠 | Saldo: ${state.iacoins || 0} 🧠` };
+  }
+
+  const cached = await checkKnowledgeBase(question, mode);
+  if (cached) {
+    return { ok: true, answer: cached, fromCache: true, cost: 0 };
+  }
+
+  try {
+    const answer = await callGeminiAPI(question, mode);
+    spendIACoins(cost);
+    await saveToKnowledgeBase(question, answer, mode);
+    return { ok: true, answer, fromCache: false, cost };
+  } catch (e) {
+    if (e.message === 'NO_KEY') return { ok: false, error: 'Configure sua chave Gemini nas ⚙️ Configurações.' };
+    return { ok: false, error: `Erro da IA: ${e.message}` };
+  }
+}
+
+/** Renderiza a página de IA */
+function renderAIPage() {
+  const page = document.getElementById('page-ai');
+  if (!page) return;
+  const iacoins = state.iacoins || 0;
+  const hasKey  = !!localStorage.getItem(_GEMINI_LS);
+
+  const modeButtons = IA_MODES.map(m => `
+    <button class="ia-mode-btn ${_aiCurrentMode === m.id ? 'active' : ''}" onclick="setAIMode('${m.id}')">
+      ${m.label} <span class="ia-mode-cost">${m.cost} 🧠</span>
+    </button>`).join('');
+
+  const history = (state.aiHistory || []).map(msg => `
+    <div class="ia-msg ia-msg-${msg.role}">
+      <div class="ia-msg-bubble">${msg.role === 'ai' ? marked(msg.content) : escHtml(msg.content)}</div>
+      ${msg.fromCache ? '<span class="ia-cache-tag">📦 cache</span>' : ''}
+      ${msg.cost ? `<span class="ia-cost-tag">-${msg.cost} 🧠</span>` : ''}
+    </div>`).join('');
+
+  page.innerHTML = `
+    <div class="page-header">
+      <h1>🧠 IA Educacional</h1>
+      <p class="page-subtitle">Use IACoin para interagir com a IA</p>
+    </div>
+
+    <div class="ia-topbar">
+      <div class="ia-balance-card">
+        <span class="ia-balance-icon">🧠</span>
+        <div>
+          <div class="ia-balance-val"><span class="iacoin-count">${iacoins}</span> IACoin</div>
+          <div class="ia-balance-sub">100 💰 = 10 🧠</div>
+        </div>
+        <button class="btn-sm btn-convert" onclick="convertCoinsToIACoins()">Converter</button>
+      </div>
+      ${!hasKey ? `<div class="ia-key-warn">⚠️ <a href="#" onclick="openAISettings()">Configure sua chave Gemini</a></div>` : ''}
+    </div>
+
+    <div class="ia-modes">${modeButtons}</div>
+    <div class="ia-mode-info">Modo: <strong>${IA_MODES.find(m=>m.id===_aiCurrentMode)?.label}</strong> — Custo: <strong>${IA_COSTS[_aiCurrentMode]} 🧠</strong></div>
+
+    <div class="ia-chat" id="ia-chat-history">${history || '<div class="ia-empty">Faça uma pergunta para começar! 🚀</div>'}</div>
+
+    <div class="ia-input-row">
+      <textarea id="ia-question" class="ia-textarea" placeholder="Digite sua pergunta..." rows="2"></textarea>
+      <button class="btn-primary ia-send-btn" onclick="handleAISubmit()">Enviar 🚀</button>
+    </div>
+    <div class="ia-actions-row">
+      <button class="btn-sm btn-ghost" onclick="clearAIHistory()">🗑️ Limpar conversa</button>
+    </div>
+  `;
+
+  // Scroll chat para o final
+  const chat = document.getElementById('ia-chat-history');
+  if (chat) chat.scrollTop = chat.scrollHeight;
+}
+
+function setAIMode(modeId) {
+  _aiCurrentMode = modeId;
+  renderAIPage();
+}
+
+async function handleAISubmit() {
+  const textarea = document.getElementById('ia-question');
+  if (!textarea) return;
+  const question = textarea.value.trim();
+  if (!question) return showNotification('Digite uma pergunta!', 'warning');
+
+  const cost = IA_COSTS[_aiCurrentMode] || 1;
+  if ((state.iacoins || 0) < cost) {
+    showNotification(`Saldo insuficiente! Você tem ${state.iacoins || 0} 🧠 e precisa de ${cost} 🧠.`, 'error');
+    return;
+  }
+
+  textarea.value = '';
+  textarea.disabled = true;
+
+  // Adiciona pergunta ao histórico
+  state.aiHistory = state.aiHistory || [];
+  state.aiHistory.push({ role: 'user', content: question });
+  renderAIPage();
+  document.getElementById('ia-chat-history').innerHTML += '<div class="ia-msg ia-msg-loading">⏳ Consultando IA...</div>';
+
+  const result = await askAI(question, _aiCurrentMode);
+
+  state.aiHistory.push({
+    role: 'ai',
+    content: result.ok ? result.answer : `❌ ${result.error}`,
+    fromCache: result.fromCache,
+    cost: result.cost,
+  });
+
+  if (state.aiHistory.length > 40) state.aiHistory = state.aiHistory.slice(-40);
+  saveState();
+  renderAIPage();
+
+  const ta = document.getElementById('ia-question');
+  if (ta) ta.disabled = false;
+}
+
+function clearAIHistory() {
+  state.aiHistory = [];
+  saveState();
+  renderAIPage();
+}
+
+function openAISettings() {
+  const key = localStorage.getItem(_GEMINI_LS) || '';
+  const newKey = prompt('Cole sua chave da API Gemini (google.dev/gemini):', key);
+  if (newKey === null) return;
+  if (newKey.trim()) {
+    localStorage.setItem(_GEMINI_LS, newKey.trim());
+    showNotification('✅ Chave Gemini salva!', 'success');
+  } else {
+    localStorage.removeItem(_GEMINI_LS);
+    showNotification('Chave removida.', 'info');
+  }
+  renderAIPage();
+}
+
+// Markdown mínimo para formatar respostas da IA
+function marked(text) {
+  return escHtml(text)
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`(.*?)`/g, '<code>$1</code>')
+    .replace(/^#{1,3} (.+)$/gm, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>');
+}
+
+// ============================================================
+// DETECÇÃO DE FRAUDE
+// ============================================================
+
+/** Verifica uma ação e gera flag se suspeita */
+async function _fraudCheck(action, meta = {}) {
+  if (!authUserId || state.isAdmin) return; // admin não é flagado
+
+  let reason = null;
+  let score  = 0;
+
+  if (action === 'task_complete') {
+    const elapsed = meta.elapsed || 0;
+    if (elapsed < 300) {
+      reason = `Tarefa concluída em ${Math.round(elapsed / 60)} min (< 5 min)`;
+      score  = 2;
+    }
+  } else if (action === 'study_item') {
+    if ((meta.elapsed || 0) < 60) {
+      reason = `Item de estudo concluído em menos de 1 min`;
+      score  = 1;
+    }
+  } else if (action === 'rapid_xp') {
+    if ((meta.xp || 0) > 500) {
+      reason = `+${meta.xp} XP em menos de 5 min`;
+      score  = 3;
+    }
+  } else if (action === 'grade_spam') {
+    if ((meta.recent || 0) >= 4 && (meta.grade || 0) >= 9.5) {
+      reason = `${meta.recent} notas ≥ 9.5 em sequência`;
+      score  = 1;
+    }
+  }
+
+  if (!reason) return;
+  await flagUser(reason, score);
+}
+
+/** Insere flag no banco e marca como suspeito se score total ≥ 5 */
+async function flagUser(reason, score = 1) {
+  if (!sb || !authUserId) return;
+  try {
+    await sb.from('user_flags').insert({ user_id: authUserId, reason, score });
+
+    const { data } = await sb.from('user_flags').select('score').eq('user_id', authUserId);
+    const total = (data || []).reduce((s, r) => s + (r.score || 1), 0);
+    if (total >= 5) {
+      await sb.from('users').update({ is_suspect: true }).eq('id', authUserId);
+      state.isSuspect = true;
+    }
+  } catch (e) {
+    console.warn('[flagUser]', e);
+  }
+}
+
+// Integra detecção na conclusão de tarefa
+const _taskCreationTimes = {}; // taskId → timestamp de criação
+function _recordTaskCreation(taskId) { _taskCreationTimes[taskId] = Date.now(); }
+async function _checkTaskFraud(taskId) {
+  const created = _taskCreationTimes[taskId];
+  if (!created) return;
+  const elapsed = (Date.now() - created) / 1000;
+  await _fraudCheck('task_complete', { elapsed });
+  delete _taskCreationTimes[taskId];
+}
+
+// ============================================================
+// SISTEMA ADMIN
+// ============================================================
+
+/** Carrega todos os usuários suspeitos para o painel admin */
+async function loadSuspects() {
+  if (!sb || !state.isAdmin) return [];
+  try {
+    const { data } = await sb.from('users')
+      .select('id, name, xp, level, coins, is_suspect, penalty_type, penalty_until, data')
+      .eq('is_suspect', true);
+    return data || [];
+  } catch { return []; }
+}
+
+/** Carrega flags de um usuário específico */
+async function loadUserFlags(userId) {
+  if (!sb) return [];
+  try {
+    const { data } = await sb.from('user_flags').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(20);
+    return data || [];
+  } catch { return []; }
+}
+
+/** Carrega histórico de ações admin */
+async function loadAdminHistory() {
+  if (!sb || !state.isAdmin) return [];
+  try {
+    const { data } = await sb.from('admin_actions').select('*').order('created_at', { ascending: false }).limit(50);
+    return data || [];
+  } catch { return []; }
+}
+
+/** Executa uma ação administrativa */
+async function adminAction(userId, action, reason = '') {
+  if (!sb || !authUserId || !state.isAdmin) return false;
+  try {
+    switch (action) {
+      case 'ok':
+        await sb.from('users').update({ is_suspect: false, penalty_type: null, penalty_until: null }).eq('id', userId);
+        break;
+      case 'warn':
+        await sb.from('motivations').insert({ from_id: authUserId, to_id: userId, phrase: `⚠️ Aviso do sistema: ${reason}`, read: false });
+        break;
+      case 'limit':
+        await sb.from('users').update({ penalty_type: 'limit' }).eq('id', userId);
+        break;
+      case 'reset':
+        await sb.from('users').update({ xp: 0, coins: 0, level: 1, data: {} }).eq('id', userId);
+        break;
+      case 'remove_penalty':
+        await sb.from('users').update({ is_suspect: false, penalty_type: null, penalty_until: null }).eq('id', userId);
+        break;
+    }
+    await sb.from('admin_actions').insert({ admin_id: authUserId, user_id: userId, action, reason });
+    return true;
+  } catch (e) {
+    console.error('[adminAction]', e);
+    return false;
+  }
+}
+
+/** Renderiza o painel admin */
+async function renderAdminPage() {
+  const page = document.getElementById('page-admin');
+  if (!page) return;
+
+  if (!state.isAdmin) {
+    page.innerHTML = `<div class="page-header"><h1>🛡️ Admin</h1></div><div class="social-empty">Acesso restrito.</div>`;
+    return;
+  }
+
+  page.innerHTML = `<div class="page-header"><h1>👑 Painel Admin</h1><p class="page-subtitle">Moderação e gerenciamento</p></div>
+    <div class="social-loading">Carregando dados...</div>`;
+
+  const [suspects, history] = await Promise.all([loadSuspects(), loadAdminHistory()]);
+
+  const susHtml = suspects.length ? suspects.map(u => {
+    const d = u.data || {};
+    return `
+    <div class="admin-user-card" id="auc-${u.id}">
+      <div class="admin-user-info">
+        <div class="admin-user-avatar">${d.avatar || '🧙'}</div>
+        <div>
+          <div class="admin-user-name">${escHtml(u.name || 'Sem nome')}</div>
+          <div class="admin-user-stats">Nv ${u.level} · ${u.xp} XP · ${u.coins} 💰</div>
+          ${u.penalty_type ? `<div class="admin-penalty-badge">🔒 ${u.penalty_type}</div>` : ''}
+        </div>
+      </div>
+      <div class="admin-actions">
+        <button class="btn-admin-ok"     onclick="handleAdminAction('${u.id}','ok','Comportamento verificado')">✅ OK</button>
+        <button class="btn-admin-warn"   onclick="adminPromptAction('${u.id}','warn')">⚠️ Avisar</button>
+        <button class="btn-admin-limit"  onclick="adminPromptAction('${u.id}','limit')">🔒 Limitar</button>
+        <button class="btn-admin-reset"  onclick="adminPromptAction('${u.id}','reset')">♻️ Resetar</button>
+        <button class="btn-admin-remove" onclick="handleAdminAction('${u.id}','remove_penalty','')">🔓 Remover punição</button>
+        <button class="btn-sm btn-ghost" onclick="showUserFlags('${u.id}')">🚩 Ver flags</button>
+      </div>
+    </div>`;
+  }).join('') : '<div class="social-empty">Nenhum usuário suspeito no momento. ✅</div>';
+
+  const histHtml = history.length ? history.map(a => `
+    <div class="admin-history-row">
+      <span class="admin-hist-action admin-act-${a.action}">${a.action}</span>
+      <span class="admin-hist-user">${a.user_id.slice(0,8)}…</span>
+      <span class="admin-hist-reason">${escHtml(a.reason || '')}</span>
+      <span class="admin-hist-date">${new Date(a.created_at).toLocaleDateString('pt-BR')}</span>
+    </div>`).join('') : '<div class="social-empty">Sem histórico de ações.</div>';
+
+  page.innerHTML = `
+    <div class="page-header">
+      <h1>👑 Painel Admin</h1>
+      <p class="page-subtitle">Moderação e gerenciamento</p>
+    </div>
+
+    <div class="admin-section-title">🚨 Usuários Suspeitos (${suspects.length})</div>
+    <div class="admin-suspects">${susHtml}</div>
+
+    <div class="admin-section-title" style="margin-top:1.5rem">📋 Histórico de Ações</div>
+    <div class="admin-history">${histHtml}</div>
+  `;
+}
+
+async function handleAdminAction(userId, action, defaultReason) {
+  const ok = await adminAction(userId, action, defaultReason);
+  if (ok) {
+    showNotification(`Ação "${action}" aplicada.`, 'success');
+    renderAdminPage();
+  } else {
+    showNotification('Erro ao aplicar ação.', 'error');
+  }
+}
+
+async function adminPromptAction(userId, action) {
+  const labels = { warn: 'Motivo do aviso:', limit: 'Motivo da limitação:', reset: 'Motivo do reset (irreversível!):' };
+  const reason = prompt(labels[action] || 'Motivo:');
+  if (reason === null) return;
+  await handleAdminAction(userId, action, reason);
+}
+
+async function showUserFlags(userId) {
+  const flags = await loadUserFlags(userId);
+  const total = flags.reduce((s, f) => s + (f.score || 1), 0);
+  const msg = flags.length
+    ? `Score total: ${total}\n\n` + flags.map(f => `[${new Date(f.created_at).toLocaleDateString('pt-BR')}] +${f.score} — ${f.reason}`).join('\n')
+    : 'Nenhuma flag encontrada.';
+  alert(msg);
+}
+
+// ============================================================
+// CÓDIGOS DE RESGATE
+// ============================================================
+
+async function redeemCode(code) {
+  if (!authUserId) return { ok: false, msg: 'Faça login para resgatar códigos.' };
+  const clean = (code || '').trim().toUpperCase();
+  if (!clean) return { ok: false, msg: 'Digite um código válido.' };
+
+  try {
+    const { data: row } = await sb.from('redeem_codes').select('*').eq('code', clean).maybeSingle();
+    if (!row) return { ok: false, msg: 'Código inválido ou inexistente.' };
+
+    if (row.expires_at && new Date(row.expires_at) < new Date())
+      return { ok: false, msg: 'Código expirado.' };
+
+    if (row.uses_max > 0 && row.uses_current >= row.uses_max)
+      return { ok: false, msg: 'Código esgotado.' };
+
+    const { count } = await sb.from('user_redeems')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', authUserId).eq('code_id', row.id);
+    if (count > 0) return { ok: false, msg: 'Você já usou este código.' };
+
+    let msg = '';
+    switch (row.type) {
+      case 'coins':
+        addCoins(row.value);
+        msg = `+${row.value} 💰 moedas adicionadas!`;
+        break;
+      case 'iacoins':
+        addIACoins(row.value);
+        msg = `+${row.value} 🧠 IACoin adicionados!`;
+        break;
+      case 'xp':
+        addXp(row.value);
+        msg = `+${row.value} ✨ XP adicionados!`;
+        break;
+      case 'admin':
+        state.isAdmin = true;
+        await sb.from('users').update({ is_admin: true }).eq('id', authUserId);
+        msg = '👑 Acesso admin ativado!';
+        break;
+      default:
+        msg = `Código tipo "${row.type}" resgatado!`;
+    }
+
+    await sb.from('user_redeems').insert({ user_id: authUserId, code_id: row.id });
+    await sb.from('redeem_codes').update({ uses_current: row.uses_current + 1 }).eq('id', row.id);
+    saveState();
+    return { ok: true, msg };
+  } catch (e) {
+    console.error('[redeemCode]', e);
+    return { ok: false, msg: 'Erro ao resgatar código. Tente novamente.' };
+  }
+}
+
+function openRedeemModal() {
+  openModal('modal-redeem');
+  const inp = document.getElementById('redeem-code-input');
+  if (inp) { inp.value = ''; inp.focus(); }
+  const res = document.getElementById('redeem-result');
+  if (res) res.textContent = '';
+}
+
+async function handleRedeemSubmit() {
+  const inp = document.getElementById('redeem-code-input');
+  const res = document.getElementById('redeem-result');
+  if (!inp || !res) return;
+
+  const btn = document.getElementById('redeem-submit-btn');
+  if (btn) btn.disabled = true;
+
+  const result = await redeemCode(inp.value);
+  res.textContent = result.msg;
+  res.className   = 'redeem-result ' + (result.ok ? 'redeem-ok' : 'redeem-err');
+
+  if (result.ok) {
+    showNotification(result.msg, 'success');
+    inp.value = '';
+  }
+  if (btn) btn.disabled = false;
 }
