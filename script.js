@@ -5754,12 +5754,6 @@ async function sendFriendRequest(toId) {
   if (!sb || !authUserId) return { ok: false, reason: 'not_logged_in' };
   try {
     // 1) Já são amigos?
-    const { data: alreadyFriend } = await sb.from('friends')
-      .select('friend_id', { count: 'exact', head: true })
-      .eq('user_id', authUserId).eq('friend_id', toId);
-    if (alreadyFriend !== null && alreadyFriend !== undefined) {
-      // head:true → data é null quando vazio, objeto quando tem
-    }
     const { count: friendCount } = await sb.from('friends')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', authUserId).eq('friend_id', toId);
