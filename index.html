@@ -754,6 +754,32 @@
         </div>
       </div>
 
+      <!-- SEÇÃO: IA EDUCACIONAL -->
+      <div class="settings-section">
+        <div class="settings-section-title">🧠 IA Educacional</div>
+        <div class="settings-card">
+          <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:.6rem">
+            <div class="settings-row-info">
+              <span class="settings-row-label">🔑 Chave da API Gemini</span>
+              <span class="settings-row-desc">Necessária para usar a IA. Obtenha gratuitamente em <strong>aistudio.google.com</strong> → "Get API Key"</span>
+            </div>
+            <div style="display:flex;gap:.5rem;width:100%;align-items:center">
+              <input type="password" id="cfg-gemini-key" placeholder="Cole sua chave aqui (AIza...)" autocomplete="off" style="flex:1;font-size:.85rem">
+              <button class="btn-settings-action" id="cfg-gemini-save-btn">💾 Salvar</button>
+            </div>
+            <div id="cfg-gemini-status" style="font-size:.78rem;font-weight:700"></div>
+          </div>
+          <div class="settings-divider"></div>
+          <div class="settings-row">
+            <div class="settings-row-info">
+              <span class="settings-row-label">💰 Saldo IACoin</span>
+              <span class="settings-row-desc">Moeda usada para interagir com a IA</span>
+            </div>
+            <span style="font-weight:800;font-size:1.1rem">🧠 <span class="iacoin-count">0</span></span>
+          </div>
+        </div>
+      </div>
+
       <!-- SEÇÃO: INSTALAR APP (PWA) -->
       <div class="settings-section" id="pwa-install-section" style="display:none">
         <div class="settings-section-title">📲 App</div>

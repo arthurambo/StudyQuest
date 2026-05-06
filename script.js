@@ -5087,6 +5087,36 @@ function initSettingsPage() {
   const darkToggle = document.getElementById('cfg-dark-mode');
   if (darkToggle) darkToggle.checked = document.documentElement.dataset.theme === 'dark';
 
+  // Gemini API key
+  const geminiInput   = document.getElementById('cfg-gemini-key');
+  const geminiSaveBtn = document.getElementById('cfg-gemini-save-btn');
+  const geminiStatus  = document.getElementById('cfg-gemini-status');
+  if (geminiInput && !geminiInput._bound) {
+    geminiInput._bound = true;
+    const stored = localStorage.getItem(_GEMINI_LS) || '';
+    geminiInput.value = stored;
+    if (geminiStatus) {
+      geminiStatus.textContent = stored ? '✅ Chave configurada' : '⚠️ Chave não configurada';
+      geminiStatus.style.color  = stored ? '#34d399' : '#f59e0b';
+    }
+    if (geminiSaveBtn) {
+      geminiSaveBtn.addEventListener('click', () => {
+        const key = geminiInput.value.trim();
+        if (key) {
+          localStorage.setItem(_GEMINI_LS, key);
+          geminiStatus.textContent = '✅ Chave salva com sucesso!';
+          geminiStatus.style.color  = '#34d399';
+          showNotification('✅ Chave Gemini salva! A IA já está disponível.', 'success');
+        } else {
+          localStorage.removeItem(_GEMINI_LS);
+          geminiStatus.textContent = '⚠️ Chave removida';
+          geminiStatus.style.color  = '#f59e0b';
+          showNotification('Chave Gemini removida.', 'info');
+        }
+      });
+    }
+  }
+
   // Export / Import (moved from sidebar)
   const exportBtn = document.getElementById('export-btn');
   const importBtn = document.getElementById('import-btn');
@@ -7633,6 +7663,50 @@ async function adminAction(userId, action, reason = '') {
 }
 
 /** Renderiza o painel admin */
+/** Carrega todos os usuários cadastrados */
+async function loadAllUsers() {
+  if (!sb || !state.isAdmin) return [];
+  try {
+    const { data } = await sb.from('users')
+      .select('id, name, xp, level, coins, iacoins, is_admin, is_suspect, penalty_type, data')
+      .order('xp', { ascending: false })
+      .limit(100);
+    return data || [];
+  } catch { return []; }
+}
+
+/** Carrega todos os códigos de resgate existentes */
+async function loadRedeemCodes() {
+  if (!sb || !state.isAdmin) return [];
+  try {
+    const { data } = await sb.from('redeem_codes')
+      .select('*').order('created_at', { ascending: false }).limit(50);
+    return data || [];
+  } catch { return []; }
+}
+
+/** Cria um código de resgate novo */
+async function adminCreateCode(code, type, value, usesMax, expiresAt) {
+  if (!sb || !state.isAdmin) return { ok: false, msg: 'Sem permissão.' };
+  try {
+    const { error } = await sb.from('redeem_codes').insert({
+      code:      code.trim().toUpperCase(),
+      type,
+      value:     Number(value) || 0,
+      uses_max:  Number(usesMax) || 1,
+      expires_at: expiresAt || null,
+    });
+    if (error) return { ok: false, msg: error.message };
+    return { ok: true };
+  } catch (e) { return { ok: false, msg: e.message }; }
+}
+
+/** Deleta um código de resgate */
+async function adminDeleteCode(codeId) {
+  if (!sb || !state.isAdmin) return;
+  try { await sb.from('redeem_codes').delete().eq('id', codeId); } catch {}
+}
+
 async function renderAdminPage() {
   const page = document.getElementById('page-admin');
   if (!page) return;
@@ -7645,36 +7719,80 @@ async function renderAdminPage() {
   page.innerHTML = `<div class="page-header"><h1>👑 Painel Admin</h1><p class="page-subtitle">Moderação e gerenciamento</p></div>
     <div class="social-loading">Carregando dados...</div>`;
 
-  const [suspects, history] = await Promise.all([loadSuspects(), loadAdminHistory()]);
+  const [suspects, history, allUsers, codes] = await Promise.all([
+    loadSuspects(), loadAdminHistory(), loadAllUsers(), loadRedeemCodes(),
+  ]);
 
-  const susHtml = suspects.length ? suspects.map(u => {
+  // ── Criar código ─────────────────────────────────────────────
+  const createCodeHtml = `
+    <div class="admin-create-code-form">
+      <div class="admin-form-row">
+        <input id="adm-code-val"   placeholder="CÓDIGO (ex: BONUS2025)" style="text-transform:uppercase;letter-spacing:.05em;font-weight:700">
+        <select id="adm-code-type">
+          <option value="coins">💰 Moedas</option>
+          <option value="iacoins">🧠 IACoin</option>
+          <option value="xp">✨ XP</option>
+          <option value="admin">👑 Admin</option>
+        </select>
+        <input id="adm-code-amount" type="number" placeholder="Valor" min="0" value="100" style="width:90px">
+        <input id="adm-code-uses"   type="number" placeholder="Usos" min="1" value="1" style="width:70px">
+        <input id="adm-code-exp"    type="datetime-local" title="Expira em (opcional)">
+      </div>
+      <button class="btn-primary" onclick="handleAdminCreateCode()" style="margin-top:.5rem;width:100%">➕ Criar Código</button>
+      <div id="adm-code-result" style="margin-top:.4rem;font-size:.82rem;font-weight:700"></div>
+    </div>`;
+
+  // ── Lista de códigos ──────────────────────────────────────────
+  const codesHtml = codes.length ? `
+    <div class="admin-codes-table">
+      <div class="admin-codes-header">
+        <span>Código</span><span>Tipo</span><span>Valor</span><span>Usos</span><span>Expira</span><span></span>
+      </div>
+      ${codes.map(c => `
+      <div class="admin-codes-row">
+        <span class="admin-code-val">${escHtml(c.code)}</span>
+        <span class="admin-code-type admin-type-${c.type}">${c.type}</span>
+        <span>${c.value}</span>
+        <span>${c.uses_current}/${c.uses_max > 0 ? c.uses_max : '∞'}</span>
+        <span style="font-size:.72rem">${c.expires_at ? new Date(c.expires_at).toLocaleDateString('pt-BR') : '—'}</span>
+        <button class="btn-sm btn-ghost" style="color:#f87171;font-size:.72rem" onclick="handleAdminDeleteCode('${c.id}')">🗑️</button>
+      </div>`).join('')}
+    </div>` : '<div class="social-empty" style="margin:.5rem 0">Nenhum código criado ainda.</div>';
+
+  // ── Usuários cadastrados ──────────────────────────────────────
+  const usersHtml = allUsers.length ? allUsers.map(u => {
     const d = u.data || {};
+    const badges = [
+      u.is_admin   ? '<span class="admin-badge-tag admin-tag-admin">👑 admin</span>'   : '',
+      u.is_suspect ? '<span class="admin-badge-tag admin-tag-suspect">⚠️ suspeito</span>' : '',
+      u.penalty_type ? `<span class="admin-badge-tag admin-tag-limit">🔒 ${u.penalty_type}</span>` : '',
+    ].filter(Boolean).join('');
     return `
-    <div class="admin-user-card" id="auc-${u.id}">
+    <div class="admin-user-card">
       <div class="admin-user-info">
         <div class="admin-user-avatar">${d.avatar || '🧙'}</div>
-        <div>
-          <div class="admin-user-name">${escHtml(u.name || 'Sem nome')}</div>
-          <div class="admin-user-stats">Nv ${u.level} · ${u.xp} XP · ${u.coins} 💰</div>
-          ${u.penalty_type ? `<div class="admin-penalty-badge">🔒 ${u.penalty_type}</div>` : ''}
+        <div style="flex:1;min-width:0">
+          <div class="admin-user-name">${escHtml(u.name || 'Sem nome')} ${badges}</div>
+          <div class="admin-user-stats">Nv ${u.level} · ${u.xp} XP · ${u.coins} 💰 · ${u.iacoins || 0} 🧠</div>
+          <div style="font-size:.68rem;color:var(--text-muted);word-break:break-all">${u.id}</div>
         </div>
       </div>
-      <div class="admin-actions">
-        <button class="btn-admin-ok"     onclick="handleAdminAction('${u.id}','ok','Comportamento verificado')">✅ OK</button>
+      <div class="admin-actions" style="margin-top:.5rem">
+        ${u.is_suspect ? `<button class="btn-admin-ok" onclick="handleAdminAction('${u.id}','ok','Verificado')">✅ OK</button>` : ''}
         <button class="btn-admin-warn"   onclick="adminPromptAction('${u.id}','warn')">⚠️ Avisar</button>
         <button class="btn-admin-limit"  onclick="adminPromptAction('${u.id}','limit')">🔒 Limitar</button>
-        <button class="btn-admin-reset"  onclick="adminPromptAction('${u.id}','reset')">♻️ Resetar</button>
-        <button class="btn-admin-remove" onclick="handleAdminAction('${u.id}','remove_penalty','')">🔓 Remover punição</button>
-        <button class="btn-sm btn-ghost" onclick="showUserFlags('${u.id}')">🚩 Ver flags</button>
+        ${u.penalty_type ? `<button class="btn-admin-remove" onclick="handleAdminAction('${u.id}','remove_penalty','')">🔓 Remover punição</button>` : ''}
+        <button class="btn-sm btn-ghost" onclick="showUserFlags('${u.id}')">🚩 Flags</button>
       </div>
     </div>`;
-  }).join('') : '<div class="social-empty">Nenhum usuário suspeito no momento. ✅</div>';
+  }).join('') : '<div class="social-empty">Nenhum usuário encontrado.</div>';
 
+  // ── Histórico ─────────────────────────────────────────────────
   const histHtml = history.length ? history.map(a => `
     <div class="admin-history-row">
       <span class="admin-hist-action admin-act-${a.action}">${a.action}</span>
       <span class="admin-hist-user">${a.user_id.slice(0,8)}…</span>
-      <span class="admin-hist-reason">${escHtml(a.reason || '')}</span>
+      <span class="admin-hist-reason">${escHtml(a.reason || '—')}</span>
       <span class="admin-hist-date">${new Date(a.created_at).toLocaleDateString('pt-BR')}</span>
     </div>`).join('') : '<div class="social-empty">Sem histórico de ações.</div>';
 
@@ -7684,12 +7802,72 @@ async function renderAdminPage() {
       <p class="page-subtitle">Moderação e gerenciamento</p>
     </div>
 
-    <div class="admin-section-title">🚨 Usuários Suspeitos (${suspects.length})</div>
-    <div class="admin-suspects">${susHtml}</div>
+    <div class="admin-section-title">🎟️ Criar Código de Resgate</div>
+    ${createCodeHtml}
 
-    <div class="admin-section-title" style="margin-top:1.5rem">📋 Histórico de Ações</div>
+    <div class="admin-section-title" style="margin-top:1.5rem">📋 Códigos Existentes (${codes.length})</div>
+    ${codesHtml}
+
+    <div class="admin-section-title" style="margin-top:1.5rem">👥 Usuários Cadastrados (${allUsers.length})</div>
+    <div class="admin-suspects">${usersHtml}</div>
+
+    <div class="admin-section-title" style="margin-top:1.5rem">🚨 Usuários Suspeitos (${suspects.length})</div>
+    <div class="admin-suspects">${suspects.length
+      ? suspects.map(u => {
+          const d = u.data || {};
+          return `<div class="admin-user-card" style="border-color:rgba(239,68,68,.4)">
+            <div class="admin-user-info">
+              <div class="admin-user-avatar">${d.avatar||'🧙'}</div>
+              <div><div class="admin-user-name">${escHtml(u.name||'?')}</div>
+              <div class="admin-user-stats">Nv ${u.level} · ${u.xp} XP</div></div>
+            </div>
+            <div class="admin-actions">
+              <button class="btn-admin-ok"     onclick="handleAdminAction('${u.id}','ok','Verificado')">✅ OK</button>
+              <button class="btn-admin-warn"   onclick="adminPromptAction('${u.id}','warn')">⚠️ Avisar</button>
+              <button class="btn-admin-limit"  onclick="adminPromptAction('${u.id}','limit')">🔒 Limitar</button>
+              <button class="btn-admin-reset"  onclick="adminPromptAction('${u.id}','reset')">♻️ Resetar</button>
+              <button class="btn-admin-remove" onclick="handleAdminAction('${u.id}','remove_penalty','')">🔓 Remover</button>
+              <button class="btn-sm btn-ghost" onclick="showUserFlags('${u.id}')">🚩 Flags</button>
+            </div>
+          </div>`;
+        }).join('')
+      : '<div class="social-empty">Nenhum usuário suspeito. ✅</div>'
+    }</div>
+
+    <div class="admin-section-title" style="margin-top:1.5rem">📜 Histórico de Ações</div>
     <div class="admin-history">${histHtml}</div>
   `;
+}
+
+async function handleAdminCreateCode() {
+  const code    = document.getElementById('adm-code-val')?.value;
+  const type    = document.getElementById('adm-code-type')?.value;
+  const value   = document.getElementById('adm-code-amount')?.value;
+  const uses    = document.getElementById('adm-code-uses')?.value;
+  const exp     = document.getElementById('adm-code-exp')?.value;
+  const result  = document.getElementById('adm-code-result');
+
+  if (!code?.trim()) {
+    if (result) { result.textContent = '⚠️ Digite o código.'; result.style.color = '#f59e0b'; }
+    return;
+  }
+
+  const res = await adminCreateCode(code, type, value, uses, exp || null);
+  if (result) {
+    result.textContent = res.ok ? `✅ Código "${code.trim().toUpperCase()}" criado!` : `❌ ${res.msg}`;
+    result.style.color  = res.ok ? '#34d399' : '#f87171';
+  }
+  if (res.ok) {
+    showNotification('✅ Código criado com sucesso!', 'success');
+    setTimeout(() => renderAdminPage(), 1000);
+  }
+}
+
+async function handleAdminDeleteCode(codeId) {
+  if (!confirm('Deletar este código?')) return;
+  await adminDeleteCode(codeId);
+  showNotification('Código deletado.', 'info');
+  renderAdminPage();
 }
 
 async function handleAdminAction(userId, action, defaultReason) {
