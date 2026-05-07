@@ -7433,6 +7433,119 @@ function detectarIntencao(text) {
   return 'explicar';
 }
 
+/**
+ * Retorna true se a mensagem é uma resposta conversacional
+ * e NÃO deve acionar busca no banco/Wikipédia.
+ * Regras: <= 4 palavras com conteúdo OU frases de resposta conhecidas.
+ */
+function isConversacional(text) {
+  const n = normalizeText(text);
+  const palavras = n.split(' ').filter(w => w.length > 1);
+
+  // Muito curto → conversacional
+  if (palavras.length <= 2) return true;
+
+  // Frases de resposta que NÃO são perguntas/buscas
+  const respostas = [
+    'nao sei', 'nao lembro', 'nao tenho certeza', 'nao entendi',
+    'nao compreendi', 'nao consigo', 'nao consigo lembrar',
+    'esqueci', 'me esqueci',
+    'sim', 'nao', 'talvez', 'mais ou menos',
+    'ok', 'certo', 'entendi', 'compreendi', 'ah entendi', 'ah sim',
+    'obrigado', 'obrigada', 'valeu', 'show', 'legal', 'otimo',
+    'perfeito', 'exato', 'isso mesmo', 'correto',
+    'pode repetir', 'pode explicar melhor', 'nao ficou claro',
+    'como assim', 'pode dar um exemplo',
+  ];
+  if (respostas.some(r => n === r || n.startsWith(r + ' '))) return true;
+
+  // 3-4 palavras onde a primeira é uma resposta conhecida
+  const primeiras = ['nao', 'sim', 'talvez', 'ok', 'certo', 'entendi',
+                     'obrigado', 'obrigada', 'valeu', 'legal', 'show', 'esqueci'];
+  if (palavras.length <= 4 && primeiras.includes(palavras[0])) return true;
+
+  return false;
+}
+
+/**
+ * Lê o histórico e retorna contexto do último turno da IA:
+ * { modo: 'prova'|'explicar'|'calc'|null, topico: string|null, conteudo: string }
+ */
+function _contextoAnterior() {
+  const history = state.aiHistory || [];
+  const lastAI  = [...history].reverse().find(m => m.role === 'ai');
+  if (!lastAI) return { modo: null, topico: null, conteudo: '' };
+
+  const c = lastAI.content || '';
+
+  // Detecta modo pelo conteúdo
+  let modo = 'explicar';
+  if (c.includes('Mini-prova:') || /\*\*\d+\.\*\*/.test(c)) modo = 'prova';
+  else if (lastAI.source === 'calc') modo = 'calc';
+
+  // Tenta extrair o tópico
+  const matchProva   = c.match(/Mini-prova:\s*\*?\*?([^\*\n]+)/);
+  const matchTitulo  = c.match(/\*\*([^\*]+)\*\*/);
+  const topico = (matchProva?.[1] || matchTitulo?.[1] || '').trim() || null;
+
+  return { modo, topico, conteudo: c };
+}
+
+/**
+ * Gera uma resposta contextual para mensagens conversacionais,
+ * levando em conta o que a IA estava fazendo antes.
+ */
+function gerarRespostaContextual(text) {
+  const n   = normalizeText(text);
+  const ctx = _contextoAnterior();
+
+  /* ── "não sei" / "esqueci" ── */
+  if (/nao sei|nao lembro|esqueci|nao tenho certeza|nao consigo lembrar/.test(n)) {
+    if (ctx.modo === 'prova' && ctx.topico) {
+      return `Tudo bem, estudar é um processo! 😊\n\nSobre **${ctx.topico}**, tente reler o material de referência que apareceu logo abaixo das perguntas da prova. Quando sentir que está pronto, pode me pedir para tentar novamente ou perguntar qualquer dúvida específica!`;
+    }
+    if (ctx.topico) {
+      return `Sem problema! 😊 Quer que eu explique **${ctx.topico}** de uma forma diferente, talvez com um exemplo prático?`;
+    }
+    return `Tudo bem não saber! 😊 Me conta qual parte ficou mais confusa e eu te ajudo a entender melhor.`;
+  }
+
+  /* ── "não entendi" / "pode explicar" ── */
+  if (/nao entendi|nao compreendi|nao ficou claro|pode explicar|como assim|pode dar um exemplo/.test(n)) {
+    if (ctx.topico) {
+      return `Claro! 😊 Me diz qual parte de **${ctx.topico}** não ficou clara e eu explico de outro jeito. Ou, se preferir, escreva "explique ${ctx.topico}" que eu faço uma explicação mais detalhada com exemplos!`;
+    }
+    return `Pode me dizer o que não ficou claro? Assim consigo te explicar melhor! 😊`;
+  }
+
+  /* ── "pode repetir" ── */
+  if (/pode repetir|repita|repete/.test(n)) {
+    if (ctx.conteudo) {
+      return `Claro! Aqui está novamente:\n\n${ctx.conteudo}`;
+    }
+    return `Pode me dizer o que quer que eu repita? 😊`;
+  }
+
+  /* ── confirmações positivas (ok, entendi, obrigado…) ── */
+  if (/^(ok|certo|entendi|compreendi|ah (entendi|sim|certo)|obrigad|valeu|show|legal|otimo|perfeito|exato|isso mesmo|correto)/.test(n)) {
+    if (ctx.modo === 'prova') {
+      return `Ótimo! 🎉 Quando terminar de responder as perguntas, me manda suas respostas e eu te dou um feedback. Ou, se quiser uma nova prova sobre outro assunto, é só pedir!`;
+    }
+    return `Fico feliz em ajudar! 😊 Se tiver mais alguma dúvida, pode perguntar à vontade.`;
+  }
+
+  /* ── sim / não simples ── */
+  if (/^(sim|nao|talvez|mais ou menos)$/.test(n)) {
+    if (ctx.modo === 'prova') {
+      return `Para responder a prova, escreva as respostas completas abaixo de cada pergunta. Estou aqui para ajudar se tiver dúvidas! 😊`;
+    }
+    return `Entendido! 😊 Quer saber mais sobre algum assunto específico?`;
+  }
+
+  /* ── fallback conversacional genérico ── */
+  return `Hmm, não entendi bem o que você quis dizer. 😊 Pode reformular sua pergunta? Por exemplo:\n- *"O que é fotossíntese?"*\n- *"Crie uma prova sobre Segunda Guerra Mundial"*\n- *"Quanto é 15 × 8?"*`;
+}
+
 /** Gera perguntas simples a partir de um título e texto */
 function gerarProva(titulo, texto) {
   const frases = texto
@@ -7551,9 +7664,15 @@ async function buscarNoBanco(question) {
   } catch { return null; }
 }
 
-/** Fluxo principal local: calculadora → banco → Wikipédia → null */
+/** Fluxo principal local: contexto → calculadora → banco → Wikipédia → null */
 async function responderLocalAI(question) {
-  // 1. Calculadora
+  // 1. Mensagem conversacional? Responde com contexto, sem buscar
+  if (isConversacional(question)) {
+    const resposta = gerarRespostaContextual(question);
+    return { ok: true, answer: resposta, cost: 0, source: 'kb' };
+  }
+
+  // 2. Calculadora
   if (isCalculo(question)) {
     const res = calcular(question);
     if (res !== null) {
