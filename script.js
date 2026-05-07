@@ -6041,7 +6041,8 @@ async function sendFriendRequest(toId) {
     const { data: incoming } = await sb.from('friend_requests')
       .select('id').eq('from_id', toId).eq('to_id', authUserId).eq('status', 'pending').maybeSingle();
     if (incoming) {
-      await acceptFriendRequest(toId, incoming.id);
+      const acc = await acceptFriendRequest(toId, incoming.id);
+      if (!acc.ok) return { ok: false, reason: acc.msg || 'auto_accept_failed' };
       return { ok: true, reason: 'auto_accepted' };
     }
 
@@ -6084,26 +6085,62 @@ async function listPendingRequests() {
   } catch (e) { return []; }
 }
 
-/** Aceita pedido: adiciona nas duas direções e deleta o pedido */
+/** Aceita pedido via RPC SECURITY DEFINER (resolve RLS bidirecional) */
 async function acceptFriendRequest(fromId, requestId) {
-  if (!sb || !authUserId) return false;
+  if (!sb || !authUserId) return { ok: false, msg: 'Não autenticado.' };
   try {
-    // upsert evita erro de constraint duplicada se o registro já existir
-    await sb.from('friends').upsert([
-      { user_id: authUserId, friend_id: fromId },
-      { user_id: fromId, friend_id: authUserId },
-    ], { onConflict: 'user_id,friend_id', ignoreDuplicates: true });
-    // Deleta pedido pelo id se tiver, senão pelo par from/to
+    // Tenta via função RPC (recomendado — bypass RLS seguro)
+    const { data, error } = await sb.rpc('accept_friend_request', {
+      p_request_id: requestId,
+      p_from_id:    fromId,
+    });
+
+    if (!error && data?.ok) return { ok: true };
+
+    // RPC não existe ainda → fallback com dois inserts separados
+    if (error?.code === 'PGRST202') {
+      console.warn('[acceptFriendRequest] RPC não encontrada, usando fallback direto');
+      return await _acceptFriendFallback(fromId, requestId);
+    }
+
+    const msg = error?.message || data?.error || 'Erro desconhecido';
+    console.error('[acceptFriendRequest] RPC error:', msg);
+    return { ok: false, msg };
+  } catch (e) {
+    console.error('[acceptFriendRequest] catch:', e);
+    return { ok: false, msg: e.message || 'Erro inesperado' };
+  }
+}
+
+/** Fallback direto (funciona se a política RLS permitir ambas as direções) */
+async function _acceptFriendFallback(fromId, requestId) {
+  try {
+    // Minha direção (sempre permitido pelo RLS)
+    const { error: e1 } = await sb.from('friends')
+      .upsert({ user_id: authUserId, friend_id: fromId }, { onConflict: 'user_id,friend_id', ignoreDuplicates: true });
+    if (e1) {
+      console.error('[_acceptFriendFallback] insert próprio:', e1.code, e1.message);
+      return { ok: false, msg: e1.message };
+    }
+
+    // Direção inversa (pode falhar por RLS — rode o SQL abaixo)
+    const { error: e2 } = await sb.from('friends')
+      .upsert({ user_id: fromId, friend_id: authUserId }, { onConflict: 'user_id,friend_id', ignoreDuplicates: true });
+    if (e2) {
+      console.error('[_acceptFriendFallback] insert inverso:', e2.code, e2.message, '→ rode o SQL accept_friend_request no Supabase');
+      return { ok: false, msg: 'Permissão negada ao criar amizade. Rode o SQL accept_friend_request no Supabase.' };
+    }
+
+    // Deleta o pedido
     if (requestId) {
       await sb.from('friend_requests').delete().eq('id', requestId);
     } else {
-      await sb.from('friend_requests').delete()
-        .eq('from_id', fromId).eq('to_id', authUserId);
+      await sb.from('friend_requests').delete().eq('from_id', fromId).eq('to_id', authUserId);
     }
-    return true;
+    return { ok: true };
   } catch (e) {
-    console.error('[acceptFriendRequest] erro:', e);
-    return false;
+    console.error('[_acceptFriendFallback] catch:', e);
+    return { ok: false, msg: e.message };
   }
 }
 
@@ -6436,12 +6473,13 @@ async function handleAddFriend(friendId, btn) {
 
 async function handleAcceptFriend(fromId, requestId, btn) {
   if (btn) btn.disabled = true;
-  const ok = await acceptFriendRequest(fromId, requestId);
-  if (ok) {
+  const res = await acceptFriendRequest(fromId, requestId);
+  if (res.ok) {
     showNotification('✅ Pedido aceito! Vocês agora são amigos.', 'success');
     renderFriendsPage();
   } else {
-    showNotification('Erro ao aceitar pedido.', 'error');
+    showNotification('❌ ' + (res.msg || 'Erro ao aceitar pedido.'), 'error');
+    console.error('[handleAcceptFriend]', res.msg);
     if (btn) btn.disabled = false;
   }
 }
