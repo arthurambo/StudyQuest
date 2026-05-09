@@ -4360,3 +4360,104 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
   background: rgba(124,58,237,.05) !important;
   flex-direction: column;
 }
+
+/* ── CRONOGRAMA SEMANAL ─────────────────────────────────────── */
+.schedule-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: .6rem;
+  margin-top: .75rem;
+}
+.schedule-day-card {
+  background: var(--bg-card, rgba(255,255,255,.05));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: .65rem .75rem;
+}
+.schedule-day-today {
+  border-color: rgba(124,58,237,.5);
+  background: rgba(124,58,237,.07);
+}
+.schedule-day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: .4rem;
+}
+.schedule-day-name { font-weight: 800; font-size: .82rem; }
+.schedule-today-badge {
+  background: rgba(124,58,237,.3);
+  color: #a78bfa;
+  font-size: .62rem;
+  padding: .05rem .3rem;
+  border-radius: 4px;
+  margin-left: .3rem;
+}
+.schedule-add-btn { font-size: 1rem; line-height: 1; padding: 0 .3rem; }
+.schedule-subjects { display: flex; flex-wrap: wrap; gap: .3rem; }
+.schedule-tag {
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+  background: rgba(124,58,237,.15);
+  color: #a78bfa;
+  border-radius: 6px;
+  padding: .15rem .4rem;
+  font-size: .72rem;
+  font-weight: 700;
+}
+.schedule-tag button {
+  background: none; border: none; cursor: pointer;
+  color: #a78bfa; font-size: .8rem; line-height: 1;
+  padding: 0; opacity: .7;
+}
+.schedule-tag button:hover { opacity: 1; }
+.schedule-empty { font-size: .72rem; color: var(--text-muted); }
+
+/* ── TAREFAS DIÁRIAS ─────────────────────────────────────────── */
+.daily-tasks-section {
+  background: var(--bg-card, rgba(255,255,255,.05));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+}
+.daily-tasks-header { margin-bottom: .75rem; }
+.daily-tasks-header > div:first-child {
+  display: flex; align-items: center; gap: .6rem; margin-bottom: .4rem;
+}
+.daily-tasks-title  { font-weight: 800; font-size: 1rem; }
+.daily-tasks-progress {
+  font-size: .75rem; color: var(--text-muted);
+  background: rgba(255,255,255,.07); border-radius: 10px;
+  padding: .1rem .45rem;
+}
+.daily-tasks-bar-wrap {
+  height: 4px; background: rgba(255,255,255,.1); border-radius: 2px; overflow: hidden;
+}
+.daily-tasks-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #7c3aed, #34d399);
+  border-radius: 2px;
+  transition: width .4s ease;
+}
+.daily-tasks-list { display: flex; flex-direction: column; gap: .5rem; }
+.daily-task-card {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .65rem .75rem;
+  border-radius: 10px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: background .15s, opacity .15s;
+}
+.daily-task-card:hover { background: rgba(124,58,237,.1); }
+.daily-task-done { opacity: .55; }
+.daily-task-done .daily-task-title { text-decoration: line-through; }
+.daily-task-icon { font-size: 1.4rem; flex-shrink: 0; }
+.daily-task-info { flex: 1; min-width: 0; }
+.daily-task-title { font-weight: 700; font-size: .88rem; }
+.daily-task-desc  { font-size: .75rem; color: var(--text-muted); margin-top: .1rem; }
+.daily-task-check { font-size: 1.1rem; flex-shrink: 0; }

@@ -190,6 +190,15 @@ const IA_MODES = [
   { id: 'prova',       label: '📋 Prova',     cost: 10 },
 ];
 
+const WEEKDAY_NAMES = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+const WEEKDAY_SHORT = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+
+const DAILY_TASK_TYPES = [
+  { id: 'resumo',  icon: '📝', label: 'Mini Resumo',    mkDesc: s => `Escreva um resumo curto sobre ${s} estudado hoje.` },
+  { id: 'revisao', icon: '⚡', label: 'Revisão Rápida', mkDesc: s => `Revise rapidamente o conteúdo de ${s} visto hoje.` },
+  { id: 'feynman', icon: '🧠', label: 'Método Feynman', mkDesc: s => `Explique ${s} com suas próprias palavras como se ensinasse alguém.` },
+];
+
 // ── Frases motivacionais ──────────────────────────────────────
 // Presentes surpresa diários gerados pelo sistema
 const SURPRISE_GIFTS_POOL = [
@@ -315,6 +324,10 @@ let state = {
   isSuspect: false,         // lido do Supabase (coluna is_suspect)
   penaltyType: null,        // null | 'limit' | 'warn'
   aiHistory: [],            // histórico do chat IA [{role,content}]
+  schedule:        {},   // { 0:['Matéria',...], 1:[...], ... } — 0=Dom
+  dailyTasks:      [],   // tarefas geradas hoje [{id,type,icon,label,subject,title,description,done,doneAt,createdDate}]
+  dailyTasksDate:  '',   // 'YYYY-MM-DD' — data da última geração
+  username:        '',   // @username do usuário
   settings: {
     schoolAverage:       7,       // média escolar padrão
     notificationsEnabled: true,   // notificações visuais
@@ -1097,6 +1110,155 @@ function autoArchiveTasks() {
   }
 }
 
+/* ── CRONOGRAMA SEMANAL ──────────────────────────────────────────────────── */
+
+function renderScheduleEditor() {
+  const el = document.getElementById('schedule-editor');
+  if (!el) return;
+  const schedule = state.schedule || {};
+  const today = new Date().getDay();
+
+  el.innerHTML = `
+    <div class="page-header" style="margin-top:1.5rem">
+      <h2 style="font-size:1.1rem;margin:0">📚 Meu Cronograma Semanal</h2>
+      <p class="page-subtitle" style="margin:0">Defina as matérias de cada dia para gerar tarefas diárias automaticamente</p>
+    </div>
+    <div class="schedule-grid">
+      ${WEEKDAY_NAMES.map((name, day) => {
+        const subjects = schedule[day] || [];
+        const isToday = day === today;
+        return `
+        <div class="schedule-day-card ${isToday ? 'schedule-day-today' : ''}">
+          <div class="schedule-day-header">
+            <span class="schedule-day-name">${WEEKDAY_SHORT[day]}${isToday ? ' <span class="schedule-today-badge">Hoje</span>' : ''}</span>
+            <button class="btn-sm btn-ghost schedule-add-btn" onclick="promptAddSubject(${day})">+</button>
+          </div>
+          <div class="schedule-subjects" id="sched-day-${day}">
+            ${subjects.length
+              ? subjects.map((s, i) => `
+                <div class="schedule-tag">
+                  <span>${escHtml(s)}</span>
+                  <button onclick="removeScheduleSubject(${day},${i})" title="Remover">×</button>
+                </div>`).join('')
+              : '<span class="schedule-empty">Nenhuma</span>'}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+function promptAddSubject(day) {
+  const name = prompt(`Adicionar matéria para ${WEEKDAY_NAMES[day]}:`);
+  if (!name || !name.trim()) return;
+  addScheduleSubject(day, name.trim());
+}
+
+function addScheduleSubject(day, subject) {
+  if (!state.schedule) state.schedule = {};
+  if (!state.schedule[day]) state.schedule[day] = [];
+  if (state.schedule[day].some(s => s.toLowerCase() === subject.toLowerCase())) {
+    showNotification('Essa matéria já está no cronograma!', 'warning'); return;
+  }
+  state.schedule[day].push(subject);
+  saveState(); scheduleSyncToSupabase();
+  renderScheduleEditor();
+  showNotification(`📚 ${subject} adicionada ao ${WEEKDAY_NAMES[day]}!`, 'success');
+}
+
+function removeScheduleSubject(day, idx) {
+  if (!state.schedule?.[day]) return;
+  state.schedule[day].splice(idx, 1);
+  saveState(); scheduleSyncToSupabase();
+  renderScheduleEditor();
+}
+
+/* ── GERAÇÃO DE TAREFAS DIÁRIAS ─────────────────────────────────────────── */
+
+function generateDailyTasks() {
+  const today = todayStr();
+  if (state.dailyTasksDate === today && (state.dailyTasks || []).length) return; // já gerou hoje
+
+  const weekday  = new Date().getDay();
+  const subjects = (state.schedule || {})[weekday] || [];
+  if (!subjects.length) { state.dailyTasksDate = today; saveState(); return; }
+
+  // Gera 1 tarefa por matéria (máximo 3), rotacionando o tipo
+  const tasks = subjects.slice(0, 3).map((subject, i) => {
+    const type = DAILY_TASK_TYPES[i % DAILY_TASK_TYPES.length];
+    return {
+      id:          'dt_' + Date.now() + '_' + i,
+      type:        type.id,
+      icon:        type.icon,
+      label:       type.label,
+      subject,
+      title:       `${type.label} — ${subject}`,
+      description: type.mkDesc(subject),
+      done:        false,
+      doneAt:      null,
+      createdDate: today,
+    };
+  });
+
+  state.dailyTasks    = tasks;
+  state.dailyTasksDate = today;
+  saveState();
+}
+
+function renderDailyTasksSection() {
+  const el = document.getElementById('daily-tasks-section');
+  if (!el) return;
+
+  generateDailyTasks();
+  const tasks = state.dailyTasks || [];
+  if (!tasks.length) { el.innerHTML = ''; return; }
+
+  const today = todayStr();
+  if (state.dailyTasksDate !== today) { el.innerHTML = ''; return; }
+
+  const done  = tasks.filter(t => t.done).length;
+  const total = tasks.length;
+
+  el.innerHTML = `
+    <div class="daily-tasks-section">
+      <div class="daily-tasks-header">
+        <div>
+          <span class="daily-tasks-title">⚡ Tarefas do Dia</span>
+          <span class="daily-tasks-progress">${done}/${total} concluídas</span>
+        </div>
+        <div class="daily-tasks-bar-wrap">
+          <div class="daily-tasks-bar" style="width:${total ? Math.round(done/total*100) : 0}%"></div>
+        </div>
+      </div>
+      <div class="daily-tasks-list">
+        ${tasks.map(t => `
+          <div class="daily-task-card ${t.done ? 'daily-task-done' : ''}" onclick="toggleDailyTask('${t.id}')">
+            <div class="daily-task-icon">${t.icon}</div>
+            <div class="daily-task-info">
+              <div class="daily-task-title">${escHtml(t.title)}</div>
+              <div class="daily-task-desc">${escHtml(t.description)}</div>
+            </div>
+            <div class="daily-task-check">${t.done ? '✅' : '⬜'}</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+function toggleDailyTask(id) {
+  const task = (state.dailyTasks || []).find(t => t.id === id);
+  if (!task || task.done) return;
+  task.done   = true;
+  task.doneAt = Date.now();
+
+  // Recompensa modesta (tarefas diárias são simples)
+  addXp(20, `${task.icon} ${task.label} concluído!`);
+  addCoins(8);
+
+  saveState();
+  generateDynamicMissions();
+  renderDailyTasksSection();
+  showNotification(`${task.icon} ${task.label} concluído! +20 XP`, 'success');
+}
+
 function renderTaskItem(t, inHistory) {
   inHistory = inHistory || false;
   const subj     = state.subjects.find(s => s.id === t.subjectId);
@@ -1149,6 +1311,7 @@ function renderTasks() {
   applySortSelect('tasks');
   const sectionsEl = document.getElementById('tasks-sections');
   const listEl = document.getElementById('tasks-list');
+  renderDailyTasksSection();
   sectionsEl.innerHTML = '';
   listEl.innerHTML = '';
 
@@ -1822,6 +1985,29 @@ function generateDynamicMissions() {
       name: 'Lançar nota de 1 prova pendente',
       goal: 1, progress: 0, reward: 35, key: 'examsToday', completed: false, type: 'auto',
     });
+  }
+
+  // Missões de tarefas diárias
+  const dailyTasks   = state.dailyTasks || [];
+  const dailyDone    = dailyTasks.filter(t => t.done && t.createdDate === today).length;
+  const dailyTotal   = dailyTasks.filter(t => t.createdDate === today).length;
+  const hasFeynman   = dailyTasks.some(t => t.done && t.type === 'feynman' && t.createdDate === today);
+  const hasRevisao   = dailyTasks.some(t => t.done && t.type === 'revisao' && t.createdDate === today);
+
+  if (dailyTotal >= 1 && !existingIds.includes('daily_1')) {
+    state.dynamicMissions.push({ id: 'daily_1', icon: '⚡', name: 'Tarefa do Dia', goal: 1, progress: Math.min(dailyDone, 1), reward: 30, key: 'dailyTasksToday', completed: dailyDone >= 1, type: 'auto' });
+  }
+  if (dailyTotal >= 2 && !existingIds.includes('daily_2')) {
+    state.dynamicMissions.push({ id: 'daily_2', icon: '🎯', name: 'Aluno Dedicado', goal: 2, progress: Math.min(dailyDone, 2), reward: 60, key: 'dailyTasksToday', completed: dailyDone >= 2, type: 'auto' });
+  }
+  if (dailyTotal >= 3 && !existingIds.includes('daily_all')) {
+    state.dynamicMissions.push({ id: 'daily_all', icon: '🏆', name: 'Dia Perfeito!', goal: dailyTotal, progress: Math.min(dailyDone, dailyTotal), reward: 100, key: 'dailyTasksToday', completed: dailyDone >= dailyTotal, type: 'auto' });
+  }
+  if (dailyTasks.some(t => t.type === 'feynman' && t.createdDate === today) && !existingIds.includes('daily_feynman')) {
+    state.dynamicMissions.push({ id: 'daily_feynman', icon: '🧠', name: 'Método Feynman', goal: 1, progress: hasFeynman ? 1 : 0, reward: 50, key: 'dailyTasksToday', completed: hasFeynman, type: 'auto' });
+  }
+  if (dailyTasks.some(t => t.type === 'revisao' && t.createdDate === today) && !existingIds.includes('daily_revisao')) {
+    state.dynamicMissions.push({ id: 'daily_revisao', icon: '⚡', name: 'Revisão Rápida', goal: 1, progress: hasRevisao ? 1 : 0, reward: 40, key: 'dailyTasksToday', completed: hasRevisao, type: 'auto' });
   }
 
   saveState();
@@ -2661,6 +2847,7 @@ function renderCalendar() {
   }
 
   document.getElementById('cal-grid').innerHTML = html;
+  renderScheduleEditor();
 }
 
 function showCalDay(dateStr) {
@@ -4658,6 +4845,7 @@ async function launchApp() {
     checkDailyReset();
     checkStreakIntegrity();
     autoArchiveTasks();
+    generateDailyTasks();
     updateAllUI();
     navigateTo('dashboard');
     console.log('[App] App iniciado para:', state.name, '| XP:', state.xp, '| Nível:', state.level);
