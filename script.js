@@ -6112,23 +6112,25 @@ async function acceptFriendRequest(fromId, requestId) {
   }
 }
 
-/** Fallback direto (funciona se a política RLS permitir ambas as direções) */
+/** Fallback direto — usa INSERT simples e ignora duplicatas (23505) */
 async function _acceptFriendFallback(fromId, requestId) {
   try {
-    // Minha direção (sempre permitido pelo RLS)
+    // Insere minha direção
     const { error: e1 } = await sb.from('friends')
-      .upsert({ user_id: authUserId, friend_id: fromId }, { onConflict: 'user_id,friend_id', ignoreDuplicates: true });
-    if (e1) {
+      .insert({ user_id: authUserId, friend_id: fromId });
+    if (e1 && e1.code !== '23505') {
       console.error('[_acceptFriendFallback] insert próprio:', e1.code, e1.message);
       return { ok: false, msg: e1.message };
     }
 
-    // Direção inversa (pode falhar por RLS — rode o SQL abaixo)
+    // Insere direção inversa
     const { error: e2 } = await sb.from('friends')
-      .upsert({ user_id: fromId, friend_id: authUserId }, { onConflict: 'user_id,friend_id', ignoreDuplicates: true });
-    if (e2) {
-      console.error('[_acceptFriendFallback] insert inverso:', e2.code, e2.message, '→ rode o SQL accept_friend_request no Supabase');
-      return { ok: false, msg: 'Permissão negada ao criar amizade. Rode o SQL accept_friend_request no Supabase.' };
+      .insert({ user_id: fromId, friend_id: authUserId });
+    if (e2 && e2.code !== '23505') {
+      console.error('[_acceptFriendFallback] insert inverso:', e2.code, e2.message);
+      // Código 42501 = permissão negada por RLS
+      if (e2.code === '42501') return { ok: false, msg: 'Permissão negada. Execute o SQL accept_friend_request no Supabase.' };
+      return { ok: false, msg: e2.message };
     }
 
     // Deleta o pedido
