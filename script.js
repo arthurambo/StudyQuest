@@ -641,6 +641,7 @@ async function loadUserData() {
       if (data.is_admin   != null) merged.isAdmin      = !!data.is_admin;
       if (data.is_suspect != null) merged.isSuspect    = !!data.is_suspect;
       if (data.penalty_type    )   merged.penaltyType  = data.penalty_type;
+      if (data.username        )   merged.username     = data.username;
       return merged;
     }
 
@@ -683,7 +684,8 @@ async function saveUserData(data) {
         level:   data.level   || 1,
         coins:   data.coins   || 0,
         iacoins: data.iacoins || 0,
-        data:    { ...data, friendCode: _friendCode(uid) }, // friendCode embutido para busca
+        username: data.username || _generateUsername(uid),
+        data:    { ...data },
       });
     if (error) console.warn('[Supabase] ❌ Erro ao salvar (código:', error.code, '):', error.message);
     else       console.log('[Supabase] ✅ State salvo — XP:', data.xp, '| Nível:', data.level, '| Nome:', data.name);
@@ -5913,8 +5915,8 @@ function renderProfilePage() {
       </div>
     </div>
     ${authUserId ? `<div class="friend-code-box">
-      <span class="friend-code-label">🔑 Código de amizade:</span>
-      <span class="friend-code-val">${_friendCode(authUserId)}</span>
+      <span class="friend-code-label">🔑 Seu código de amigo:</span>
+      <span class="friend-code-val">@${state.username || _generateUsername(authUserId)}</span>
       <button class="btn-sm btn-secondary" onclick="copyFriendCode()">📋 Copiar</button>
     </div>` : ''}
     ${authNote}
@@ -5941,10 +5943,11 @@ function _parseUserRow(row) {
   const d = row.data || {};
   return {
     id:              row.id,
-    name:            row.name   || 'Herói',
-    level:           row.level  || 1,
-    xp:              row.xp     || 0,
-    avatar:          d.avatar   || '🧙',
+    name:            row.name     || 'Herói',
+    username:        row.username || _generateUsername(row.id),
+    level:           row.level    || 1,
+    xp:              row.xp       || 0,
+    avatar:          d.avatar     || '🧙',
     avatarType:      d.avatarType || 'emoji',
     avatarUrl:       d.avatarUrl  || '',
     equippedFrame:   d.cosmetics?.equippedFrame  || null,
@@ -5969,24 +5972,28 @@ function _avatarHtml(user, extraClass = '') {
 async function getUserById(userId) {
   if (!sb || !userId) return null;
   try {
-    const { data } = await sb.from('users').select('id, name, xp, level, data').eq('id', userId).single();
+    const { data } = await sb.from('users').select('id, name, xp, level, data, username').eq('id', userId).single();
     return _parseUserRow(data);
   } catch (e) { return null; }
 }
 
-/** Busca usuários por nome na tabela users */
-async function searchUsersByName(query) {
+/** Busca usuários por nome OU por @username em uma só query */
+async function searchUsers(query) {
   if (!sb || !query.trim()) return [];
+  const q = query.trim().replace(/^@/, ''); // aceita @username ou username
   try {
     const { data } = await sb
       .from('users')
-      .select('id, name, xp, level, data')
-      .ilike('name', `%${query.trim()}%`)
+      .select('id, name, xp, level, data, username')
+      .or(`name.ilike.%${q}%,username.ilike.%${q}%`)
       .neq('id', authUserId || '')
-      .limit(10);
+      .limit(15);
     return (data || []).map(_parseUserRow).filter(Boolean);
-  } catch (e) { return []; }
+  } catch (e) { console.error('[searchUsers]', e); return []; }
 }
+
+/** @deprecated — mantido por compatibilidade */
+async function searchUsersByName(query) { return searchUsers(query); }
 
 /** Lista os IDs dos amigos do usuário atual */
 async function listFriendIds() {
@@ -6003,7 +6010,7 @@ async function listFriendsWithData() {
   try {
     const ids = await listFriendIds();
     if (!ids.length) return [];
-    const { data } = await sb.from('users').select('id, name, xp, level, data').in('id', ids);
+    const { data } = await sb.from('users').select('id, name, xp, level, data, username').in('id', ids);
     return (data || []).map(_parseUserRow).filter(Boolean);
   } catch (e) { return []; }
 }
@@ -6078,7 +6085,7 @@ async function listPendingRequests() {
     const { data: reqs } = await sb.from('friend_requests').select('id, from_id, created_at').eq('to_id', authUserId).eq('status', 'pending');
     if (!reqs || !reqs.length) return [];
     const ids = reqs.map(r => r.from_id);
-    const { data: users } = await sb.from('users').select('id, name, xp, level, data').in('id', ids);
+    const { data: users } = await sb.from('users').select('id, name, xp, level, data, username').in('id', ids);
     const userMap = {};
     (users || []).forEach(u => { userMap[u.id] = _parseUserRow(u); });
     return reqs.map(r => ({ ...r, user: userMap[r.from_id] })).filter(r => r.user);
@@ -6168,27 +6175,15 @@ async function listSentRequests() {
       .select('id, to_id, created_at').eq('from_id', authUserId).eq('status', 'pending');
     if (!reqs?.length) return [];
     const ids = reqs.map(r => r.to_id);
-    const { data: users } = await sb.from('users').select('id, name, xp, level, data').in('id', ids);
+    const { data: users } = await sb.from('users').select('id, name, xp, level, data, username').in('id', ids);
     const uMap = {};
     (users || []).forEach(u => { uMap[u.id] = _parseUserRow(u); });
     return reqs.map(r => ({ ...r, user: uMap[r.to_id] })).filter(r => r.user);
   } catch (e) { return []; }
 }
 
-/** Busca usuário pelo código de amizade (8 hex chars) */
-async function searchUserByCode(code) {
-  if (!sb) return [];
-  const clean = code.trim().toUpperCase();
-  if (clean.length !== 8) return [];
-  try {
-    // Busca pelo campo friendCode salvo no JSONB data
-    const { data, error } = await sb.from('users')
-      .select('id, name, xp, level, data')
-      .filter('data->>friendCode', 'eq', clean);
-    if (error) console.error('[FriendCode] Erro na busca por código:', error.message, error);
-    return (data || []).map(_parseUserRow).filter(Boolean);
-  } catch (e) { console.error('[FriendCode] Exceção:', e); return []; }
-}
+/** @deprecated — searchUsers() já cobre username */
+async function searchUserByCode(code) { return searchUsers(code); }
 
 /** Amigos de amigos (sugestões) — exclui quem já é amigo ou tem pedido pendente */
 async function loadFriendSuggestions(myFriendIds, sentIds) {
@@ -6203,7 +6198,7 @@ async function loadFriendSuggestions(myFriendIds, sentIds) {
     }
     const cids = Object.keys(countMap);
     if (!cids.length) return [];
-    const { data: users } = await sb.from('users').select('id, name, xp, level, data').in('id', cids);
+    const { data: users } = await sb.from('users').select('id, name, xp, level, data, username').in('id', cids);
     return (users || [])
       .map(u => ({ ..._parseUserRow(u), mutualCount: countMap[u.id] || 0 }))
       .sort((a, b) => b.mutualCount - a.mutualCount)
@@ -6218,6 +6213,7 @@ function _friendCard(user) {
     ${_avatarHtml(user)}
     <div class="friend-info">
       <div class="friend-name">${escHtml(user.name)}</div>
+      ${user.username ? `<div class="friend-username">@${escHtml(user.username)}</div>` : ''}
       <div class="friend-level">⚔️ Nível ${user.level} · ✨ ${user.xp} XP</div>
       ${user.favoriteSubject ? `<div class="friend-fav">❤️ ${escHtml(user.favoriteSubject)}</div>` : ''}
     </div>
@@ -6293,12 +6289,8 @@ async function renderFriendsPage() {
     <!-- Painel de busca (fechado por padrão) -->
     <div id="add-friend-section" class="friends-panel" style="display:none">
       <div class="friends-search-bar">
-        <input type="text" id="friend-search-input" placeholder="🔍 Buscar por nome..." autocomplete="off">
+        <input type="text" id="friend-search-input" placeholder="🔍 Nome ou @codigo (ex: @user_a3f7b2)" autocomplete="off">
         <button class="btn-primary" id="friend-search-btn">Buscar</button>
-      </div>
-      <div class="friends-search-bar" style="margin-top:.5rem">
-        <input type="text" id="friend-code-input" placeholder="🔑 Adicionar por código (ex: A3F7B2C1)" autocomplete="off" maxlength="8">
-        <button class="btn-secondary" id="friend-code-btn">Adicionar</button>
       </div>
       <div id="friend-search-results"></div>
       <div id="friend-suggestions-wrap"></div>
@@ -6360,9 +6352,6 @@ async function renderFriendsPage() {
 
   document.getElementById('friend-search-btn').addEventListener('click', doFriendSearch);
   document.getElementById('friend-search-input').addEventListener('keydown', e => { if (e.key === 'Enter') doFriendSearch(); });
-
-  document.getElementById('friend-code-btn').addEventListener('click', doFriendCodeSearch);
-  document.getElementById('friend-code-input').addEventListener('keydown', e => { if (e.key === 'Enter') doFriendCodeSearch(); });
 }
 
 async function doFriendSearch() {
@@ -6373,7 +6362,7 @@ async function doFriendSearch() {
 
   resultsDiv.innerHTML = '<div class="social-loading">Buscando...</div>';
 
-  const results = await searchUsersByName(query);
+  const results = await searchUsers(query);
   if (!results.length) {
     resultsDiv.innerHTML = '<div class="social-empty">Nenhum usuário encontrado.</div>';
     return;
@@ -6394,6 +6383,7 @@ async function doFriendSearch() {
       <div class="friend-avatar">${u.avatar}</div>
       <div class="friend-info">
         <div class="friend-name">${escHtml(u.name)}</div>
+        <div class="friend-username">@${escHtml(u.username)}</div>
         <div class="friend-level">⚔️ Nível ${u.level} · ✨ ${u.xp} XP</div>
         ${u.favoriteSubject ? `<div class="friend-fav">❤️ ${escHtml(u.favoriteSubject)}</div>` : ''}
       </div>
@@ -6402,18 +6392,10 @@ async function doFriendSearch() {
   }).join('');
 }
 
+/** @deprecated — substituído por doFriendSearch + searchUsers() */
 async function doFriendCodeSearch() {
-  const code = document.getElementById('friend-code-input')?.value.trim().toUpperCase();
-  const resultsDiv = document.getElementById('friend-search-results');
-  if (!resultsDiv) return;
-  if (!code) { resultsDiv.innerHTML = ''; return; }
-  if (code.length !== 8) {
-    resultsDiv.innerHTML = '<div class="social-empty">O código deve ter 8 caracteres.</div>';
-    return;
-  }
-
-  resultsDiv.innerHTML = '<div class="social-loading">Buscando...</div>';
-  const results = await searchUserByCode(code);
+  const input = document.getElementById('friend-code-input') || document.getElementById('friend-search-input');
+  if (input) { input.value && doFriendSearch(); }
 
   if (!results.length) {
     resultsDiv.innerHTML = '<div class="social-empty">Nenhum usuário encontrado com esse código.</div>';
@@ -6616,15 +6598,20 @@ function _groupCode(id) {
 }
 
 /** Código de amizade: primeiros 8 hex chars do UUID, maiúsculo */
-function _friendCode(userId) {
-  return userId ? userId.replace(/-/g, '').substring(0, 8).toUpperCase() : '';
+/** Gera um @username inicial a partir do UUID (usado no primeiro save) */
+function _generateUsername(userId) {
+  if (!userId) return '';
+  return 'user_' + userId.replace(/-/g, '').substring(0, 6).toLowerCase();
 }
 
+/** @deprecated — use state.username ou _generateUsername() */
+function _friendCode(userId) { return _generateUsername(userId).toUpperCase(); }
+
 function copyFriendCode() {
-  const code = _friendCode(authUserId);
-  navigator.clipboard?.writeText(code)
-    .then(() => showNotification('🔑 Código copiado!', 'success'))
-    .catch(() => showNotification('Código: ' + code, 'info'));
+  const code = state.username || _generateUsername(authUserId);
+  navigator.clipboard?.writeText('@' + code)
+    .then(() => showNotification('✅ @' + code + ' copiado!', 'success'))
+    .catch(() => showNotification('Seu código: @' + code, 'info'));
 }
 
 async function createGroup(name) {
@@ -6687,7 +6674,7 @@ async function loadGroupMembers(groupId) {
     const { data: members } = await sb.from('group_members').select('user_id').eq('group_id', groupId);
     if (!members || !members.length) return [];
     const ids = members.map(m => m.user_id);
-    const { data: users } = await sb.from('users').select('id, name, xp, level, data').in('id', ids);
+    const { data: users } = await sb.from('users').select('id, name, xp, level, data, username').in('id', ids);
     const userMap = {};
     (users || []).forEach(u => { userMap[u.id] = _parseUserRow(u); });
     return members.map(m => ({ profile: userMap[m.user_id] }));
