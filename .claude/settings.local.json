@@ -19,7 +19,9 @@
       "Bash(node --check script.js)",
       "Bash(git pull *)",
       "Bash(git stash *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(grep -v \"//.*group\")",
+      "Bash(node -e ' *)"
     ]
   }
 }
