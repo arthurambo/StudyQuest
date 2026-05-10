@@ -199,6 +199,76 @@ const DAILY_TASK_TYPES = [
   { id: 'feynman', icon: '🧠', label: 'Método Feynman', mkDesc: s => `Explique ${s} com suas próprias palavras como se ensinasse alguém.` },
 ];
 
+// ============================================================
+// RANKING & MEDALHAS DOS GRUPOS
+// ============================================================
+
+/** Definições das 9 medalhas de grupo */
+const GROUP_MEDAL_DEFS = [
+  {
+    type: 'xp_master',    icon: '📈', label: 'Mestre do XP',
+    desc: 'Mais XP ganho no grupo esta semana',
+    scoreKey: 'totalXp',
+    rarityThresholds: { bronze: 50, silver: 200, gold: 500, legendary: 1000 },
+  },
+  {
+    type: 'most_active',  icon: '⚡', label: 'Mais Ativo',
+    desc: 'Mais sessões de estudo registradas',
+    scoreKey: 'sessionCount',
+    rarityThresholds: { bronze: 3, silver: 7, gold: 15, legendary: 25 },
+  },
+  {
+    type: 'revisao_king', icon: '📚', label: 'Mestre da Revisão',
+    desc: 'Mais revisões rápidas concluídas',
+    scoreKey: 'revisaoCount',
+    rarityThresholds: { bronze: 1, silver: 3, gold: 5, legendary: 7 },
+  },
+  {
+    type: 'feynman_king', icon: '🧠', label: 'Feynman Master',
+    desc: 'Mais tarefas Método Feynman concluídas',
+    scoreKey: 'feynmanCount',
+    rarityThresholds: { bronze: 1, silver: 2, gold: 4, legendary: 6 },
+  },
+  {
+    type: 'resumo_king',  icon: '📝', label: 'Rei dos Resumos',
+    desc: 'Mais mini resumos concluídos',
+    scoreKey: 'resumoCount',
+    rarityThresholds: { bronze: 1, silver: 3, gold: 5, legendary: 7 },
+  },
+  {
+    type: 'streak',       icon: '🔥', label: 'Sequência Suprema',
+    desc: 'Maior sequência de dias de estudo',
+    scoreKey: 'streak',
+    rarityThresholds: { bronze: 3, silver: 7, gold: 14, legendary: 30 },
+  },
+  {
+    type: 'focus',        icon: '🎯', label: 'Foco Total',
+    desc: 'Maior XP acumulado em um único dia',
+    scoreKey: 'maxDayXp',
+    rarityThresholds: { bronze: 50, silver: 150, gold: 300, legendary: 500 },
+  },
+  {
+    type: 'evolution',    icon: '🚀', label: 'Evolução Rápida',
+    desc: 'Maior crescimento de XP na semana',
+    scoreKey: 'totalXp',
+    rarityThresholds: { bronze: 100, silver: 300, gold: 700, legendary: 1500 },
+  },
+  {
+    type: 'explorer',     icon: '📖', label: 'Explorador',
+    desc: 'Estudou mais matérias diferentes',
+    scoreKey: 'subjectCount',
+    rarityThresholds: { bronze: 2, silver: 4, gold: 6, legendary: 8 },
+  },
+];
+
+/** Recompensas e cores de cada raridade */
+const MEDAL_RARITIES = {
+  bronze:    { label: 'Bronze',   color: '#cd7f32', bg: 'rgba(205,127,50,.12)',  xp: 10,  coins: 5  },
+  silver:    { label: 'Prata',    color: '#9e9e9e', bg: 'rgba(158,158,158,.12)', xp: 25,  coins: 15 },
+  gold:      { label: 'Ouro',     color: '#f9a825', bg: 'rgba(249,168,37,.12)',  xp: 50,  coins: 30 },
+  legendary: { label: 'Lendária', color: '#9b59b6', bg: 'rgba(155,89,182,.15)', xp: 100, coins: 60 },
+};
+
 // ── Frases motivacionais ──────────────────────────────────────
 // Presentes surpresa diários gerados pelo sistema
 const SURPRISE_GIFTS_POOL = [
@@ -1253,6 +1323,10 @@ function toggleDailyTask(id) {
   addXp(20, `${task.icon} ${task.label} concluído!`);
   addCoins(8);
 
+  // Registra no ranking dos grupos com source específico da tarefa
+  const taskSource = `task_${task.type || 'general'}`;
+  logGroupXP(20, taskSource).catch(() => {});
+
   saveState();
   generateDynamicMissions();
   renderDailyTasksSection();
@@ -1747,6 +1821,9 @@ function addXp(amount, bonusMsg = null) {
   updateDashboard();
   checkMissionGoals();
   scheduleSyncToSupabase(); // → Supabase: XP + level em 3s (debounced)
+
+  // Registra no ranking dos grupos (fire-and-forget, não bloqueia UI)
+  logGroupXP(amount, 'general').catch(() => {});
 }
 
 function addCoins(amount) {
@@ -6689,6 +6766,31 @@ async function openFriendProfile(userId) {
   document.getElementById('friend-profile-best').textContent   = '';
   document.getElementById('friend-profile-achs').innerHTML     = achs || '<em>Sem conquistas ainda.</em>';
 
+  // ── Medalhas de grupo desta semana ──
+  const medalsEl = document.getElementById('friend-profile-medals');
+  if (medalsEl) {
+    loadUserMedals(userId).then(medals => {
+      if (!medals.length) {
+        medalsEl.innerHTML = '';
+        return;
+      }
+      const chips = medals.map(m => {
+        const def    = GROUP_MEDAL_DEFS.find(d => d.type === m.medal_type);
+        const rarity = MEDAL_RARITIES[m.rarity];
+        if (!def || !rarity) return '';
+        return `<div class="profile-medal-chip" style="color:${rarity.color};border-color:${rarity.color}" title="${def.desc} — ${rarity.label}">
+          ${def.icon} ${def.label}
+        </div>`;
+      }).join('');
+      medalsEl.innerHTML = chips
+        ? `<div class="profile-medals-section">
+             <div class="profile-medals-title">🏅 Medalhas da Semana</div>
+             <div class="profile-medals-list">${chips}</div>
+           </div>`
+        : '';
+    }).catch(() => { medalsEl.innerHTML = ''; });
+  }
+
   // Botões de interação (só para amigos reais logados)
   const actionsEl = document.getElementById('friend-profile-actions');
   if (actionsEl && authUserId && userId !== authUserId) {
@@ -6773,6 +6875,323 @@ async function handleSendGift() {
 }
 
 // ============================================================
+// GRUPOS — RANKING & MEDALHAS
+// ============================================================
+
+/** Chave ISO da semana atual, ex: '2026-W20' */
+function _isoWeekKey(date = new Date()) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const y = d.getUTCFullYear();
+  const w = Math.ceil((((d - new Date(Date.UTC(y, 0, 1))) / 86400000) + 1) / 7);
+  return `${y}-W${String(w).padStart(2, '0')}`;
+}
+
+/** Início da semana atual (segunda-feira 00:00 UTC) como ISO string */
+function _weekStart() {
+  const d = new Date();
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() - (day - 1));
+  d.setUTCHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
+/** Início do dia de hoje (00:00 hora local como UTC) */
+function _dayStart() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
+/** Cache dos IDs de grupo do usuário logado (evita consultas repetidas) */
+let _cachedGroupIds = null;
+
+/**
+ * Registra um ganho de XP na tabela group_xp_logs para todos os grupos do usuário.
+ * Fire-and-forget — não bloqueia o fluxo principal.
+ * @param {number} amount  - quantidade de XP ganho
+ * @param {string} source  - fonte: 'general' | 'task_resumo' | 'task_revisao' | 'task_feynman' | 'group_task'
+ */
+async function logGroupXP(amount, source = 'general') {
+  if (!sb || !authUserId || amount <= 0) return;
+  try {
+    if (!_cachedGroupIds) {
+      const { data } = await sb.from('group_members')
+        .select('group_id').eq('user_id', authUserId);
+      _cachedGroupIds = (data || []).map(r => r.group_id);
+    }
+    if (!_cachedGroupIds.length) return;
+
+    const rows = _cachedGroupIds.map(gid => ({
+      user_id: authUserId, group_id: gid, xp: amount, source,
+    }));
+    await sb.from('group_xp_logs').insert(rows);
+  } catch (e) {
+    console.warn('[GroupXP] Erro ao logar:', e.message);
+  }
+}
+
+/** Invalida o cache de grupos (ex: ao entrar/sair de grupo) */
+function _invalidateGroupCache() { _cachedGroupIds = null; }
+
+/** Busca ranking de um grupo (daily | weekly) → [{userId, xp}] ordenado desc */
+async function fetchGroupRanking(groupId, period = 'weekly') {
+  if (!sb) return [];
+  const since = period === 'daily' ? _dayStart() : _weekStart();
+  const { data, error } = await sb
+    .from('group_xp_logs')
+    .select('user_id, xp')
+    .eq('group_id', groupId)
+    .gte('created_at', since);
+  if (error || !data) return [];
+  const agg = {};
+  for (const row of data) agg[row.user_id] = (agg[row.user_id] || 0) + row.xp;
+  return Object.entries(agg)
+    .map(([userId, xp]) => ({ userId, xp }))
+    .sort((a, b) => b.xp - a.xp);
+}
+
+/** Calcula a raridade de uma medalha com base no score do ganhador */
+function _medalRarity(score, thresholds) {
+  if (score >= thresholds.legendary) return 'legendary';
+  if (score >= thresholds.gold)      return 'gold';
+  if (score >= thresholds.silver)    return 'silver';
+  if (score >= thresholds.bronze)    return 'bronze';
+  return null;
+}
+
+/**
+ * Agrega scores por usuário a partir dos logs da semana.
+ * Retorna { [userId]: { totalXp, sessionCount, revisaoCount, feynmanCount, resumoCount, maxDayXp, subjectCount, streak } }
+ */
+async function _calcMedalScores(groupId, members) {
+  if (!sb) return {};
+  const { data: logs } = await sb
+    .from('group_xp_logs')
+    .select('user_id, xp, source, created_at')
+    .eq('group_id', groupId)
+    .gte('created_at', _weekStart());
+
+  const entries = logs || [];
+  const scores  = {};
+
+  for (const m of members) {
+    const uid = m.profile?.id;
+    if (!uid) continue;
+
+    const uLogs        = entries.filter(e => e.user_id === uid);
+    const totalXp      = uLogs.reduce((s, e) => s + (e.xp || 0), 0);
+    const sessionCount = uLogs.length;
+    const revisaoCount = uLogs.filter(e => e.source === 'task_revisao').length;
+    const feynmanCount = uLogs.filter(e => e.source === 'task_feynman').length;
+    const resumoCount  = uLogs.filter(e => e.source === 'task_resumo').length;
+
+    // XP máximo em um único dia da semana
+    const byDay = {};
+    for (const e of uLogs) {
+      const day = (e.created_at || '').slice(0, 10);
+      byDay[day] = (byDay[day] || 0) + (e.xp || 0);
+    }
+    const maxDayXp = Object.values(byDay).length ? Math.max(...Object.values(byDay)) : 0;
+
+    // Matérias distintas (source = 'subject:NomeDaMatéria')
+    const subjects     = new Set(uLogs.map(e => e.source).filter(s => s?.startsWith('subject:')));
+    const subjectCount = subjects.size;
+
+    // Streak vem do perfil carregado
+    const streak = m.profile?.streak || 0;
+
+    scores[uid] = { totalXp, sessionCount, revisaoCount, feynmanCount, resumoCount, maxDayXp, subjectCount, streak };
+  }
+  return scores;
+}
+
+/**
+ * Calcula e atribui medalhas da semana atual para um grupo.
+ * Idempotente — UNIQUE constraint no banco evita duplicatas.
+ */
+async function calculateAndAwardMedals(groupId, members) {
+  if (!sb || !authUserId) return;
+  const weekKey = _isoWeekKey();
+  const scores  = await _calcMedalScores(groupId, members);
+  const uids    = Object.keys(scores);
+  if (!uids.length) return;
+
+  // Medalhas já atribuídas esta semana
+  const { data: existing } = await sb
+    .from('group_medals')
+    .select('user_id, medal_type')
+    .eq('group_id', groupId)
+    .eq('period_key', weekKey);
+  const alreadyAwarded = new Set((existing || []).map(r => `${r.medal_type}:${r.user_id}`));
+
+  const toInsert = [];
+  for (const def of GROUP_MEDAL_DEFS) {
+    // Encontra o ganhador (maior score)
+    let best = null, bestScore = -1;
+    for (const uid of uids) {
+      const s = scores[uid]?.[def.scoreKey] ?? 0;
+      if (s > bestScore) { bestScore = s; best = uid; }
+    }
+    if (!best || bestScore <= 0) continue;
+
+    const rarity = _medalRarity(bestScore, def.rarityThresholds);
+    if (!rarity) continue;
+
+    if (alreadyAwarded.has(`${def.type}:${best}`)) continue;
+
+    const r = MEDAL_RARITIES[rarity];
+    toInsert.push({
+      group_id: groupId, user_id: best, medal_type: def.type,
+      rarity, period: 'weekly', period_key: weekKey,
+      rewarded_xp: r.xp, rewarded_coins: r.coins,
+    });
+  }
+
+  if (!toInsert.length) return;
+
+  // Insere (UNIQUE constraint garante idempotência)
+  const { data: inserted } = await sb
+    .from('group_medals').insert(toInsert).select();
+
+  // Dá recompensas ao usuário logado
+  for (const m of (inserted || [])) {
+    if (m.user_id !== authUserId) continue;
+    const def = GROUP_MEDAL_DEFS.find(d => d.type === m.medal_type);
+    if (!def) continue;
+    const r = MEDAL_RARITIES[m.rarity];
+    addXp(m.rewarded_xp, `${def.icon} ${def.label}`);
+    addCoins(m.rewarded_coins);
+    showNotification(`🏅 Medalha: ${def.icon} ${def.label} [${r.label}]! +${r.xp} XP`, 'success');
+  }
+}
+
+/** Renderiza aba 🏆 Ranking no modal do grupo */
+async function renderGroupRanking(groupId, members) {
+  const container = document.getElementById('group-view-ranking');
+  if (!container) return;
+  container.innerHTML = '<div class="social-loading">Carregando ranking...</div>';
+
+  // Índice de perfis por ID
+  const profiles = {};
+  for (const m of members) { if (m.profile) profiles[m.profile.id] = m.profile; }
+
+  const [daily, weekly] = await Promise.all([
+    fetchGroupRanking(groupId, 'daily'),
+    fetchGroupRanking(groupId, 'weekly'),
+  ]);
+
+  function buildList(list, empty) {
+    if (!list.length) return `<div class="social-empty">${empty}</div>`;
+    const pos = ['🥇', '🥈', '🥉'];
+    const maxXp = list[0].xp || 1;
+    return list.map((e, i) => {
+      const p    = profiles[e.userId];
+      const name = p ? escHtml(p.name) : 'Usuário';
+      const av   = p ? p.avatar : '👤';
+      const isMe = e.userId === authUserId;
+      const pct  = Math.round((e.xp / maxXp) * 100);
+      return `
+        <div class="ranking-row${isMe ? ' ranking-row-me' : ''}">
+          <div class="ranking-pos">${pos[i] || `#${i + 1}`}</div>
+          <div class="ranking-avatar">${av}</div>
+          <div class="ranking-info">
+            <div class="ranking-name">${name}${isMe ? ' <span class="ranking-you-tag">Você</span>' : ''}</div>
+            <div class="ranking-xp-bar-wrap"><div class="ranking-xp-bar" style="width:${pct}%"></div></div>
+          </div>
+          <div class="ranking-xp">+${e.xp} XP</div>
+        </div>`;
+    }).join('');
+  }
+
+  container.innerHTML = `
+    <div class="ranking-period-tabs">
+      <button class="ranking-period-btn active" onclick="switchRankingPeriod(this,'ranking-panel-daily')">📅 Hoje</button>
+      <button class="ranking-period-btn" onclick="switchRankingPeriod(this,'ranking-panel-weekly')">📊 Semana</button>
+    </div>
+    <div id="ranking-panel-daily" class="ranking-period-panel">
+      ${buildList(daily, 'Nenhum XP registrado hoje ainda. Estude para aparecer aqui! 📚')}
+    </div>
+    <div id="ranking-panel-weekly" class="ranking-period-panel" style="display:none">
+      ${buildList(weekly, 'Nenhum XP registrado esta semana. Comece a estudar! 🚀')}
+    </div>`;
+}
+
+/** Alterna entre período daily/weekly no ranking */
+function switchRankingPeriod(btn, panelId) {
+  const parent = btn.closest('#group-view-ranking');
+  if (!parent) return;
+  parent.querySelectorAll('.ranking-period-btn').forEach(b => b.classList.remove('active'));
+  parent.querySelectorAll('.ranking-period-panel').forEach(p => { p.style.display = 'none'; });
+  btn.classList.add('active');
+  const panel = document.getElementById(panelId);
+  if (panel) panel.style.display = 'block';
+}
+
+/** Renderiza aba 🏅 Medalhas no modal do grupo */
+async function renderGroupMedals(groupId, members) {
+  const container = document.getElementById('group-view-medals');
+  if (!container) return;
+  container.innerHTML = '<div class="social-loading">Calculando medalhas...</div>';
+
+  await calculateAndAwardMedals(groupId, members);
+
+  const weekKey = _isoWeekKey();
+  const { data: medals } = await sb
+    .from('group_medals').select('*')
+    .eq('group_id', groupId).eq('period_key', weekKey);
+
+  // Mapeia tipo → medalha atribuída
+  const awardedMap = {};
+  for (const m of (medals || [])) awardedMap[m.medal_type] = m;
+
+  // Índice de perfis
+  const profiles = {};
+  for (const m of members) { if (m.profile) profiles[m.profile.id] = m.profile; }
+
+  container.innerHTML = `
+    <div class="medals-header">
+      <span class="medals-week-label">🗓 ${weekKey.replace('-W', ' · Semana ')}</span>
+      <span class="medals-week-label" style="font-size:.7rem">Recompensas renovam toda segunda-feira</span>
+    </div>
+    <div class="medals-grid">
+      ${GROUP_MEDAL_DEFS.map(def => {
+        const medal  = awardedMap[def.type];
+        const rarity = medal ? MEDAL_RARITIES[medal.rarity] : null;
+        const holder = medal ? profiles[medal.user_id] : null;
+        const isMe   = medal && medal.user_id === authUserId;
+        return `
+          <div class="medal-card${rarity ? ' medal-card-active' : ''}"
+               ${rarity ? `style="--medal-color:${rarity.color};--medal-bg:${rarity.bg}"` : ''}>
+            <div class="medal-icon">${def.icon}</div>
+            <div class="medal-label">${def.label}</div>
+            ${rarity ? `<div class="medal-rarity-badge" style="background:${rarity.color}">${rarity.label}</div>` : ''}
+            <div class="medal-desc">${def.desc}</div>
+            ${holder
+              ? `<div class="medal-holder${isMe ? ' medal-holder-me' : ''}">
+                   <span>${holder.avatar}</span>
+                   <span>${escHtml(holder.name)}${isMe ? ' 🎉' : ''}</span>
+                 </div>`
+              : '<div class="medal-holder medal-holder-empty">Sem ganhador ainda</div>'}
+            ${rarity ? `<div class="medal-rewards">+${rarity.xp} XP · +${rarity.coins} 🪙</div>` : ''}
+          </div>`;
+      }).join('')}
+    </div>`;
+}
+
+/** Carrega medalhas de um usuário para a semana atual (todos os grupos) */
+async function loadUserMedals(userId) {
+  if (!sb) return [];
+  const { data } = await sb
+    .from('group_medals')
+    .select('medal_type, rarity, group_id, awarded_at')
+    .eq('user_id', userId)
+    .eq('period_key', _isoWeekKey())
+    .order('rarity', { ascending: false });
+  return data || [];
+}
+
+// ============================================================
 // GRUPOS
 // ============================================================
 
@@ -6832,6 +7251,7 @@ async function joinGroupByCode(code) {
     const { data: existing } = await sb.from('group_members').select('id').eq('group_id', group.id).eq('user_id', authUserId).maybeSingle();
     if (existing) return group;
     await sb.from('group_members').insert({ group_id: group.id, user_id: authUserId });
+    _invalidateGroupCache(); // atualiza cache de grupos
     return group;
   } catch (e) { return null; }
 }
@@ -6839,6 +7259,7 @@ async function joinGroupByCode(code) {
 async function leaveGroup(groupId) {
   if (!sb || !authUserId) return;
   await sb.from('group_members').delete().eq('group_id', groupId).eq('user_id', authUserId);
+  _invalidateGroupCache(); // atualiza cache de grupos
 }
 
 async function loadMyGroups() {
@@ -6938,8 +7359,12 @@ async function renderGroupsPage() {
 }
 
 async function openGroupView(groupId) {
+  // Reseta abas e conteúdo imediatamente
   document.getElementById('group-view-members').innerHTML = '<div class="social-loading">Carregando...</div>';
   document.getElementById('group-view-tasks').innerHTML   = '<div class="social-loading">Carregando tarefas...</div>';
+  document.getElementById('group-view-ranking').innerHTML = '<div class="social-loading">Carregando ranking...</div>';
+  document.getElementById('group-view-medals').innerHTML  = '<div class="social-loading">Calculando medalhas...</div>';
+  _switchGroupTab('members'); // Sempre abre na aba Membros
   openModal('modal-group-view');
 
   const [members, group] = await Promise.all([
@@ -6958,11 +7383,12 @@ async function openGroupView(groupId) {
 
   const iAmCreator = group && group.created_by === authUserId;
 
+  // ── Aba Membros ──
   document.getElementById('group-view-members').innerHTML = members.map(m => {
     const p = m.profile;
     if (!p) return '';
     const isCreator = group && group.created_by === p.id;
-    const canRemove = iAmCreator && !isCreator; // criador pode remover outros membros
+    const canRemove = iAmCreator && !isCreator;
     return `<div class="friend-card">
       <div class="friend-avatar" style="cursor:pointer" onclick="openFriendProfile('${p.id}')">${p.avatar}</div>
       <div class="friend-info" style="cursor:pointer" onclick="openFriendProfile('${p.id}')">
@@ -6976,16 +7402,53 @@ async function openGroupView(groupId) {
 
   // Botão convidar amigo
   const inviteBtn = document.getElementById('invite-friend-btn');
-  if (inviteBtn) {
-    inviteBtn.onclick = () => openGroupInviteModal(groupId, members);
-  }
+  if (inviteBtn) inviteBtn.onclick = () => openGroupInviteModal(groupId, members);
 
   // Guarda groupId e flag de admin no modal
   const createTaskBtn = document.getElementById('create-group-task-btn');
   if (createTaskBtn) createTaskBtn.dataset.groupId = groupId;
   document.getElementById('modal-group-view').dataset.isAdmin = iAmCreator ? '1' : '0';
 
+  // ── Aba Tarefas ──
   await renderGroupTasks(groupId, members.length, iAmCreator);
+
+  // ── Wiring das abas (lazy-load ranking e medalhas na primeira visita) ──
+  const modal = document.getElementById('modal-group-view');
+  // Remove listeners antigos clonando o container de abas
+  const tabsContainer = modal.querySelector('.group-tabs');
+  const newTabs = tabsContainer.cloneNode(true);
+  tabsContainer.replaceWith(newTabs);
+
+  newTabs.querySelectorAll('.group-tab').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const tab = btn.dataset.groupTab;
+      _switchGroupTab(tab);
+      // Lazy-load ao primeira visita de cada aba
+      if (tab === 'ranking' && !modal.dataset.rankingLoaded) {
+        modal.dataset.rankingLoaded = '1';
+        await renderGroupRanking(groupId, members);
+      }
+      if (tab === 'medals' && !modal.dataset.medalsLoaded) {
+        modal.dataset.medalsLoaded = '1';
+        await renderGroupMedals(groupId, members);
+      }
+    });
+  });
+  // Limpa flags ao abrir novo grupo
+  modal.dataset.rankingLoaded = '';
+  modal.dataset.medalsLoaded  = '';
+}
+
+/** Troca a aba ativa no modal do grupo */
+function _switchGroupTab(tabName) {
+  const modal = document.getElementById('modal-group-view');
+  if (!modal) return;
+  modal.querySelectorAll('.group-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.groupTab === tabName);
+  });
+  modal.querySelectorAll('.group-tab-panel').forEach(p => {
+    p.classList.toggle('active', p.id === `group-panel-${tabName}`);
+  });
 }
 
 async function handleCreateGroup() {

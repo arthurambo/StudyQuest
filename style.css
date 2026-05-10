@@ -4461,3 +4461,237 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
 .daily-task-title { font-weight: 700; font-size: .88rem; }
 .daily-task-desc  { font-size: .75rem; color: var(--text-muted); margin-top: .1rem; }
 .daily-task-check { font-size: 1.1rem; flex-shrink: 0; }
+
+/* ============================================================
+   GRUPO — ABAS DE NAVEGAÇÃO
+   ============================================================ */
+.group-tabs {
+  display: flex;
+  gap: .2rem;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 1rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.group-tabs::-webkit-scrollbar { display: none; }
+
+.group-tab {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  padding: .5rem .75rem;
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color .2s, border-color .2s;
+}
+.group-tab:hover { color: var(--primary); }
+.group-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.group-tab-panel { display: none; }
+.group-tab-panel.active { display: block; }
+
+/* ============================================================
+   RANKING
+   ============================================================ */
+.ranking-period-tabs {
+  display: flex;
+  gap: .5rem;
+  margin-bottom: 1rem;
+}
+.ranking-period-btn {
+  flex: 1;
+  background: var(--card-bg);
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  padding: .45rem .75rem;
+  font-weight: 600;
+  font-size: .82rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all .2s;
+}
+.ranking-period-btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.ranking-row {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .65rem .6rem;
+  border-radius: 10px;
+  margin-bottom: .4rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  transition: background .15s;
+}
+.ranking-row-me {
+  background: rgba(124,58,237,.07);
+  border-color: var(--primary);
+}
+.ranking-pos   { font-size: 1.3rem; min-width: 2rem; text-align: center; flex-shrink: 0; }
+.ranking-avatar { font-size: 1.45rem; flex-shrink: 0; }
+.ranking-info  { flex: 1; min-width: 0; }
+.ranking-name  { font-weight: 700; font-size: .88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ranking-xp-bar-wrap {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin-top: .3rem;
+  overflow: hidden;
+}
+.ranking-xp-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), #a78bfa);
+  border-radius: 2px;
+  transition: width .5s ease;
+}
+.ranking-xp {
+  font-weight: 700;
+  color: var(--primary);
+  font-size: .82rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.ranking-you-tag {
+  background: var(--primary);
+  color: #fff;
+  border-radius: 4px;
+  padding: .1rem .35rem;
+  font-size: .6rem;
+  font-weight: 700;
+  vertical-align: middle;
+  margin-left: .25rem;
+}
+
+/* ============================================================
+   MEDALHAS DO GRUPO
+   ============================================================ */
+.medals-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: .85rem;
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+.medals-week-label {
+  font-size: .78rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.medals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+  gap: .65rem;
+}
+
+.medal-card {
+  border-radius: 14px;
+  padding: .9rem .7rem .75rem;
+  text-align: center;
+  border: 2px solid var(--border);
+  background: var(--card-bg);
+  transition: transform .2s, box-shadow .2s;
+}
+.medal-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,.1); }
+.medal-card-active {
+  background: var(--medal-bg, var(--card-bg));
+  border-color: var(--medal-color, var(--border));
+  box-shadow: 0 2px 10px rgba(0,0,0,.07);
+}
+
+.medal-icon { font-size: 2rem; margin-bottom: .3rem; line-height: 1; }
+.medal-label {
+  font-weight: 700;
+  font-size: .82rem;
+  margin-bottom: .25rem;
+  line-height: 1.2;
+}
+.medal-rarity-badge {
+  display: inline-block;
+  color: #fff;
+  border-radius: 6px;
+  padding: .1rem .45rem;
+  font-size: .62rem;
+  font-weight: 700;
+  margin-bottom: .35rem;
+  letter-spacing: .03em;
+}
+.medal-desc {
+  font-size: .7rem;
+  color: var(--text-muted);
+  margin-bottom: .55rem;
+  line-height: 1.3;
+}
+.medal-holder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .3rem;
+  font-weight: 600;
+  font-size: .75rem;
+  padding: .3rem .5rem;
+  background: rgba(0,0,0,.04);
+  border-radius: 8px;
+  min-height: 2rem;
+}
+.medal-holder-me {
+  background: rgba(124,58,237,.12);
+  color: var(--primary);
+}
+.medal-holder-empty {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-style: italic;
+  font-size: .72rem;
+}
+.medal-rewards {
+  font-size: .68rem;
+  color: var(--text-muted);
+  margin-top: .35rem;
+  font-weight: 600;
+}
+
+/* ============================================================
+   MEDALHAS NO PERFIL DO AMIGO
+   ============================================================ */
+.profile-medals-section {
+  margin: .75rem 0;
+  padding: .65rem .75rem;
+  background: rgba(124,58,237,.05);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.profile-medals-title {
+  font-weight: 700;
+  font-size: .82rem;
+  margin-bottom: .5rem;
+  color: var(--text-muted);
+}
+.profile-medals-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+}
+.profile-medal-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  padding: .22rem .6rem;
+  border-radius: 20px;
+  font-size: .72rem;
+  font-weight: 700;
+  border: 1.5px solid;
+  white-space: nowrap;
+}
