@@ -777,6 +777,44 @@ async function saveUserData(data) {
   }
 }
 
+/**
+ * Mescla dados da nuvem (API ou Supabase) no state local de forma inteligente.
+ *
+ * Problema: a nuvem pode ter uma versão DESATUALIZADA de certas propriedades
+ * (ex: schedule, dailyTasks) porque o debounce de 3s ainda não tinha disparado
+ * quando a sessão anterior encerrou. Um spread simples `{ ...state, ...cloud }`
+ * sobrescreveria dados locais mais recentes com versões antigas.
+ *
+ * Regra para `schedule`: ganha a versão com MAIS matérias cadastradas.
+ * Regra para `dailyTasks`: ganha a versão com mais tarefas ou a local (tarefas são
+ *   regeneradas diariamente, então não faz sentido sobrescrever com lista vazia).
+ * Todas as outras propriedades: a nuvem vence (comportamento padrão).
+ */
+function _mergeCloudState(localState, cloudData) {
+  const merged = { ...localState, ...cloudData };
+
+  // ── Schedule: preserva o mais rico ─────────────────────────────────────
+  const localSched = localState.schedule || {};
+  const cloudSched = cloudData.schedule  || {};
+  const countSubjects = (s) => Object.values(s).reduce((n, arr) => n + (Array.isArray(arr) ? arr.length : 0), 0);
+  if (countSubjects(localSched) > countSubjects(cloudSched)) {
+    merged.schedule = localSched;
+  }
+
+  // ── Daily tasks: preserva local se nuvem está vazia ou do dia anterior ─
+  const localTasks = localState.dailyTasks     || [];
+  const cloudTasks = cloudData.dailyTasks      || [];
+  const localDate  = localState.dailyTasksDate || '';
+  const cloudDate  = cloudData.dailyTasksDate  || '';
+  const today      = new Date().toISOString().slice(0, 10);
+  if (localDate === today && cloudDate !== today && localTasks.length > 0) {
+    merged.dailyTasks     = localTasks;
+    merged.dailyTasksDate = localDate;
+  }
+
+  return merged;
+}
+
 /** Debounce: sincroniza state completo com Supabase 3s após qualquer mudança. */
 let _supabaseSyncTimer = null;
 function scheduleSyncToSupabase() {
@@ -4844,7 +4882,7 @@ async function launchApp() {
         new Promise(resolve => setTimeout(() => { console.warn('[Supabase] Timeout ao carregar dados — continuando.'); resolve(null); }, 7000))
       ]);
       if (cloudState) {
-        state = { ...state, ...cloudState };
+        state = _mergeCloudState(state, cloudState);
         saveLocalData(state); // espelha no localStorage para fallback offline
         console.log('[Supabase] State aplicado — XP:', state.xp,
                     '| Nível:', state.level, '| Nome:', state.name);
@@ -4895,11 +4933,14 @@ async function launchApp() {
         const cloudXP = cloudState.xp || 0;
         const localXP = state.xp      || 0;
         if (cloudXP > localXP) {
-          state = { ...state, ...cloudState };
+          state = _mergeCloudState(state, cloudState);
           saveLocalData(state);
           console.log('[Supabase] XP da nuvem aplicado:', cloudXP);
         } else if (localXP > cloudXP) {
           saveUserData(state); // sobe o progresso local para a nuvem
+        } else {
+          // XP igual: aplica dados da nuvem mas preserva schedule/tarefas locais
+          state = _mergeCloudState(state, cloudState);
         }
       }
     }
@@ -5040,8 +5081,8 @@ async function loadUserDataFromAPI() {
     const json = await res.json();
 
     if (json.data && typeof json.data === 'object' && Object.keys(json.data).length > 0) {
-      // Sobrepõe o state local com os dados do backend
-      state = { ...state, ...json.data };
+      // Mescla dados da API preservando schedule/tarefas locais mais recentes
+      state = _mergeCloudState(state, json.data);
       // Espelha no localStorage como backup offline (via função canônica)
       saveLocalData(state);
       console.log('[API] Dados carregados do backend com sucesso. Setup:', state.setup, '| XP:', state.xp);
