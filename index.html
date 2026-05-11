@@ -743,6 +743,91 @@
         </div>
       </div>
 
+      <!-- SEÇÃO: NOTIFICAÇÕES PUSH -->
+      <div class="settings-section" id="push-settings-section">
+        <div class="settings-section-title">📲 Notificações Push</div>
+        <div class="settings-card">
+          <!-- Status + botão ativar/desativar -->
+          <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:.75rem">
+            <div class="settings-row-info">
+              <span class="settings-row-label">🔔 Notificações no Dispositivo</span>
+              <span class="settings-row-desc">Receba alertas mesmo com o app fechado</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+              <button class="btn-secondary btn-sm" id="push-enable-btn" onclick="handlePushToggle(this)" data-state="inactive">
+                🔔 Ativar Notificações Push
+              </button>
+              <span class="push-status-badge push-status-inactive" id="push-status-badge">○ Desativado</span>
+            </div>
+          </div>
+
+          <!-- Tipos de notificação -->
+          <div class="push-prefs-section" id="push-prefs-section">
+            <div class="push-prefs-title">Quais notificações receber:</div>
+
+            <div class="settings-divider"></div>
+            <div class="settings-row">
+              <div class="settings-row-info">
+                <span class="settings-row-label">🔥 Streak em Risco</span>
+                <span class="settings-row-desc">Alerta no fim do dia se você não estudou</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="push-pref-streak" checked onchange="savePushPref('streak',this.checked)">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="settings-divider"></div>
+            <div class="settings-row">
+              <div class="settings-row-info">
+                <span class="settings-row-label">📅 Cronograma Diário</span>
+                <span class="settings-row-desc">Lembrete matinal com as matérias do dia</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="push-pref-daily" checked onchange="savePushPref('daily',this.checked)">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="settings-divider"></div>
+            <div class="settings-row">
+              <div class="settings-row-info">
+                <span class="settings-row-label">👥 Pedidos de Amizade</span>
+                <span class="settings-row-desc">Quando alguém te enviar um pedido</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="push-pref-friends" checked onchange="savePushPref('friends',this.checked)">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="settings-divider"></div>
+            <div class="settings-row">
+              <div class="settings-row-info">
+                <span class="settings-row-label">🏰 Grupos</span>
+                <span class="settings-row-desc">Convites para grupos de estudo</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="push-pref-groups" checked onchange="savePushPref('groups',this.checked)">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="settings-divider"></div>
+            <div class="settings-row">
+              <div class="settings-row-info">
+                <span class="settings-row-label">🏅 Medalhas</span>
+                <span class="settings-row-desc">Quando conquistar uma medalha no grupo</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="push-pref-medals" checked onchange="savePushPref('medals',this.checked)">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- SEÇÃO: DADOS -->
       <div class="settings-section">
         <div class="settings-section-title">💾 Dados</div>

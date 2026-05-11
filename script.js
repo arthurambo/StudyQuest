@@ -4969,12 +4969,13 @@ async function launchApp() {
     console.log('[App] App iniciado para:', state.name, '| XP:', state.xp, '| Nível:', state.level);
     // Sincroniza perfil público para que amigos possam buscar
     if (authUserId) setTimeout(syncPublicProfile, 2000);
-    // Verifica notificações de desempenho e presente surpresa
+    // Verifica notificações de desempenho, presente surpresa e push inteligente
     setTimeout(() => {
       checkPerformanceNotifs();
       checkSurpriseGift();
       updateNotifBell();
-    }, 1500);
+      runSmartPushChecks().catch(() => {}); // streak risk + cronograma
+    }, 2000);
   } else {
     // Primeiro acesso → criação de herói
     console.log('[App] Novo usuário → tela de criação de herói.');
@@ -5450,6 +5451,22 @@ function initSettingsPage() {
       if (e.target === resetOverlay) closeModal('modal-reset-confirm');
     });
   }
+
+  // ── Push notification preferences UI ──────────────────────
+  _updatePushStatusUI().catch(() => {});
+  const prefs = state.settings?.pushPrefs || {};
+  ['streak','daily','friends','groups','medals'].forEach(type => {
+    const el = document.getElementById(`push-pref-${type}`);
+    if (el) el.checked = prefs[type] !== false; // default ativado
+  });
+}
+
+/** Salva preferência de push para um tipo específico */
+function savePushPref(type, enabled) {
+  if (!state.settings) state.settings = {};
+  if (!state.settings.pushPrefs) state.settings.pushPrefs = {};
+  state.settings.pushPrefs[type] = !!enabled;
+  saveState();
 }
 
 function resetAllProgress() {
@@ -6368,6 +6385,16 @@ async function sendFriendRequest(toId) {
       if (error.code === '42501') return { ok: false, reason: 'permission_denied' };
       return { ok: false, reason: error.message || 'insert_error' };
     }
+
+    // Push para o destinatário
+    if (_pushPrefEnabled('friends')) {
+      sendPushToUser(toId,
+        '👥 Novo pedido de amizade!',
+        `${escHtml(state.name || 'Alguém')} te enviou um pedido de amizade no StudyQuest.`,
+        { page: 'friends', tag: 'friend-request' }
+      ).catch(() => {});
+    }
+
     return { ok: true, reason: 'sent' };
   } catch (e) {
     console.error('[sendFriendRequest] Exception:', e);
@@ -6916,6 +6943,263 @@ async function handleSendGift() {
 }
 
 // ============================================================
+// NOTIFICAÇÕES PUSH — WEB PUSH API + SUPABASE EDGE FUNCTION
+// ============================================================
+
+/**
+ * Chave pública VAPID (gerada uma vez — nunca mudar sem reger a Edge Function também).
+ * A chave PRIVADA fica SOMENTE nas variáveis de ambiente da Edge Function no Supabase.
+ */
+const VAPID_PUBLIC_KEY = 'BJp3WxkkiYt1EkyJVFEWG76beoHg1cvrvFzjNpsLOwX24gIEO0VSw9Q6bmlv7cx_13iHHnnmiEftNFIVQL4NQZk';
+
+/** Converte base64url → Uint8Array (necessário para applicationServerKey) */
+function _urlBase64ToUint8Array(base64String) {
+  const padding  = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64   = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData  = atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+/**
+ * Solicita permissão + cria subscription push + salva no Supabase.
+ * Retorna true se ativado, false se bloqueado/não-suportado.
+ */
+async function initPushNotifications() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    console.warn('[Push] Web Push não suportado neste navegador.');
+    return false;
+  }
+
+  // Verifica se já está subscrito
+  const reg = await navigator.serviceWorker.ready;
+  const existingSub = await reg.pushManager.getSubscription();
+  if (existingSub) {
+    await savePushSubscription(existingSub);
+    return true;
+  }
+
+  // Pede permissão
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') {
+    console.log('[Push] Permissão negada pelo usuário.');
+    return false;
+  }
+
+  try {
+    const subscription = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: _urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
+    await savePushSubscription(subscription);
+    console.log('[Push] ✅ Subscrito com sucesso.');
+    return true;
+  } catch (e) {
+    console.warn('[Push] Erro ao criar subscription:', e.message);
+    return false;
+  }
+}
+
+/** Salva (ou atualiza) a push subscription no Supabase */
+async function savePushSubscription(subscription) {
+  if (!sb || !authUserId) return;
+  try {
+    await sb.from('push_subscriptions').upsert({
+      user_id:      authUserId,
+      subscription: subscription.toJSON(),
+    }, { onConflict: 'user_id' });
+  } catch (e) {
+    console.warn('[Push] Erro ao salvar subscription:', e.message);
+  }
+}
+
+/** Remove a push subscription do Supabase e cancela no browser */
+async function disablePushNotifications() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) await sub.unsubscribe();
+    if (sb && authUserId) {
+      await sb.from('push_subscriptions').delete().eq('user_id', authUserId);
+    }
+    console.log('[Push] Subscription removida.');
+  } catch (e) {
+    console.warn('[Push] Erro ao desativar push:', e.message);
+  }
+}
+
+/**
+ * Envia notificação push para um usuário via Supabase Edge Function.
+ * Só envia se o remetente não for o mesmo que o destinatário.
+ *
+ * @param {string} toUserId   - UUID do destinatário
+ * @param {string} title      - Título da notificação
+ * @param {string} body       - Corpo da mensagem
+ * @param {object} data       - Dados extras { page, tag, icon }
+ */
+async function sendPushToUser(toUserId, title, body, data = {}) {
+  if (!sb || !toUserId || toUserId === authUserId) return;
+  try {
+    // Chama a Edge Function via Supabase Functions
+    const { error } = await sb.functions.invoke('send-push', {
+      body: { toUserId, title, body, data },
+    });
+    if (error) console.warn('[Push] Edge Function erro:', error.message);
+  } catch (e) {
+    console.warn('[Push] Falha ao invocar Edge Function:', e.message);
+  }
+}
+
+/**
+ * Verifica se push está habilitado para um tipo específico.
+ * O usuário pode desativar tipos individualmente nas configurações.
+ */
+function _pushPrefEnabled(type) {
+  const prefs = state.settings?.pushPrefs || {};
+  // Se a chave não existe, considera ativado por padrão
+  return prefs[type] !== false;
+}
+
+/** Exibe status de permissão no botão de ativação de push */
+async function _updatePushStatusUI() {
+  const btn   = document.getElementById('push-enable-btn');
+  const badge = document.getElementById('push-status-badge');
+  if (!btn || !badge) return;
+
+  if (!('PushManager' in window)) {
+    badge.textContent = '❌ Não suportado neste navegador';
+    badge.className   = 'push-status-badge push-status-unsupported';
+    btn.style.display = 'none';
+    return;
+  }
+
+  const perm = Notification.permission;
+  if (perm === 'granted') {
+    const reg = await navigator.serviceWorker.ready.catch(() => null);
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    if (sub) {
+      badge.textContent = '✅ Ativo';
+      badge.className   = 'push-status-badge push-status-active';
+      btn.textContent   = '🔕 Desativar';
+      btn.dataset.state = 'active';
+    } else {
+      badge.textContent = '⚠️ Permissão concedida mas sem subscription';
+      badge.className   = 'push-status-badge push-status-warn';
+      btn.textContent   = '🔔 Ativar';
+      btn.dataset.state = 'inactive';
+    }
+  } else if (perm === 'denied') {
+    badge.textContent = '🚫 Bloqueado — reative nas configurações do navegador';
+    badge.className   = 'push-status-badge push-status-denied';
+    btn.style.display = 'none';
+  } else {
+    badge.textContent = '○ Desativado';
+    badge.className   = 'push-status-badge push-status-inactive';
+    btn.textContent   = '🔔 Ativar Notificações Push';
+    btn.dataset.state = 'inactive';
+  }
+}
+
+/** Handler do botão ativar/desativar push */
+async function handlePushToggle(btn) {
+  if (btn.dataset.state === 'active') {
+    await disablePushNotifications();
+  } else {
+    const ok = await initPushNotifications();
+    if (!ok) showNotification('Não foi possível ativar as notificações. Verifique as permissões do navegador.', 'warning');
+    else     showNotification('🔔 Notificações push ativadas!', 'success');
+  }
+  await _updatePushStatusUI();
+}
+
+/**
+ * Ouve mensagens do Service Worker (ex: SW_NAVIGATE após clique em notificação).
+ */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', event => {
+    const msg = event.data;
+    if (!msg) return;
+    if (msg.type === 'SW_NAVIGATE' && msg.page) {
+      navigateTo(msg.page);
+    }
+    if (msg.type === 'SW_PUSH_RESUBSCRIBED' && msg.subscription) {
+      // Subscription mudou — atualiza no Supabase
+      if (sb && authUserId) {
+        sb.from('push_subscriptions').upsert({
+          user_id: authUserId, subscription: msg.subscription,
+        }, { onConflict: 'user_id' }).catch(() => {});
+      }
+    }
+  });
+}
+
+// ── Verificações inteligentes de notificações push ─────────────
+
+/**
+ * Verifica se o streak está em risco (fim do dia sem estudar).
+ * Só envia se: streak > 0, sem escudo, sem estudo hoje, depois das 20h.
+ */
+async function checkStreakRiskPush() {
+  if (!authUserId || !_pushPrefEnabled('streak')) return;
+  const now  = new Date();
+  const hour = now.getHours();
+  if (hour < 20) return; // só alerta depois das 20h
+
+  const today         = now.toISOString().slice(0, 10);
+  const studiedToday  = (state.studyDays || []).includes(today) || state.dailyXp > 0;
+  const hasShield     = (state.boosts || []).some(b => b.type === 'streak_shield' && b.charges > 0);
+  const streak        = state.streak || 0;
+
+  if (streak > 0 && !studiedToday && !hasShield) {
+    // Verifica se já enviou hoje (evita spam)
+    const lastKey = 'sq_streak_push_' + today;
+    if (localStorage.getItem(lastKey)) return;
+    localStorage.setItem(lastKey, '1');
+
+    await sendPushToUser(authUserId,
+      '🔥 Sua sequência está em risco!',
+      `Você tem ${streak} dias seguidos — estude um pouco hoje para não perder!`,
+      { page: 'study', tag: 'streak-risk' }
+    );
+  }
+}
+
+/**
+ * Verifica matérias do dia no cronograma e envia lembrete matinal (7–9h).
+ */
+async function checkSchedulePush() {
+  if (!authUserId || !_pushPrefEnabled('daily')) return;
+  const now   = new Date();
+  const hour  = now.getHours();
+  if (hour < 7 || hour > 9) return;
+
+  const today   = now.toISOString().slice(0, 10);
+  const lastKey = 'sq_sched_push_' + today;
+  if (localStorage.getItem(lastKey)) return;
+
+  const weekday  = now.getDay();
+  const subjects = (state.schedule || {})[weekday] || [];
+  if (!subjects.length) return;
+
+  localStorage.setItem(lastKey, '1');
+  await sendPushToUser(authUserId,
+    '📚 Seu cronograma de hoje',
+    `Matérias de hoje: ${subjects.slice(0, 3).join(', ')}${subjects.length > 3 ? '...' : ''}`,
+    { page: 'calendar', tag: 'daily-schedule' }
+  );
+}
+
+/** Roda as verificações periódicas de push ao abrir o app */
+async function runSmartPushChecks() {
+  if (Notification.permission !== 'granted') return;
+  // Faz checks em paralelo, silenciando erros individuais
+  await Promise.allSettled([
+    checkStreakRiskPush(),
+    checkSchedulePush(),
+  ]);
+}
+
+// ============================================================
 // GRUPOS — RANKING & MEDALHAS
 // ============================================================
 
@@ -7104,6 +7388,15 @@ async function calculateAndAwardMedals(groupId, members) {
     addXp(m.rewarded_xp, `${def.icon} ${def.label}`);
     addCoins(m.rewarded_coins);
     showNotification(`🏅 Medalha: ${def.icon} ${def.label} [${r.label}]! +${r.xp} XP`, 'success');
+
+    // Push para o próprio usuário
+    if (_pushPrefEnabled('medals')) {
+      sendPushToUser(authUserId,
+        `🏅 Nova medalha: ${def.label}!`,
+        `Você conquistou a medalha "${def.label}" [${r.label}] no grupo. +${r.xp} XP`,
+        { page: 'groups', tag: 'medal-awarded' }
+      ).catch(() => {});
+    }
   }
 }
 
@@ -7792,7 +8085,22 @@ async function sendGroupInvite(groupId, toId) {
     const { error } = await sb.from('group_invites').insert({
       group_id: groupId, from_id: authUserId, to_id: toId, status: 'pending',
     });
-    return !error;
+    if (error) return false;
+
+    // Push para o convidado
+    if (_pushPrefEnabled('groups')) {
+      // Busca nome do grupo para a mensagem
+      sb.from('study_groups').select('name').eq('id', groupId).single()
+        .then(({ data: g }) => {
+          const groupName = g?.name || 'um grupo';
+          sendPushToUser(toId,
+            '🏰 Convite de grupo!',
+            `${escHtml(state.name || 'Alguém')} te convidou para "${escHtml(groupName)}" no StudyQuest.`,
+            { page: 'groups', tag: 'group-invite' }
+          );
+        }).catch(() => {});
+    }
+    return true;
   } catch (e) { return false; }
 }
 

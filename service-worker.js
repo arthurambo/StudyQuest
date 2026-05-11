@@ -81,3 +81,80 @@ async function networkFirst(request) {
     return fallback || new Response('Offline — sem conexão e sem cache disponível.', { status: 503 });
   }
 }
+
+// ── Push Notifications ────────────────────────────────────────
+/**
+ * Recebe evento push do servidor (via Supabase Edge Function + Web Push Protocol).
+ * Exibe notificação nativa no dispositivo — funciona mesmo com o app fechado.
+ */
+self.addEventListener('push', event => {
+  if (!event.data) return;
+
+  let payload;
+  try { payload = event.data.json(); }
+  catch { payload = { title: 'StudyQuest', body: event.data.text(), data: {} }; }
+
+  const title   = payload.title || 'StudyQuest';
+  const options = {
+    body:    payload.body    || '',
+    icon:    payload.icon    || './icon.svg',
+    badge:   payload.badge   || './icon.svg',
+    tag:     payload.tag     || 'studyquest-notif',   // agrupa notifs do mesmo tipo
+    renotify: !!payload.renotify,                     // vibra mesmo se o tag já existir
+    data:    payload.data    || {},
+    actions: payload.actions || [],
+    vibrate: [100, 50, 100],
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+  );
+});
+
+/**
+ * Usuário clicou na notificação ou num botão de ação dela.
+ * Foca a aba existente ou abre uma nova, navegando para a página correta.
+ */
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+
+  const data     = event.notification.data || {};
+  const page     = data.page   || 'dashboard';   // ex: 'friends', 'groups', 'missions'
+  const targetUrl = data.url   || './';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+      // Se já há uma aba aberta com o app, foca ela e envia mensagem para navegar
+      for (const client of clients) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.focus();
+          client.postMessage({ type: 'SW_NAVIGATE', page });
+          return;
+        }
+      }
+      // Nenhuma aba aberta → abre o app com o parâmetro de página
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl + (page !== 'dashboard' ? `#${page}` : ''));
+      }
+    })
+  );
+});
+
+/**
+ * Push subscription foi revogada pelo browser (ex: usuário desativou nas config do SO).
+ * Registra o evento — o backend pode limpar a subscription da tabela.
+ */
+self.addEventListener('pushsubscriptionchange', event => {
+  console.log('[SW] Push subscription mudou — resubscrevendo...');
+  event.waitUntil(
+    self.registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: self._vapidPublicKey,
+    }).then(sub => {
+      // Envia nova subscription para o app via postMessage
+      self.clients.matchAll().then(clients => {
+        clients.forEach(c => c.postMessage({ type: 'SW_PUSH_RESUBSCRIBED', subscription: sub.toJSON() }));
+      });
+    }).catch(err => console.warn('[SW] Falha ao resubscrever:', err))
+  );
+});
