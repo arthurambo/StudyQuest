@@ -1361,6 +1361,9 @@ function toggleDailyTask(id) {
   addXp(20, `${task.icon} ${task.label} concluído!`);
   addCoins(8);
 
+  // Conta como dia de estudo → mantém streak e missões semanais
+  markStudyToday();
+
   // Registra no ranking dos grupos com source específico da tarefa
   const taskSource = `task_${task.type || 'general'}`;
   logGroupXP(20, taskSource).catch(() => {});
