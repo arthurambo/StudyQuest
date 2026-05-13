@@ -4639,23 +4639,9 @@ function clearAuth() {
 
 // ── Screen switcher ───────────────────────────────────────
 function showAuthScreen() {
-  // Hide app and setup
-  const app   = document.getElementById('app');
-  const setup = document.getElementById('setup-screen');
-  if (app)   { app.classList.remove('active');   app.style.display   = 'none'; }
-  if (setup) { setup.classList.remove('active'); setup.style.display = 'none'; }
-
-  const authScreen = document.getElementById('auth-screen');
-  authScreen.classList.add('active');
-  authScreen.style.display = '';
-
-  // Pre-fill email da última sessão (se disponível)
-  const user = getAuthUser();
-  if (user && user.email && user.id) {
-    const loginEmail = document.getElementById('login-email');
-    if (loginEmail) loginEmail.value = user.email;
-  }
-  showAuthPanel('login');
+  // Redireciona para a landing page ao invés de mostrar a tela de login inline.
+  // A landing page detecta sessão ativa e redireciona de volta ao app automaticamente.
+  window.location.replace('./landing.html');
 }
 
 function showAuthPanel(panel) {
