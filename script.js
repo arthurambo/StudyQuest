@@ -6702,8 +6702,8 @@ async function doFriendSearch() {
       btn = `<button class="btn-add-friend" onclick="handleAddFriend('${u.id}', this)">+ Adicionar</button>`;
     }
     return `<div class="friend-card search-result">
-      <div class="friend-avatar">${u.avatar}</div>
-      <div class="friend-info">
+      <div class="friend-avatar" style="cursor:pointer" onclick="openFriendProfile('${u.id}')">${u.avatar}</div>
+      <div class="friend-info" style="cursor:pointer" onclick="openFriendProfile('${u.id}')">
         <div class="friend-name">${escHtml(u.name)}</div>
         <div class="friend-username">@${escHtml(u.username)}</div>
         <div class="friend-level">⚔️ Nível ${u.level} · ✨ ${u.xp} XP</div>
@@ -6815,6 +6815,15 @@ async function openFriendProfile(userId) {
 
   const avatarEl = document.getElementById('friend-profile-avatar');
   avatarEl.innerHTML = _avatarHtml(user, 'friend-profile-avatar-inner');
+
+  // ── Banner de fundo ──
+  const bannerEl = document.getElementById('friend-profile-banner');
+  if (bannerEl) {
+    // Remove classes de banner anteriores
+    const bannerClasses = ['banner_purple','banner_fire','banner_ocean','banner_forest','banner_galaxy'];
+    bannerEl.classList.remove(...bannerClasses);
+    if (user.equippedBanner) bannerEl.classList.add(user.equippedBanner);
+  }
 
   document.getElementById('friend-profile-name').textContent   = user.name;
   document.getElementById('friend-profile-level').textContent  = `⚔️ Nível ${user.level}`;
@@ -9044,6 +9053,17 @@ async function adminCreateCode(code, type, value, usesMax, expiresAt) {
 async function adminDeleteCode(codeId) {
   if (!sb || !state.isAdmin) return { ok: false, msg: 'Sem permissão.' };
   try {
+    // Remove resgates vinculados primeiro (evita violação de FK)
+    const { error: errRedeems } = await sb
+      .from('user_redeems')
+      .delete()
+      .eq('code_id', codeId);
+    if (errRedeems) {
+      console.warn('[adminDeleteCode] Erro ao limpar user_redeems:', errRedeems.message);
+      // Continua mesmo assim — pode ser que a tabela esteja vazia para este código
+    }
+
+    // Agora deleta o código em si
     const { error } = await sb.from('redeem_codes').delete().eq('id', codeId);
     if (error) {
       console.error('[adminDeleteCode]', error.code, error.message, error.hint);
@@ -9053,6 +9073,53 @@ async function adminDeleteCode(codeId) {
   } catch (e) {
     console.error('[adminDeleteCode] catch:', e);
     return { ok: false, msg: e.message || 'Erro inesperado.' };
+  }
+}
+
+/**
+ * Deleta o perfil de um usuário da tabela `users` (dados de jogo).
+ * Não remove da tabela auth.users do Supabase (requer service-role key ou painel).
+ * Para contas duplicadas, basta remover o perfil.
+ */
+async function adminDeleteUser(userId) {
+  if (!sb || !state.isAdmin) return { ok: false, msg: 'Sem permissão.' };
+  try {
+    // Remove dados relacionados na ordem certa para evitar FK violations
+    await sb.from('user_redeems').delete().eq('user_id', userId).catch(() => {});
+    await sb.from('push_subscriptions').delete().eq('user_id', userId).catch(() => {});
+    await sb.from('admin_actions').delete().eq('user_id', userId).catch(() => {});
+    await sb.from('user_flags').delete().eq('user_id', userId).catch(() => {});
+    await sb.from('group_medals').delete().eq('user_id', userId).catch(() => {});
+    await sb.from('group_xp_logs').delete().eq('user_id', userId).catch(() => {});
+    await sb.from('friends').delete().or(`user_id.eq.${userId},friend_id.eq.${userId}`).catch(() => {});
+    await sb.from('friend_requests').delete().or(`from_id.eq.${userId},to_id.eq.${userId}`).catch(() => {});
+    await sb.from('group_members').delete().eq('user_id', userId).catch(() => {});
+    await sb.from('notifications').delete().or(`user_id.eq.${userId},from_id.eq.${userId}`).catch(() => {});
+    // Por último, o perfil em si
+    const { error } = await sb.from('users').delete().eq('id', userId);
+    if (error) {
+      console.error('[adminDeleteUser]', error.code, error.message);
+      return { ok: false, msg: error.message || 'Erro ao deletar usuário.' };
+    }
+    return { ok: true };
+  } catch (e) {
+    console.error('[adminDeleteUser] catch:', e);
+    return { ok: false, msg: e.message || 'Erro inesperado.' };
+  }
+}
+
+async function handleAdminDeleteUser(userId, userName) {
+  const confirmed = confirm(
+    `⚠️ DELETAR CONTA\n\nUsuário: ${userName}\nID: ${userId}\n\nIsso remove o perfil e todos os dados de jogo do usuário.\nA conta de login no Supabase pode precisar ser removida manualmente.\n\nTem certeza?`
+  );
+  if (!confirmed) return;
+  const res = await adminDeleteUser(userId);
+  if (res.ok) {
+    showNotification(`🗑️ Conta de "${userName}" deletada.`, 'success');
+    renderAdminPage('usuarios');
+  } else {
+    showNotification('❌ ' + res.msg, 'error');
+    console.error('[handleAdminDeleteUser] falhou:', res.msg);
   }
 }
 
@@ -9075,6 +9142,7 @@ async function renderAdminPage(tab) {
     <div class="admin-tabs">
       <button class="admin-tab-btn ${_adminTab==='usuarios'?'active':''}" onclick="renderAdminPage('usuarios')">👥 Usuários</button>
       <button class="admin-tab-btn ${_adminTab==='codigos' ?'active':''}" onclick="renderAdminPage('codigos')">🎟️ Códigos</button>
+      <button class="admin-tab-btn ${_adminTab==='stats'   ?'active':''}" onclick="renderAdminPage('stats')">📊 Estatísticas</button>
       <button class="admin-tab-btn ${_adminTab==='ia'      ?'active':''}" onclick="renderAdminPage('ia')">🤖 IA</button>
     </div>
     <div id="admin-tab-content"><div class="social-loading">Carregando...</div></div>`;
@@ -9110,6 +9178,7 @@ async function renderAdminPage(tab) {
           <button class="btn-admin-reset" onclick="adminPromptAction('${u.id}','reset')">♻️ Resetar</button>
           ${u.penalty_type ? `<button class="btn-admin-remove" onclick="handleAdminAction('${u.id}','remove_penalty','')">🔓 Remover punição</button>` : ''}
           <button class="btn-sm btn-ghost" onclick="showUserFlags('${u.id}')">🚩 Flags</button>
+          <button class="btn-sm btn-ghost" style="color:#f87171;border-color:rgba(248,113,113,.3)" onclick="handleAdminDeleteUser('${u.id}','${escHtml(u.name||'Herói')}')">🗑️ Deletar</button>
         </div>
       </div>`;
     };
@@ -9176,6 +9245,87 @@ async function renderAdminPage(tab) {
 
       <div class="admin-section-title" style="margin-top:1.5rem">📋 Códigos Existentes (${codes.length})</div>
       ${codesHtml}`;
+
+  } else if (_adminTab === 'stats') {
+    // Carrega todos os usuários com created_at e updated_at para calcular estatísticas
+    let allUsersStats = [];
+    try {
+      const { data } = await sb.from('users')
+        .select('id, created_at, updated_at')
+        .order('created_at', { ascending: false })
+        .limit(5000);
+      allUsersStats = data || [];
+    } catch(e) { console.warn('[admin stats]', e); }
+
+    const now      = new Date();
+    const todayStart  = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStart   = new Date(todayStart); weekStart.setDate(todayStart.getDate() - todayStart.getDay());
+    const monthStart  = new Date(now.getFullYear(), now.getMonth(), 1);
+    const yearStart   = new Date(now.getFullYear(), 0, 1);
+
+    const count = (arr, since) => arr.filter(u => new Date(u.created_at) >= since).length;
+    const active = (arr, since) => arr.filter(u => u.updated_at && new Date(u.updated_at) >= since).length;
+
+    const totalUsers   = allUsersStats.length;
+    const newToday     = count(allUsersStats, todayStart);
+    const newWeek      = count(allUsersStats, weekStart);
+    const newMonth     = count(allUsersStats, monthStart);
+    const newYear      = count(allUsersStats, yearStart);
+
+    const activeToday  = active(allUsersStats, todayStart);
+    const activeWeek   = active(allUsersStats, weekStart);
+    const activeMonth  = active(allUsersStats, monthStart);
+    const activeYear   = active(allUsersStats, yearStart);
+
+    // Últimos 30 dias — novos por dia para mini-gráfico
+    const last30 = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(todayStart); d.setDate(todayStart.getDate() - i);
+      const next = new Date(d); next.setDate(d.getDate() + 1);
+      const n = allUsersStats.filter(u => { const c = new Date(u.created_at); return c >= d && c < next; }).length;
+      last30.push({ label: `${d.getDate()}/${d.getMonth()+1}`, value: n });
+    }
+    const maxDay = Math.max(...last30.map(d => d.value), 1);
+    const chartBars = last30.map(d => {
+      const pct = Math.round((d.value / maxDay) * 100);
+      return `<div class="admin-stat-bar-wrap" title="${d.label}: ${d.value} novos">
+        <div class="admin-stat-bar" style="height:${Math.max(pct,2)}%"></div>
+        <div class="admin-stat-bar-val">${d.value > 0 ? d.value : ''}</div>
+      </div>`;
+    }).join('');
+
+    const statCard = (icon, label, val, sub = '') => `
+      <div class="admin-stat-card">
+        <div class="admin-stat-icon">${icon}</div>
+        <div class="admin-stat-val">${val}</div>
+        <div class="admin-stat-label">${label}</div>
+        ${sub ? `<div class="admin-stat-sub">${sub}</div>` : ''}
+      </div>`;
+
+    content.innerHTML = `
+      <div class="admin-section-title">👤 Total de Usuários</div>
+      <div class="admin-stat-grid">
+        ${statCard('👥', 'Total cadastrados', totalUsers, 'todos os tempos')}
+        ${statCard('🆕', 'Novos hoje', newToday)}
+        ${statCard('📅', 'Novos esta semana', newWeek)}
+        ${statCard('📆', 'Novos este mês', newMonth)}
+        ${statCard('📊', 'Novos este ano', newYear)}
+      </div>
+
+      <div class="admin-section-title" style="margin-top:1.5rem">🟢 Usuários Ativos (por último acesso)</div>
+      <div class="admin-stat-grid">
+        ${statCard('⚡', 'Ativos hoje', activeToday, 'acessaram hoje')}
+        ${statCard('🔥', 'Ativos esta semana', activeWeek)}
+        ${statCard('✅', 'Ativos este mês', activeMonth)}
+        ${statCard('🌟', 'Ativos este ano', activeYear)}
+        ${statCard('📈', 'Inativos', totalUsers - activeMonth, 'sem acesso este mês')}
+      </div>
+
+      <div class="admin-section-title" style="margin-top:1.5rem">📅 Novos Usuários — Últimos 30 dias</div>
+      <div class="admin-chart-wrap">
+        <div class="admin-chart-bars">${chartBars}</div>
+        <div class="admin-chart-label">Cada barra = 1 dia · máximo do período: ${maxDay}</div>
+      </div>`;
 
   } else if (_adminTab === 'ia') {
     const key = localStorage.getItem(_GEMINI_LS) || '';
