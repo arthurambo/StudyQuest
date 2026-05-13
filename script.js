@@ -9054,12 +9054,10 @@ async function adminDeleteCode(codeId) {
   if (!sb || !state.isAdmin) return { ok: false, msg: 'Sem permissão.' };
   try {
     // Remove resgates vinculados primeiro (evita violação de FK)
-    const { error: errRedeems } = await sb
-      .from('user_redeems')
-      .delete()
-      .eq('code_id', codeId);
-    if (errRedeems) {
-      console.warn('[adminDeleteCode] Erro ao limpar user_redeems:', errRedeems.message);
+    try {
+      await sb.from('user_redeems').delete().eq('code_id', codeId);
+    } catch(e) {
+      console.warn('[adminDeleteCode] Erro ao limpar user_redeems:', e.message);
       // Continua mesmo assim — pode ser que a tabela esteja vazia para este código
     }
 
@@ -9083,18 +9081,32 @@ async function adminDeleteCode(codeId) {
  */
 async function adminDeleteUser(userId) {
   if (!sb || !state.isAdmin) return { ok: false, msg: 'Sem permissão.' };
+
+  // Helper: executa delete ignorando erros (tabela pode não existir ou estar vazia)
+  const tryDelete = async (table, filter) => {
+    try {
+      let q = sb.from(table).delete();
+      if (filter.col) q = q.eq(filter.col, filter.val);
+      if (filter.or)  q = q.or(filter.or);
+      await q;
+    } catch(e) {
+      console.warn(`[adminDeleteUser] ${table}:`, e.message);
+    }
+  };
+
   try {
     // Remove dados relacionados na ordem certa para evitar FK violations
-    await sb.from('user_redeems').delete().eq('user_id', userId).catch(() => {});
-    await sb.from('push_subscriptions').delete().eq('user_id', userId).catch(() => {});
-    await sb.from('admin_actions').delete().eq('user_id', userId).catch(() => {});
-    await sb.from('user_flags').delete().eq('user_id', userId).catch(() => {});
-    await sb.from('group_medals').delete().eq('user_id', userId).catch(() => {});
-    await sb.from('group_xp_logs').delete().eq('user_id', userId).catch(() => {});
-    await sb.from('friends').delete().or(`user_id.eq.${userId},friend_id.eq.${userId}`).catch(() => {});
-    await sb.from('friend_requests').delete().or(`from_id.eq.${userId},to_id.eq.${userId}`).catch(() => {});
-    await sb.from('group_members').delete().eq('user_id', userId).catch(() => {});
-    await sb.from('notifications').delete().or(`user_id.eq.${userId},from_id.eq.${userId}`).catch(() => {});
+    await tryDelete('user_redeems',    { col: 'user_id',   val: userId });
+    await tryDelete('push_subscriptions', { col: 'user_id', val: userId });
+    await tryDelete('admin_actions',   { col: 'user_id',   val: userId });
+    await tryDelete('user_flags',      { col: 'user_id',   val: userId });
+    await tryDelete('group_medals',    { col: 'user_id',   val: userId });
+    await tryDelete('group_xp_logs',   { col: 'user_id',   val: userId });
+    await tryDelete('friends',         { or: `user_id.eq.${userId},friend_id.eq.${userId}` });
+    await tryDelete('friend_requests', { or: `from_id.eq.${userId},to_id.eq.${userId}` });
+    await tryDelete('group_members',   { col: 'user_id',   val: userId });
+    await tryDelete('notifications',   { or: `user_id.eq.${userId},from_id.eq.${userId}` });
+
     // Por último, o perfil em si
     const { error } = await sb.from('users').delete().eq('id', userId);
     if (error) {
