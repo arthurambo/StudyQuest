@@ -1007,13 +1007,22 @@ const _SPA_PAGES = new Set([
   'profile','friends','groups','ai','admin',
 ]);
 
+// Flag: primeira navegação usa replaceState (não cria entrada extra no histórico),
+// as seguintes usam pushState. Não depende de history.state (que pode ser
+// sobrescrito pelo Supabase Auth internamente).
+let _navInitialized = false;
+
 function navigateTo(page) {
   // ── Atualiza a URL do browser sem recarregar a página ──
   if (_SPA_PAGES.has(page)) {
-    // replaceState na primeira navegação (sem criar entrada no histórico),
-    // pushState nas seguintes (cria entrada → botão Voltar funciona).
-    const method = history.state?.page ? 'pushState' : 'replaceState';
-    try { history[method]({ page }, '', '/' + page); } catch(e) {}
+    try {
+      if (_navInitialized) {
+        history.pushState({ page }, '', '/' + page);
+      } else {
+        history.replaceState({ page }, '', '/' + page);
+        _navInitialized = true;
+      }
+    } catch(e) {}
   }
 
   document.querySelectorAll('.nav-item').forEach(el => {
