@@ -5,6 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>StudyQuest — Transforme seus estudos em aventura</title>
 
+  <!-- SPA Routing: restaura o path guardado pelo 404.html do GitHub Pages -->
+  <script>
+    (function () {
+      var stored = sessionStorage.getItem('sq_spa_redirect');
+      if (stored) {
+        // Remove da sessionStorage (launchApp irá consumir depois)
+        // e corrige a URL do browser para o path real sem recarregar
+        try { history.replaceState(null, '', '/' + stored); } catch(e) {}
+      }
+    })();
+  </script>
+
   <!-- PWA -->
   <link rel="manifest" href="./manifest.json">
   <meta name="theme-color" content="#7c3aed">

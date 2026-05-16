@@ -829,6 +829,45 @@ function scheduleSyncToSupabase() {
 // INICIALIZAÇÃO
 // ============================================================
 
+// ── Botão Voltar/Avançar do browser ──────────────────────────
+// Quando o usuário navega pelo histórico, o popstate dispara e
+// restauramos a página correta sem recarregar.
+window.addEventListener('popstate', (e) => {
+  const page = e.state?.page;
+  if (page && _SPA_PAGES.has(page)) {
+    // Chama navigateTo sem fazer pushState de novo (já foi feito)
+    _navigateUI(page);
+  }
+});
+
+/** Aplica a UI de navegação sem alterar o histórico do browser */
+function _navigateUI(page) {
+  document.querySelectorAll('.nav-item').forEach(el =>
+    el.classList.toggle('active', el.dataset.page === page));
+  document.querySelectorAll('.page').forEach(el =>
+    el.classList.toggle('active', el.id === `page-${page}`));
+  document.querySelectorAll('.bottom-nav-item[data-page]').forEach(el =>
+    el.classList.toggle('active', el.dataset.page === page));
+  closeSidebar();
+  if (page === 'subjects')     renderSubjects();
+  if (page === 'tasks')        { autoArchiveTasks(); generateDynamicMissions(); renderTasks(); }
+  if (page === 'exams')        renderExams();
+  if (page === 'missions')     { generateDynamicMissions(); renderMissions(); }
+  if (page === 'achievements') renderAchievements();
+  if (page === 'shop')         renderShop();
+  if (page === 'grades')       { initGradesPage(); renderGradesPage(); populateGradeFilters(); }
+  if (page === 'study')        { initStudyPage(); renderStudyPage(); }
+  if (page === 'stats')        renderStats();
+  if (page === 'calendar')     renderCalendar();
+  if (page === 'settings')     initSettingsPage();
+  if (page === 'profile')      renderProfilePage();
+  if (page === 'friends')      renderFriendsPage();
+  if (page === 'groups')       renderGroupsPage();
+  if (page === 'ai')           renderAIPage();
+  if (page === 'admin')        renderAdminPage();
+  if (authUserId) updateNotifBell();
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
   // Always init UI components first
   initSetup();
@@ -961,7 +1000,22 @@ function initNavigation() {
   });
 }
 
+// Páginas válidas para roteamento por URL
+const _SPA_PAGES = new Set([
+  'dashboard','tasks','study','subjects','missions','achievements',
+  'shop','grades','stats','exams','calendar','settings',
+  'profile','friends','groups','ai','admin',
+]);
+
 function navigateTo(page) {
+  // ── Atualiza a URL do browser sem recarregar a página ──
+  if (_SPA_PAGES.has(page)) {
+    // replaceState na primeira navegação (sem criar entrada no histórico),
+    // pushState nas seguintes (cria entrada → botão Voltar funciona).
+    const method = history.state?.page ? 'pushState' : 'replaceState';
+    try { history[method]({ page }, '', '/' + page); } catch(e) {}
+  }
+
   document.querySelectorAll('.nav-item').forEach(el => {
     el.classList.toggle('active', el.dataset.page === page);
   });
@@ -4954,8 +5008,15 @@ async function launchApp() {
     autoArchiveTasks();
     generateDailyTasks();
     updateAllUI();
-    navigateTo('dashboard');
-    console.log('[App] App iniciado para:', state.name, '| XP:', state.xp, '| Nível:', state.level);
+    // Determina página inicial: URL atual → sessionStorage (vindo do 404.html) → dashboard
+    const _urlPage = window.location.pathname.replace(/^\//, '').split('/')[0];
+    const _storedPage = sessionStorage.getItem('sq_spa_redirect');
+    sessionStorage.removeItem('sq_spa_redirect');
+    const _startPage = (_SPA_PAGES.has(_storedPage) && _storedPage)
+                    || (_SPA_PAGES.has(_urlPage)     && _urlPage)
+                    || 'dashboard';
+    navigateTo(_startPage);
+    console.log('[App] App iniciado para:', state.name, '| XP:', state.xp, '| Nível:', state.level, '| Página:', _startPage);
     // Sincroniza perfil público para que amigos possam buscar
     if (authUserId) setTimeout(syncPublicProfile, 2000);
     // Verifica notificações de desempenho, presente surpresa e push inteligente

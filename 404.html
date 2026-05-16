@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>StudyQuest</title>
+  <!--
+    GitHub Pages SPA Redirect Trick
+    ================================
+    O GitHub Pages serve este 404.html sempre que o usuário acessa uma URL
+    que não corresponde a um arquivo real (ex: /friends, /missions, /profile).
+
+    O script abaixo:
+    1. Detecta qual página o usuário queria acessar (ex: "friends")
+    2. Guarda esse valor no sessionStorage
+    3. Redireciona imediatamente para /index.html
+
+    O index.html lê o sessionStorage antes de renderizar e passa o valor
+    para launchApp(), que navega para a página correta após o login/auth.
+  -->
+  <script>
+    var VALID_PAGES = [
+      'dashboard','tasks','study','subjects','missions','achievements',
+      'shop','grades','stats','exams','calendar','settings',
+      'profile','friends','groups','ai','admin',
+    ];
+
+    var path  = window.location.pathname.replace(/^\//, '').split('/')[0];
+    var query = window.location.search;
+    var hash  = window.location.hash;
+
+    if (VALID_PAGES.indexOf(path) !== -1) {
+      // Guarda a página desejada para o index.html consumir
+      sessionStorage.setItem('sq_spa_redirect', path);
+    }
+
+    // Redireciona para o app principal preservando query string e hash
+    window.location.replace('/' + (query || '') + (hash || ''));
+  </script>
+</head>
+<body>
+  <!-- Fallback caso o JS esteja desativado -->
+  <p>Redirecionando... <a href="/">Clique aqui</a> se não redirecionar automaticamente.</p>
+</body>
+</html>
