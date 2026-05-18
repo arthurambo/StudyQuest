@@ -363,6 +363,7 @@ let state = {
   dailyXp: 0,
   dailyGoal: 100,
   lastResetDate: null,
+  lastWeeklyResetKey: null,  // rastreia semana do último reset semanal
   subjects: [],
   tasks: [],
   taskHistory: [],       // NEW: tarefas concluídas arquivadas
@@ -2076,6 +2077,8 @@ function initWeeklyMissions() {
 
 function checkDailyReset() {
   const today = todayStr();
+
+  // ── Reset diário ────────────────────────────────────────────────
   if (state.lastResetDate !== today) {
     state.dailyXp = 0;
     // Reinicia apenas missões diárias, preserva semanais e dinâmicas
@@ -2091,6 +2094,22 @@ function checkDailyReset() {
     }
     saveState();
     showNotification('🌅 Novo dia! Missões diárias renovadas!', 'info');
+  }
+
+  // ── Reset semanal (segunda-feira de cada semana) ────────────────
+  const currentWeekKey = _isoWeekKey();
+  if (state.lastWeeklyResetKey !== currentWeekKey) {
+    const isFirstEver = state.lastWeeklyResetKey === null;
+    state.weeklyMissions = {};
+    WEEKLY_MISSIONS_DEF.forEach(m => {
+      state.weeklyMissions[m.id] = { progress: 0, completed: false };
+    });
+    state.lastWeeklyResetKey = currentWeekKey;
+    saveState();
+    if (!isFirstEver) {
+      // Só notifica se for troca real de semana, não primeira inicialização
+      showNotification('📅 Nova semana! Missões semanais renovadas!', 'info');
+    }
   }
 }
 

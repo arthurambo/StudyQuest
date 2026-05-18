@@ -1916,6 +1916,40 @@ html, body {
   /* ── Profile banner: altura menor ──────────────────────────── */
   .profile-page-banner { min-height: 0; }
   .profile-page-hero { gap: 0.85rem; }
+
+  /* ── Exam items: quebra em 2 linhas no mobile ───────────────── */
+  .exam-item {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.4rem 0.75rem;
+    padding: 0.75rem 1rem;
+  }
+  .exam-item .exam-grade-circle {
+    margin-top: 0.1rem;
+    width: 46px; height: 46px;
+    font-size: 1rem;
+  }
+  .exam-item .exam-info {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .exam-item .exam-status-badge,
+  .exam-item .exam-xp {
+    flex-shrink: 0;
+    align-self: flex-start;
+  }
+  /* Linha de ações: vai para a 2ª linha, recuada abaixo do círculo */
+  .exam-item .item-actions {
+    width: 100%;
+    padding-left: calc(46px + 0.75rem);
+    box-sizing: border-box;
+    justify-content: flex-start;
+  }
+  /* Botão "Lançar Nota" expande para usar o espaço disponível */
+  .exam-item .complete-exam-btn {
+    flex: 1;
+    text-align: center;
+  }
 }
 
 @media (max-width: 400px) {
