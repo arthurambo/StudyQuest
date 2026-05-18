@@ -1261,12 +1261,13 @@ canvas { max-width: 100%; border-radius: 8px; }
 }
 
 .cal-day {
-  aspect-ratio: 1;
+  min-height: 54px;
   border-radius: var(--radius-sm);
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  padding: 6px 2px 4px;
   font-size: 0.85rem;
   font-weight: 700;
   cursor: pointer;
@@ -1274,26 +1275,142 @@ canvas { max-width: 100%; border-radius: 8px; }
   position: relative;
   background: var(--bg-base);
   border: 1px solid transparent;
+  box-sizing: border-box;
 }
 
 .cal-day:hover { border-color: rgba(124,58,237,0.3); }
-.cal-day.today { border-color: var(--primary); color: var(--primary-light); }
-.cal-day.has-activity { background: rgba(124,58,237,0.15); }
-.cal-day.studied { background: rgba(16,185,129,0.15); border-color: rgba(16,185,129,0.2); }
-.cal-day.other-month { opacity: 0.3; }
+.cal-day.today { border-color: var(--primary); color: var(--primary-light); font-weight: 900; }
+.cal-day.selected { border-color: var(--primary); background: rgba(124,58,237,0.18); }
+.cal-day.has-activity { background: rgba(124,58,237,0.08); }
+.cal-day.studied { background: rgba(16,185,129,0.1); border-color: rgba(16,185,129,0.2); }
+.cal-day.other-month { opacity: 0.3; pointer-events: none; }
 
-.cal-dot {
-  width: 5px; height: 5px;
-  border-radius: 50%;
-  background: var(--success);
-  margin-top: 2px;
+/* Número do dia */
+.cal-day-num { line-height: 1; }
+
+/* Bolinhas por dia */
+.cal-dots {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 4px;
+  max-width: 100%;
 }
 
+.cal-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+.cal-dot-task  { background: #a855f7; }
+.cal-dot-exam  { background: #f59e0b; }
+.cal-dot-study { background: #10b981; }
+.cal-dot-more  { font-size: 0.5rem; color: var(--text-muted); line-height: 6px; font-weight: 800; }
+
+/* Painel de detalhe do dia */
 .cal-day-detail {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1.25rem;
+  min-height: 80px;
+}
+
+.cal-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.cal-detail-date {
+  font-weight: 800;
+  font-size: 0.95rem;
+  text-transform: capitalize;
+}
+
+.cal-detail-xp-badge {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--xp-color);
+  background: rgba(167,139,250,0.12);
+  padding: 0.2rem 0.55rem;
+  border-radius: 20px;
+}
+
+.cal-detail-legend {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.cal-detail-legend span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.cal-detail-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.cal-detail-item:last-child { border-bottom: none; }
+.cal-detail-item .cal-dot { width: 9px; height: 9px; margin-top: 5px; flex-shrink: 0; }
+
+.cal-detail-name {
+  display: block;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.cal-detail-subj {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  font-weight: 600;
+}
+
+.cal-detail-grade {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--success);
+  margin-left: 6px;
+}
+
+.cal-detail-pending {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--warning);
+  margin-left: 6px;
+}
+
+.cal-detail-xp {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--xp-color);
+  margin-left: 5px;
+}
+
+.cal-detail-empty {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 1rem 0;
+  margin: 0;
 }
 
 /* === MODAIS === */

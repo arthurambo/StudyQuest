@@ -3035,15 +3035,37 @@ function renderCalendar() {
 
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const isToday = dateStr === today;
-    const studied = state.studyDays && state.studyDays.includes(dateStr);
-    const hasXp = state.xpHistory[dateStr] > 0;
+    const isToday   = dateStr === today;
+    const studied   = state.studyDays && state.studyDays.includes(dateStr);
+    const hasXp     = state.xpHistory[dateStr] > 0;
+
+    // ── Coleta bolinhas do dia ───────────────────────────────────
+    const dotEntries = []; // { type: 'task'|'exam'|'study' }
+
+    // Tarefas com prazo neste dia
+    const dayTasks = state.tasks.filter(t => t.dueDate === dateStr);
+    dayTasks.forEach(() => dotEntries.push('task'));
+
+    // Provas marcadas para este dia
+    const dayExams = state.exams.filter(e => e.examDate === dateStr);
+    dayExams.forEach(() => dotEntries.push('exam'));
+
+    // Dia de estudo
+    if (studied) dotEntries.push('study');
+
+    const MAX_DOTS  = 5;
+    const visible   = dotEntries.slice(0, MAX_DOTS);
+    const hasMore   = dotEntries.length > MAX_DOTS;
+
+    const dotsHtml = visible.length
+      ? `<div class="cal-dots">${visible.map(t => `<div class="cal-dot cal-dot-${t}"></div>`).join('')}${hasMore ? '<div class="cal-dot-more">+</div>' : ''}</div>`
+      : '';
 
     html += `
     <div class="cal-day ${isToday ? 'today' : ''} ${studied ? 'studied' : ''} ${hasXp ? 'has-activity' : ''}"
-         onclick="showCalDay('${dateStr}')">
-      ${d}
-      ${studied ? '<div class="cal-dot"></div>' : ''}
+         onclick="showCalDay('${dateStr}', this)">
+      <span class="cal-day-num">${d}</span>
+      ${dotsHtml}
     </div>`;
   }
 
@@ -3051,17 +3073,68 @@ function renderCalendar() {
   renderScheduleEditor();
 }
 
-function showCalDay(dateStr) {
-  const xp = state.xpHistory[dateStr] || 0;
+function showCalDay(dateStr, el) {
+  // Marca dia selecionado visualmente
+  document.querySelectorAll('.cal-day.selected').forEach(c => c.classList.remove('selected'));
+  if (el) el.classList.add('selected');
+
+  const xp      = state.xpHistory[dateStr] || 0;
   const studied = state.studyDays && state.studyDays.includes(dateStr);
-  const tasks = state.tasks.filter(t => t.done && t.doneAt && new Date(t.doneAt).toISOString().slice(0,10) === dateStr);
-  const exams = state.exams.filter(e => e.date === dateStr);
+
+  // Tarefas com prazo neste dia
+  const dayTasks = state.tasks.filter(t => t.dueDate === dateStr);
+  // Provas com data neste dia
+  const dayExams = state.exams.filter(e => e.examDate === dateStr);
+
+  // Formata data legível
+  const [y, m, dNum] = dateStr.split('-');
+  const dayNames   = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
+  const monthNames = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  const dateObj    = new Date(+y, +m - 1, +dNum);
+  const formatted  = `${dayNames[dateObj.getDay()]}, ${+dNum} de ${monthNames[+m - 1]}`;
+
+  const taskRows = dayTasks.map(t => {
+    const subj    = state.subjects.find(s => s.id === t.subjectId);
+    const subjTag = subj ? `<span class="cal-detail-subj">${subj.emoji} ${subj.name}</span>` : '';
+    const icon    = t.done ? '✅' : '📌';
+    const diff    = t.difficulty === 'hard' ? ' 🔴' : t.difficulty === 'medium' ? ' 🟡' : '';
+    return `<div class="cal-detail-item">
+      <div class="cal-dot cal-dot-task"></div>
+      <div><span class="cal-detail-name">${icon} ${t.name}${diff}</span>${subjTag}</div>
+    </div>`;
+  }).join('');
+
+  const examRows = dayExams.map(e => {
+    const subj    = state.subjects.find(s => s.id === e.subjectId);
+    const subjTag = subj ? `<span class="cal-detail-subj">${subj.emoji} ${subj.name}</span>` : '';
+    const status  = e.grade != null
+      ? `<span class="cal-detail-grade">Nota: ${e.grade}</span>`
+      : `<span class="cal-detail-pending">Pendente</span>`;
+    return `<div class="cal-detail-item">
+      <div class="cal-dot cal-dot-exam"></div>
+      <div><span class="cal-detail-name">📝 ${e.name}</span>${subjTag}${status}</div>
+    </div>`;
+  }).join('');
+
+  const studyRow = studied ? `<div class="cal-detail-item">
+    <div class="cal-dot cal-dot-study"></div>
+    <div><span class="cal-detail-name">📚 Dia de estudo</span>${xp ? `<span class="cal-detail-xp"> +${xp} XP</span>` : ''}</div>
+  </div>` : '';
+
+  const isEmpty = !dayTasks.length && !dayExams.length && !studied;
 
   document.getElementById('cal-day-detail').innerHTML = `
-    <h3>📅 ${dateStr}</h3>
-    <p>⚡ XP: <strong>${xp}</strong> | 🔥 Estudou: <strong>${studied ? 'Sim ✅' : 'Não'}</strong></p>
-    ${tasks.length ? `<p>✅ Tarefas: ${tasks.map(t => t.name).join(', ')}</p>` : ''}
-    ${exams.length ? `<p>📝 Provas: ${exams.map(e => `${e.name} (${e.grade})`).join(', ')}</p>` : ''}
+    <div class="cal-detail-header">
+      <span class="cal-detail-date">${formatted}</span>
+      ${xp ? `<span class="cal-detail-xp-badge">⚡ ${xp} XP</span>` : ''}
+    </div>
+    <div class="cal-detail-legend">
+      <span><span class="cal-dot cal-dot-task"></span> Tarefas</span>
+      <span><span class="cal-dot cal-dot-exam"></span> Provas</span>
+      <span><span class="cal-dot cal-dot-study"></span> Estudo</span>
+    </div>
+    ${isEmpty ? '<p class="cal-detail-empty">Nenhum evento neste dia.</p>' : ''}
+    ${taskRows}${examRows}${studyRow}
   `;
 }
 
