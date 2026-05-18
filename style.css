@@ -1790,6 +1790,151 @@ input[type="range"] {
   .topbar-logo { font-size: 1rem; }
 }
 
+/* ============================================================
+   MOBILE — CORREÇÕES GERAIS DE OVERFLOW E PROPORÇÃO
+   (aplicado em telas até 640px)
+   ============================================================ */
+
+/* Impede scroll horizontal em toda a página */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+.main-content {
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+
+  /* ── Page header: empilha título e botões verticalmente ─────── */
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.65rem;
+  }
+
+  /* Botões da ação ocupam toda a largura e ficam lado a lado */
+  .page-header-actions {
+    width: 100%;
+    flex-wrap: nowrap;
+  }
+  .page-header-actions .btn-primary,
+  .page-header-actions .btn-secondary,
+  .page-header-actions .btn-danger {
+    flex: 1;
+    font-size: 0.8rem;
+    padding: 0.5rem 0.6rem;
+    min-height: 40px;
+    justify-content: center;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  /* ── Sort select: remove largura mínima fixa ────────────────── */
+  .sort-select {
+    min-width: 0;
+    width: 100%;
+    font-size: 0.78rem;
+  }
+  .sort-select-wrap {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* ── Sort/filter bar: coluna no mobile ─────────────────────── */
+  .sort-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  /* ── Cards e itens: sem largura fixa ───────────────────────── */
+  .card, .stat-card, .task-item,
+  .subject-card, .exam-card,
+  .friend-card, .mission-card {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* ── Boosts bar: wrapa normalmente ─────────────────────────── */
+  .boosts-bar {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  /* ── Grade de missões/conquistas: 1 coluna no mobile ────────── */
+  .missions-grid { grid-template-columns: 1fr; }
+
+  /* ── Topbar: comprime ítens ─────────────────────────────────── */
+  .topbar-stats { gap: 0.5rem; }
+  .topbar-stats span { font-size: 0.75rem; }
+
+  /* ── Modais: botões empilhados ──────────────────────────────── */
+  .modal-btns {
+    flex-direction: column;
+  }
+  .modal-btns .btn-primary,
+  .modal-btns .btn-secondary,
+  .modal-btns .btn-danger {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* ── Tabs de grupos: scroll horizontal ─────────────────────── */
+  .group-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .group-tabs::-webkit-scrollbar { display: none; }
+  .group-tab { flex-shrink: 0; font-size: 0.8rem; padding: 0.45rem 0.7rem; }
+
+  /* ── Admin tabs: scroll horizontal ─────────────────────────── */
+  .admin-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .admin-tabs::-webkit-scrollbar { display: none; }
+  .admin-tab-btn { flex-shrink: 0; font-size: 0.78rem; padding: 0.45rem 0.65rem; }
+
+  /* ── Ranking bar: label truncado ────────────────────────────── */
+  .ranking-info { min-width: 0; overflow: hidden; }
+  .ranking-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ── Stat grid do admin: 2 colunas ─────────────────────────── */
+  .admin-stat-grid { grid-template-columns: repeat(2, 1fr); }
+
+  /* ── Profile banner: altura menor ──────────────────────────── */
+  .profile-page-banner { min-height: 0; }
+  .profile-page-hero { gap: 0.85rem; }
+}
+
+@media (max-width: 400px) {
+  /* Telas muito estreitas: 1 coluna nos stats do admin */
+  .admin-stat-grid { grid-template-columns: 1fr 1fr; }
+
+  /* Topbar: comprime stats em telas muito pequenas */
+  .topbar-stats span:first-child { display: none; } /* esconde streak (🔥) */
+
+  /* Page header buttons: um embaixo do outro */
+  .page-header-actions {
+    flex-direction: column;
+  }
+  .page-header-actions .btn-primary,
+  .page-header-actions .btn-secondary {
+    width: 100%;
+  }
+}
+
 /* === SCROLLBAR CUSTOM === */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg-base); }
