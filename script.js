@@ -761,14 +761,15 @@ async function saveUserData(data) {
     const { error } = await sb
       .from('users')
       .upsert({
-        id:      uid,
-        name:    data.name    || '',
-        xp:      data.xp      || 0,
-        level:   data.level   || 1,
-        coins:   data.coins   || 0,
-        iacoins: data.iacoins || 0,
-        username: data.username || _generateUsername(uid),
-        data:    { ...data },
+        id:         uid,
+        name:       data.name    || '',
+        xp:         data.xp      || 0,
+        level:      data.level   || 1,
+        coins:      data.coins   || 0,
+        iacoins:    data.iacoins || 0,
+        username:   data.username || _generateUsername(uid),
+        data:       { ...data },
+        updated_at: new Date().toISOString(), // ← rastreia último acesso para estatísticas
       });
     if (error) console.warn('[Supabase] ❌ Erro ao salvar (código:', error.code, '):', error.message);
     else       console.log('[Supabase] ✅ State salvo — XP:', data.xp, '| Nível:', data.level, '| Nome:', data.name);
@@ -9329,35 +9330,54 @@ async function renderAdminPage(tab) {
       ${codesHtml}`;
 
   } else if (_adminTab === 'stats') {
-    // Carrega todos os usuários com created_at e updated_at para calcular estatísticas
+    // ── Carrega usuários com tratamento robusto de colunas ausentes ───────
     let allUsersStats = [];
+    let hasUpdatedAt  = false;
+
     try {
-      const { data } = await sb.from('users')
+      // Tenta buscar com updated_at (pode não existir ainda no banco)
+      const { data, error } = await sb.from('users')
         .select('id, created_at, updated_at')
         .order('created_at', { ascending: false })
         .limit(5000);
-      allUsersStats = data || [];
-    } catch(e) { console.warn('[admin stats]', e); }
 
-    const now      = new Date();
+      if (error) {
+        console.warn('[admin stats] Erro com updated_at, tentando sem:', error.message);
+        // Retry sem updated_at
+        const { data: data2, error: err2 } = await sb.from('users')
+          .select('id, created_at')
+          .order('created_at', { ascending: false })
+          .limit(5000);
+        if (err2) console.warn('[admin stats] Ainda com erro:', err2.message);
+        allUsersStats = data2 || [];
+        hasUpdatedAt = false;
+      } else {
+        allUsersStats = data || [];
+        // Verifica se alguma linha tem updated_at preenchido
+        hasUpdatedAt = allUsersStats.some(u => u.updated_at != null);
+      }
+    } catch(e) { console.warn('[admin stats] Exceção:', e.message); }
+
+    const now         = new Date();
     const todayStart  = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekStart   = new Date(todayStart); weekStart.setDate(todayStart.getDate() - todayStart.getDay());
     const monthStart  = new Date(now.getFullYear(), now.getMonth(), 1);
     const yearStart   = new Date(now.getFullYear(), 0, 1);
 
-    const count = (arr, since) => arr.filter(u => new Date(u.created_at) >= since).length;
+    const count  = (arr, since) => arr.filter(u => u.created_at && new Date(u.created_at) >= since).length;
     const active = (arr, since) => arr.filter(u => u.updated_at && new Date(u.updated_at) >= since).length;
 
-    const totalUsers   = allUsersStats.length;
-    const newToday     = count(allUsersStats, todayStart);
-    const newWeek      = count(allUsersStats, weekStart);
-    const newMonth     = count(allUsersStats, monthStart);
-    const newYear      = count(allUsersStats, yearStart);
+    const totalUsers  = allUsersStats.length;
+    const newToday    = count(allUsersStats, todayStart);
+    const newWeek     = count(allUsersStats, weekStart);
+    const newMonth    = count(allUsersStats, monthStart);
+    const newYear     = count(allUsersStats, yearStart);
 
-    const activeToday  = active(allUsersStats, todayStart);
-    const activeWeek   = active(allUsersStats, weekStart);
-    const activeMonth  = active(allUsersStats, monthStart);
-    const activeYear   = active(allUsersStats, yearStart);
+    const activeToday  = hasUpdatedAt ? active(allUsersStats, todayStart)  : '—';
+    const activeWeek   = hasUpdatedAt ? active(allUsersStats, weekStart)   : '—';
+    const activeMonth  = hasUpdatedAt ? active(allUsersStats, monthStart)  : '—';
+    const activeYear   = hasUpdatedAt ? active(allUsersStats, yearStart)   : '—';
+    const inactiveMonth = hasUpdatedAt ? totalUsers - active(allUsersStats, monthStart) : '—';
 
     // Últimos 30 dias — novos por dia para mini-gráfico
     const last30 = [];
@@ -9400,7 +9420,7 @@ async function renderAdminPage(tab) {
         ${statCard('🔥', 'Ativos esta semana', activeWeek)}
         ${statCard('✅', 'Ativos este mês', activeMonth)}
         ${statCard('🌟', 'Ativos este ano', activeYear)}
-        ${statCard('📈', 'Inativos', totalUsers - activeMonth, 'sem acesso este mês')}
+        ${statCard('📈', 'Inativos', inactiveMonth, 'sem acesso este mês')}
       </div>
 
       <div class="admin-section-title" style="margin-top:1.5rem">📅 Novos Usuários — Últimos 30 dias</div>
