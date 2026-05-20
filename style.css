@@ -278,6 +278,8 @@ select option { background: var(--bg-card); }
   background: rgba(124,58,237,0.2);
   border-radius: 50%;
   border: 2px solid rgba(124,58,237,0.4);
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
 .user-info { display: flex; flex-direction: column; }
@@ -2942,6 +2944,7 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
   border: 2px solid rgba(124,58,237,0.35);
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
+  overflow: hidden;  /* garante que img não vaze do círculo */
   transition: var(--transition);
 }
 
@@ -3053,6 +3056,7 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
   border: 2px solid rgba(124,58,237,0.3);
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
+  overflow: hidden;
   transition: var(--transition);
 }
 .settings-profile-row:hover .settings-profile-avatar { border-color: var(--primary); }
@@ -3989,6 +3993,45 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
   transition:border-color .15s, background .15s;
 }
 .avatar-type-btn.active { border-color:var(--primary,#7c3aed); background:rgba(124,58,237,.15); }
+
+/* ── Upload de foto de perfil ──────────────────────────────────── */
+.avatar-upload-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 1.25rem 1rem;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+  user-select: none;
+}
+
+.avatar-upload-area:hover,
+.avatar-upload-area:active {
+  border-color: var(--primary);
+  background: rgba(124,58,237,0.07);
+  color: var(--primary-light);
+}
+
+#avatar-upload-icon { font-size: 1.75rem; line-height: 1; }
+
+/* Nav avatar com foto (img dentro da div circular) */
+#nav-avatar img,
+.settings-profile-avatar img,
+#cfg-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
 
 /* ── Friend profile actions ────────────────────────────────────── */
 .friend-profile-actions { display:flex; gap:.5rem; margin:.5rem 0 .75rem; flex-wrap:wrap; }

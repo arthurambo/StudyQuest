@@ -1022,12 +1022,22 @@
     </div>
 
     <div class="profile-field">
-      <label class="grades-label">🖼️ Tipo de Foto</label>
+      <label class="grades-label">🖼️ Tipo de Avatar</label>
       <div class="avatar-type-row">
-        <button class="avatar-type-btn active" data-type="emoji"   id="avatar-type-emoji"  onclick="selectAvatarType('emoji')">😊 Emoji</button>
-        <button class="avatar-type-btn"        data-type="google"  id="avatar-type-google" onclick="selectAvatarType('google')" style="display:none">📷 Google</button>
-        <button class="avatar-type-btn"        data-type="url"     id="avatar-type-url"    onclick="selectAvatarType('url')">🔗 URL</button>
+        <button class="avatar-type-btn active" data-type="emoji"  id="avatar-type-emoji"  onclick="selectAvatarType('emoji')">😊 Emoji</button>
+        <button class="avatar-type-btn"        data-type="upload" id="avatar-type-upload" onclick="selectAvatarType('upload')">📷 Foto</button>
+        <button class="avatar-type-btn"        data-type="google" id="avatar-type-google" onclick="selectAvatarType('google')" style="display:none">📷 Google</button>
+        <button class="avatar-type-btn"        data-type="url"    id="avatar-type-url"    onclick="selectAvatarType('url')" style="display:none">🔗 URL</button>
       </div>
+      <!-- Upload de foto do dispositivo -->
+      <div id="avatar-upload-row" style="display:none;margin-top:.75rem">
+        <input type="file" id="avatar-upload-input" accept="image/*" style="display:none" onchange="handleAvatarUpload(this)">
+        <div class="avatar-upload-area" onclick="document.getElementById('avatar-upload-input').click()">
+          <span id="avatar-upload-icon">📁</span>
+          <span id="avatar-upload-status">Toque para escolher uma foto da galeria</span>
+        </div>
+      </div>
+      <!-- URL externa (oculto, mantido por compat.) -->
       <div id="avatar-url-row" class="friends-search-bar" style="display:none;margin-top:.5rem">
         <input type="url" id="profile-url-input" placeholder="https://..." style="flex:1">
       </div>

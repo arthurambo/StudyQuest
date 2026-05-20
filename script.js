@@ -3207,10 +3207,10 @@ function _setStyle(id, prop, value) {
 
 function updateDashboard() {
   // Nome e avatar
-  _setText('dash-name',  state.name);
-  _setText('nav-name',   state.name);
-  _setText('nav-avatar', state.avatar);
-  _setText('nav-level',  `Nível ${state.level}`);
+  _setText('dash-name', state.name);
+  _setText('nav-name',  state.name);
+  _renderNavAvatar();
+  _setText('nav-level', `Nível ${state.level}`);
 
   // Stats
   _setText('stat-xp',     state.xp);
@@ -5484,8 +5484,14 @@ function initSettingsPage() {
   // Populate profile preview
   const cfgAvatar = document.getElementById('cfg-avatar');
   const cfgName   = document.getElementById('cfg-name');
-  if (cfgAvatar) cfgAvatar.textContent = state.avatar || '🧙';
-  if (cfgName)   cfgName.textContent   = state.name   || 'Herói';
+  if (cfgAvatar) {
+    if ((state.avatarType === 'google' || state.avatarType === 'url' || state.avatarType === 'upload') && state.avatarUrl) {
+      cfgAvatar.innerHTML = `<img src="${escHtml(state.avatarUrl)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block">`;
+    } else {
+      cfgAvatar.textContent = state.avatar || '🧙';
+    }
+  }
+  if (cfgName) cfgName.textContent = state.name || 'Herói';
 
   // Show logged-in email
   const user = getAuthUser();
@@ -5676,8 +5682,28 @@ function openEditProfile() {
     gBtn.classList.toggle('active', state.avatarType === 'google');
   }
 
+  // Limpa foto pendente ao reabrir o modal
+  state._pendingUploadUrl = null;
+
   // Destaca tipo ativo
-  _updateAvatarTypeUI(state.avatarType);
+  _updateAvatarTypeUI(state.avatarType || 'emoji');
+
+  // Restaura preview se já tem foto ou URL
+  const previewEl = document.getElementById('profile-preview-avatar');
+  if (previewEl) {
+    if ((state.avatarType === 'upload' || state.avatarType === 'google' || state.avatarType === 'url') && state.avatarUrl) {
+      previewEl.innerHTML = `<img src="${escHtml(state.avatarUrl)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`;
+    } else {
+      previewEl.textContent = state.avatar || '🧙';
+    }
+  }
+  // Restaura status do upload
+  if (state.avatarType === 'upload' && state.avatarUrl) {
+    const statusEl = document.getElementById('avatar-upload-status');
+    const iconEl   = document.getElementById('avatar-upload-icon');
+    if (statusEl) statusEl.textContent = 'Foto atual. Toque para trocar.';
+    if (iconEl)   iconEl.textContent   = '✅';
+  }
 
   // Populate favorite subject select
   const sel = document.getElementById('profile-fav-subject');
@@ -5691,13 +5717,15 @@ function openEditProfile() {
 }
 
 function _updateAvatarTypeUI(type) {
-  document.getElementById('avatar-type-emoji')?.classList.toggle('active', type === 'emoji');
-  document.getElementById('avatar-type-google')?.classList.toggle('active', type === 'google');
-  document.getElementById('avatar-type-url')?.classList.toggle('active', type === 'url');
-  const urlRow = document.getElementById('avatar-url-row');
-  if (urlRow) urlRow.style.display = type === 'url' ? 'flex' : 'none';
-  const emojiRow = document.getElementById('profile-avatar-grid-wrap');
-  if (emojiRow) emojiRow.style.display = type === 'emoji' ? '' : 'none';
+  ['emoji','upload','google','url'].forEach(t => {
+    document.getElementById(`avatar-type-${t}`)?.classList.toggle('active', t === type);
+  });
+  const urlRow    = document.getElementById('avatar-url-row');
+  const uploadRow = document.getElementById('avatar-upload-row');
+  const emojiRow  = document.getElementById('profile-avatar-grid-wrap');
+  if (urlRow)    urlRow.style.display    = type === 'url'    ? 'flex' : 'none';
+  if (uploadRow) uploadRow.style.display = type === 'upload' ? ''     : 'none';
+  if (emojiRow)  emojiRow.style.display  = type === 'emoji'  ? ''     : 'none';
 }
 
 function updateProfilePreview() {
@@ -5747,24 +5775,26 @@ function saveProfile() {
   const avatarType = activeTypeBtn?.dataset.type || 'emoji';
   let avatarUrl = '';
   if (avatarType === 'google') avatarUrl = state.googleAvatarUrl || '';
-  if (avatarType === 'url') avatarUrl = document.getElementById('profile-url-input')?.value.trim() || '';
-  state.avatarType = avatarType;
-  state.avatarUrl  = avatarUrl;
+  if (avatarType === 'url')    avatarUrl = document.getElementById('profile-url-input')?.value.trim() || '';
+  if (avatarType === 'upload') avatarUrl = state._pendingUploadUrl || (state.avatarType === 'upload' ? state.avatarUrl : '');
+  state.avatarType          = avatarType;
+  state.avatarUrl           = avatarUrl;
+  state._pendingUploadUrl   = null;  // limpa temporário
 
   if (!name) return showNotification('Digite seu nome de herói!', 'warning');
 
-  const nameChanged   = name   !== state.name;
-  const avatarChanged = avatar !== state.avatar;
+  const nameChanged   = name !== state.name;
+  const avatarChanged = avatar !== state.avatar || avatarType !== (state.avatarType || 'emoji');
 
-  state.name   = name;
-  state.avatar = avatar;
+  state.name            = name;
+  state.avatar          = avatar;
   state.favoriteSubject = favoriteSubject;
   saveState();
 
-  // Update all UI elements immediately
-  document.getElementById('nav-name').textContent   = name;
-  document.getElementById('nav-avatar').textContent = avatar;
-  document.getElementById('dash-name').textContent  = name;
+  // Atualiza topbar imediatamente
+  document.getElementById('nav-name').textContent  = name;
+  document.getElementById('dash-name').textContent = name;
+  _renderNavAvatar();
 
   closeModal('modal-edit-profile');
 
@@ -6332,21 +6362,79 @@ function checkPerformanceNotifs() {
 
 function selectAvatarType(type) {
   _updateAvatarTypeUI(type);
-  // Sync preview
+  const previewEl = document.getElementById('profile-preview-avatar');
   if (type === 'google' && state.googleAvatarUrl) {
-    document.getElementById('profile-preview-avatar').innerHTML =
-      `<img src="${state.googleAvatarUrl}" class="avatar-img" style="width:100%;height:100%;border-radius:50%">`;
+    previewEl.innerHTML = `<img src="${state.googleAvatarUrl}" class="avatar-img" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`;
   } else if (type === 'url') {
     const url = document.getElementById('profile-url-input')?.value.trim();
-    if (url) document.getElementById('profile-preview-avatar').innerHTML =
-      `<img src="${url}" class="avatar-img" style="width:100%;height:100%;border-radius:50%">`;
+    if (url) previewEl.innerHTML = `<img src="${escHtml(url)}" class="avatar-img" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`;
     document.getElementById('profile-url-input')?.addEventListener('input', e => {
-      if (e.target.value.trim()) document.getElementById('profile-preview-avatar').innerHTML =
-        `<img src="${escHtml(e.target.value.trim())}" class="avatar-img" style="width:100%;height:100%;border-radius:50%">`;
+      if (e.target.value.trim()) previewEl.innerHTML =
+        `<img src="${escHtml(e.target.value.trim())}" class="avatar-img" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`;
     }, { once: true });
+  } else if (type === 'upload') {
+    // Se já tem foto carregada nesta sessão ou salva anteriormente, mostra
+    const existing = state._pendingUploadUrl || (state.avatarType === 'upload' ? state.avatarUrl : '');
+    if (existing) {
+      previewEl.innerHTML = `<img src="${existing}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`;
+    }
+    // Abre o seletor de arquivo automaticamente se não tem foto ainda
+    if (!existing) {
+      setTimeout(() => document.getElementById('avatar-upload-input')?.click(), 100);
+    }
   } else {
     updateProfilePreview();
   }
+}
+
+/**
+ * Lida com o upload de foto do dispositivo:
+ * lê o arquivo, redimensiona para 200×200 com canvas e armazena
+ * como data URL JPEG (~15–25 KB) em state._pendingUploadUrl.
+ */
+function handleAvatarUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const statusEl = document.getElementById('avatar-upload-status');
+  const iconEl   = document.getElementById('avatar-upload-icon');
+  if (statusEl) statusEl.textContent = 'Processando foto...';
+  if (iconEl)   iconEl.textContent   = '⏳';
+
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    const img = new Image();
+    img.onload = function() {
+      // Redimensiona para quadrado 200×200 (crop centralizado)
+      const SIZE   = 200;
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = SIZE;
+      const ctx    = canvas.getContext('2d');
+
+      const minSide = Math.min(img.width, img.height);
+      const sx = (img.width  - minSide) / 2;
+      const sy = (img.height - minSide) / 2;
+      ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, SIZE, SIZE);
+
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+      state._pendingUploadUrl = dataUrl;
+
+      // Preview na modal
+      const previewEl = document.getElementById('profile-preview-avatar');
+      if (previewEl) previewEl.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`;
+
+      if (statusEl) statusEl.textContent = 'Foto carregada! Clique em Salvar.';
+      if (iconEl)   iconEl.textContent   = '✅';
+    };
+    img.onerror = function() {
+      if (statusEl) statusEl.textContent = 'Erro ao carregar imagem. Tente outra.';
+      if (iconEl)   iconEl.textContent   = '❌';
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+  // Limpa o input para permitir reselecionar o mesmo arquivo
+  input.value = '';
 }
 
 function renderProfilePage() {
@@ -6437,10 +6525,21 @@ function _avatarHtml(user, extraClass = '') {
   const frame = user.equippedFrame || null;
   const frameClass = frame ? ` avatar-frame ${frame}` : '';
   const cls = `friend-avatar${frameClass}${extraClass ? ' ' + extraClass : ''}`;
-  if ((user.avatarType === 'google' || user.avatarType === 'url') && user.avatarUrl) {
-    return `<img class="${cls} avatar-img" src="${escHtml(user.avatarUrl)}" alt="${escHtml(user.name)}" onerror="this.outerHTML='<div class=\'${cls}\'>${user.avatar||'🧙'}</div>'">`;
+  if ((user.avatarType === 'google' || user.avatarType === 'url' || user.avatarType === 'upload') && user.avatarUrl) {
+    return `<img class="${cls} avatar-img" src="${escHtml(user.avatarUrl)}" alt="${escHtml(user.name || '')}" onerror="this.outerHTML='<div class=\\'${cls}\\'>${user.avatar||'🧙'}</div>'">`;
   }
   return `<div class="${cls}">${user.avatar || '🧙'}</div>`;
+}
+
+/** Atualiza o avatar da topbar (pode ser emoji ou imagem) */
+function _renderNavAvatar() {
+  const el = document.getElementById('nav-avatar');
+  if (!el) return;
+  if ((state.avatarType === 'google' || state.avatarType === 'url' || state.avatarType === 'upload') && state.avatarUrl) {
+    el.innerHTML = `<img src="${escHtml(state.avatarUrl)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block">`;
+  } else {
+    el.textContent = state.avatar || '🧙';
+  }
 }
 
 /** Busca dados de um único usuário pela tabela users */
