@@ -1355,9 +1355,14 @@ function generateDailyTasks() {
   const subjects = (state.schedule || {})[weekday] || [];
   if (!subjects.length) { state.dailyTasksDate = today; saveState(); return; }
 
-  // Gera 1 tarefa por matéria (máximo 3), rotacionando o tipo
+  // Offset diário: soma year+month+day para rotacionar o tipo de tarefa
+  // Ex: 2026+5+25=2056 → 2056%3=1 (revisao), na semana seguinte 2056+7=2063 → 2063%3=2 (feynman)
+  const [y, mo, d] = today.split('-').map(Number);
+  const typeOffset = (y + mo + d) % DAILY_TASK_TYPES.length;
+
+  // Gera 1 tarefa por matéria (máximo 3), rotacionando o tipo baseado na data
   const tasks = subjects.slice(0, 3).map((subject, i) => {
-    const type = DAILY_TASK_TYPES[i % DAILY_TASK_TYPES.length];
+    const type = DAILY_TASK_TYPES[(i + typeOffset) % DAILY_TASK_TYPES.length];
     return {
       id:          'dt_' + Date.now() + '_' + i,
       type:        type.id,
@@ -9521,62 +9526,63 @@ async function renderAdminPage(tab) {
       ${codesHtml}`;
 
   } else if (_adminTab === 'stats') {
-    // ── Carrega usuários com tratamento robusto de colunas ausentes ───────
+    // ── Datas de corte em UTC (evita problemas de timezone vs Supabase) ────
+    const now = new Date();
+    const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const weekUTC  = new Date(todayUTC); weekUTC.setUTCDate(todayUTC.getUTCDate() - todayUTC.getUTCDay());
+    const monthUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const yearUTC  = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+
+    // Helper: conta no servidor via .gte() — sem parsing de datas no cliente
+    const serverCount = async (col, since) => {
+      try {
+        const { count } = await sb.from('users')
+          .select('id', { count: 'exact', head: true })
+          .gte(col, since.toISOString());
+        return count ?? 0;
+      } catch(e) { return 0; }
+    };
+
+    // Executa todas as contagens em paralelo
+    const [
+      totalUsers,
+      newToday, newWeek, newMonth, newYear,
+      activeToday, activeWeek, activeMonth, activeYear,
+    ] = await Promise.all([
+      sb.from('users').select('id', { count: 'exact', head: true }).then(r => r.count ?? 0),
+      serverCount('created_at', todayUTC),
+      serverCount('created_at', weekUTC),
+      serverCount('created_at', monthUTC),
+      serverCount('created_at', yearUTC),
+      serverCount('updated_at', todayUTC),
+      serverCount('updated_at', weekUTC),
+      serverCount('updated_at', monthUTC),
+      serverCount('updated_at', yearUTC),
+    ]);
+
+    const inactiveMonth = totalUsers - activeMonth;
+
+    // ── Bulk fetch só para o gráfico dos últimos 30 dias ─────────────────
     let allUsersStats = [];
-    let hasUpdatedAt  = false;
-
     try {
-      // Tenta buscar com updated_at (pode não existir ainda no banco)
-      const { data, error } = await sb.from('users')
-        .select('id, created_at, updated_at')
-        .order('created_at', { ascending: false })
-        .limit(5000);
-
-      if (error) {
-        console.warn('[admin stats] Erro com updated_at, tentando sem:', error.message);
-        // Retry sem updated_at
-        const { data: data2, error: err2 } = await sb.from('users')
-          .select('id, created_at')
-          .order('created_at', { ascending: false })
-          .limit(5000);
-        if (err2) console.warn('[admin stats] Ainda com erro:', err2.message);
-        allUsersStats = data2 || [];
-        hasUpdatedAt = false;
-      } else {
-        allUsersStats = data || [];
-        // Verifica se alguma linha tem updated_at preenchido
-        hasUpdatedAt = allUsersStats.some(u => u.updated_at != null);
-      }
-    } catch(e) { console.warn('[admin stats] Exceção:', e.message); }
-
-    const now         = new Date();
-    const todayStart  = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const weekStart   = new Date(todayStart); weekStart.setDate(todayStart.getDate() - todayStart.getDay());
-    const monthStart  = new Date(now.getFullYear(), now.getMonth(), 1);
-    const yearStart   = new Date(now.getFullYear(), 0, 1);
-
-    const count  = (arr, since) => arr.filter(u => u.created_at && new Date(u.created_at) >= since).length;
-    const active = (arr, since) => arr.filter(u => u.updated_at && new Date(u.updated_at) >= since).length;
-
-    const totalUsers  = allUsersStats.length;
-    const newToday    = count(allUsersStats, todayStart);
-    const newWeek     = count(allUsersStats, weekStart);
-    const newMonth    = count(allUsersStats, monthStart);
-    const newYear     = count(allUsersStats, yearStart);
-
-    const activeToday  = hasUpdatedAt ? active(allUsersStats, todayStart)  : '—';
-    const activeWeek   = hasUpdatedAt ? active(allUsersStats, weekStart)   : '—';
-    const activeMonth  = hasUpdatedAt ? active(allUsersStats, monthStart)  : '—';
-    const activeYear   = hasUpdatedAt ? active(allUsersStats, yearStart)   : '—';
-    const inactiveMonth = hasUpdatedAt ? totalUsers - active(allUsersStats, monthStart) : '—';
+      const { data } = await sb.from('users')
+        .select('id, created_at')
+        .gte('created_at', new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 29)).toISOString())
+        .order('created_at', { ascending: false });
+      allUsersStats = data || [];
+    } catch(e) { console.warn('[admin stats] Gráfico:', e.message); }
 
     // Últimos 30 dias — novos por dia para mini-gráfico
     const last30 = [];
     for (let i = 29; i >= 0; i--) {
-      const d = new Date(todayStart); d.setDate(todayStart.getDate() - i);
-      const next = new Date(d); next.setDate(d.getDate() + 1);
-      const n = allUsersStats.filter(u => { const c = new Date(u.created_at); return c >= d && c < next; }).length;
-      last30.push({ label: `${d.getDate()}/${d.getMonth()+1}`, value: n });
+      const d    = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i));
+      const next = new Date(d); next.setUTCDate(d.getUTCDate() + 1);
+      const n = allUsersStats.filter(u => {
+        if (!u.created_at) return false;
+        const c = new Date(u.created_at);
+        return c >= d && c < next;
+      }).length;
+      last30.push({ label: `${d.getUTCDate()}/${d.getUTCMonth()+1}`, value: n });
     }
     const maxDay = Math.max(...last30.map(d => d.value), 1);
     const chartBars = last30.map(d => {
