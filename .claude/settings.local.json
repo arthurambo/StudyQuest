@@ -22,7 +22,11 @@
       "Bash(git commit *)",
       "Bash(grep -v \"//.*group\")",
       "Bash(node -e ' *)",
-      "Bash(grep -v \"//.*\")"
+      "Bash(grep -v \"//.*\")",
+      "Bash(ls supabase/)",
+      "Bash(ls -la functions/)",
+      "Bash(cat .env)",
+      "Bash(ls -la .env*)"
     ]
   }
 }

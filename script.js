@@ -7215,7 +7215,7 @@ async function handleSendGift() {
  * Chave pública VAPID (gerada uma vez — nunca mudar sem reger a Edge Function também).
  * A chave PRIVADA fica SOMENTE nas variáveis de ambiente da Edge Function no Supabase.
  */
-const VAPID_PUBLIC_KEY = 'BJp3WxkkiYt1EkyJVFEWG76beoHg1cvrvFzjNpsLOwX24gIEO0VSw9Q6bmlv7cx_13iHHnnmiEftNFIVQL4NQZk';
+const VAPID_PUBLIC_KEY = 'BEdUNLPAv-abfKlkcoxCDY0KKrZXTbvQ1J49sZY2EGbcBbqsKp8i50_g9BQbTbE_dy_GaIL6J1av9m-14x9VaTc';
 
 /** Converte base64url → Uint8Array (necessário para applicationServerKey) */
 function _urlBase64ToUint8Array(base64String) {
@@ -9716,17 +9716,7 @@ async function renderAdminPage(tab) {
       </div>`;
 
   } else if (_adminTab === 'teste') {
-    // ── Conta subscrições no banco ─────────────────────────────────────
-    let totalSubs = 0, mySubs = 0;
-    try {
-      const [r1, r2] = await Promise.all([
-        sb.from('push_subscriptions').select('id', { count: 'exact', head: true }),
-        sb.from('push_subscriptions').select('id', { count: 'exact', head: true }).eq('user_id', authUserId),
-      ]);
-      totalSubs = r1.count ?? 0;
-      mySubs    = r2.count ?? 0;
-    } catch(e) { console.warn('[admin teste]', e); }
-
+    // ── Renderiza imediatamente (sem esperar o banco) ──────────────────
     const perm = typeof Notification !== 'undefined' ? Notification.permission : 'unknown';
     const permColor = { granted: '#34d399', denied: '#f87171', default: '#f59e0b', unknown: '#888' };
     const permLabel = { granted: '✅ Concedida', denied: '🚫 Bloqueada (reative no navegador)', default: '○ Ainda não pedida', unknown: '❓ Não suportado' };
@@ -9736,8 +9726,8 @@ async function renderAdminPage(tab) {
 
       <div class="admin-stat-grid" style="margin-bottom:1rem">
         ${statCard('🔐', 'Permissão', permLabel[perm] || perm, '', `color:${permColor[perm]||'#888'}`)}
-        ${statCard('📱', 'Minha sub.', mySubs > 0 ? '✅ Ativo' : '❌ Sem sub', mySubs > 0 ? 'dispositivo inscrito' : 'ative nas configurações')}
-        ${statCard('🌐', 'Total subscrito', totalSubs, 'dispositivos no banco')}
+        <div id="adm-teste-mysubs-card">${statCard('📱', 'Minha sub.', '…', 'carregando…')}</div>
+        <div id="adm-teste-totalsubs-card">${statCard('🌐', 'Total subscrito', '…', 'carregando…')}</div>
       </div>
 
       <div class="admin-create-code-form" style="margin-bottom:1rem">
@@ -9749,8 +9739,8 @@ async function renderAdminPage(tab) {
           <label class="grades-label">Mensagem</label>
           <input type="text" id="test-push-body" value="Esta é uma notificação de teste! 🎉" placeholder="Corpo da mensagem" style="font-size:16px">
         </div>
-        <div style="display:flex;gap:.6rem;flex-wrap:wrap">
-          <button class="btn-primary" onclick="adminTestPushSelf()" ${mySubs === 0 ? 'disabled title="Ative as notificações primeiro"' : ''}>
+        <div style="display:flex;gap:.6rem;flex-wrap:wrap" id="adm-teste-btns">
+          <button class="btn-primary" onclick="adminTestPushSelf()" disabled id="adm-teste-push-btn">
             🔔 Enviar Push para Mim
           </button>
           <button class="btn-secondary" onclick="adminTestLocalNotif()">
@@ -9776,6 +9766,32 @@ async function renderAdminPage(tab) {
           <code style="background:var(--bg-base);padding:.1rem .4rem;border-radius:4px">npx supabase functions deploy send-push --no-verify-jwt</code>
         </div>
       </div>`;
+
+    // ── Busca contagens do banco em background (não bloqueia a UI) ────
+    const _timeout = (ms) => new Promise(res => setTimeout(() => res(null), ms));
+    Promise.race([
+      Promise.all([
+        sb.from('push_subscriptions').select('id', { count: 'exact', head: true }),
+        sb.from('push_subscriptions').select('id', { count: 'exact', head: true }).eq('user_id', authUserId),
+      ]),
+      _timeout(8000),
+    ]).then((result) => {
+      const totalSubs = result ? (result[0]?.count ?? 0) : '?';
+      const mySubs    = result ? (result[1]?.count ?? 0) : '?';
+      const mySubsEl  = document.getElementById('adm-teste-mysubs-card');
+      const totSubsEl = document.getElementById('adm-teste-totalsubs-card');
+      const pushBtn   = document.getElementById('adm-teste-push-btn');
+      if (mySubsEl)  mySubsEl.innerHTML  = statCard('📱', 'Minha sub.', mySubs > 0 ? '✅ Ativo' : '❌ Sem sub', mySubs > 0 ? 'dispositivo inscrito' : 'ative nas configurações');
+      if (totSubsEl) totSubsEl.innerHTML = statCard('🌐', 'Total subscrito', totalSubs, 'dispositivos no banco');
+      if (pushBtn && mySubs > 0) { pushBtn.disabled = false; pushBtn.removeAttribute('title'); }
+      else if (pushBtn) { pushBtn.title = 'Ative as notificações primeiro'; }
+    }).catch((e) => {
+      console.warn('[admin teste] falha ao buscar subscriptions:', e);
+      const mySubsEl  = document.getElementById('adm-teste-mysubs-card');
+      const totSubsEl = document.getElementById('adm-teste-totalsubs-card');
+      if (mySubsEl)  mySubsEl.innerHTML  = statCard('📱', 'Minha sub.', '⚠️ Erro', 'tabela inacessível');
+      if (totSubsEl) totSubsEl.innerHTML = statCard('🌐', 'Total subscrito', '⚠️ Erro', 'tabela inacessível');
+    });
   }
 }
 
