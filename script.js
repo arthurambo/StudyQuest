@@ -9717,6 +9717,13 @@ async function renderAdminPage(tab) {
 
   } else if (_adminTab === 'teste') {
     // ── Renderiza imediatamente (sem esperar o banco) ──────────────────
+    const statCard = (icon, label, val, sub = '') => `
+      <div class="admin-stat-card">
+        <div class="admin-stat-icon">${icon}</div>
+        <div class="admin-stat-val">${val}</div>
+        <div class="admin-stat-label">${label}</div>
+        ${sub ? `<div class="admin-stat-sub">${sub}</div>` : ''}
+      </div>`;
     const perm = typeof Notification !== 'undefined' ? Notification.permission : 'unknown';
     const permColor = { granted: '#34d399', denied: '#f87171', default: '#f59e0b', unknown: '#888' };
     const permLabel = { granted: '✅ Concedida', denied: '🚫 Bloqueada (reative no navegador)', default: '○ Ainda não pedida', unknown: '❓ Não suportado' };
