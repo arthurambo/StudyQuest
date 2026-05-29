@@ -9423,6 +9423,7 @@ async function renderAdminPage(tab) {
       <button class="admin-tab-btn ${_adminTab==='codigos' ?'active':''}" onclick="renderAdminPage('codigos')">🎟️ Códigos</button>
       <button class="admin-tab-btn ${_adminTab==='stats'   ?'active':''}" onclick="renderAdminPage('stats')">📊 Estatísticas</button>
       <button class="admin-tab-btn ${_adminTab==='ia'      ?'active':''}" onclick="renderAdminPage('ia')">🤖 IA</button>
+      <button class="admin-tab-btn ${_adminTab==='teste'   ?'active':''}" onclick="renderAdminPage('teste')">🧪 Teste</button>
     </div>
     <div id="admin-tab-content"><div class="social-loading">Carregando...</div></div>`;
 
@@ -9713,6 +9714,68 @@ async function renderAdminPage(tab) {
           <button class="btn-sm btn-ghost" style="color:#f87171" onclick="handleAdminClearKB()">🗑️ Limpar</button>
         </div>
       </div>`;
+
+  } else if (_adminTab === 'teste') {
+    // ── Conta subscrições no banco ─────────────────────────────────────
+    let totalSubs = 0, mySubs = 0;
+    try {
+      const [r1, r2] = await Promise.all([
+        sb.from('push_subscriptions').select('id', { count: 'exact', head: true }),
+        sb.from('push_subscriptions').select('id', { count: 'exact', head: true }).eq('user_id', authUserId),
+      ]);
+      totalSubs = r1.count ?? 0;
+      mySubs    = r2.count ?? 0;
+    } catch(e) { console.warn('[admin teste]', e); }
+
+    const perm = typeof Notification !== 'undefined' ? Notification.permission : 'unknown';
+    const permColor = { granted: '#34d399', denied: '#f87171', default: '#f59e0b', unknown: '#888' };
+    const permLabel = { granted: '✅ Concedida', denied: '🚫 Bloqueada (reative no navegador)', default: '○ Ainda não pedida', unknown: '❓ Não suportado' };
+
+    content.innerHTML = `
+      <div class="admin-section-title">🔔 Notificações Push</div>
+
+      <div class="admin-stat-grid" style="margin-bottom:1rem">
+        ${statCard('🔐', 'Permissão', permLabel[perm] || perm, '', `color:${permColor[perm]||'#888'}`)}
+        ${statCard('📱', 'Minha sub.', mySubs > 0 ? '✅ Ativo' : '❌ Sem sub', mySubs > 0 ? 'dispositivo inscrito' : 'ative nas configurações')}
+        ${statCard('🌐', 'Total subscrito', totalSubs, 'dispositivos no banco')}
+      </div>
+
+      <div class="admin-create-code-form" style="margin-bottom:1rem">
+        <div class="profile-field" style="margin-bottom:.5rem">
+          <label class="grades-label">Título</label>
+          <input type="text" id="test-push-title" value="🧪 StudyQuest — Teste" placeholder="Título da notificação" style="font-size:16px">
+        </div>
+        <div class="profile-field" style="margin-bottom:.75rem">
+          <label class="grades-label">Mensagem</label>
+          <input type="text" id="test-push-body" value="Esta é uma notificação de teste! 🎉" placeholder="Corpo da mensagem" style="font-size:16px">
+        </div>
+        <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+          <button class="btn-primary" onclick="adminTestPushSelf()" ${mySubs === 0 ? 'disabled title="Ative as notificações primeiro"' : ''}>
+            🔔 Enviar Push para Mim
+          </button>
+          <button class="btn-secondary" onclick="adminTestLocalNotif()">
+            💬 Notificação Local (sem push)
+          </button>
+          <button class="btn-secondary" onclick="adminCheckSwStatus()">
+            ⚙️ Status do Service Worker
+          </button>
+        </div>
+        <div id="admin-test-result" style="margin-top:.75rem;font-size:.85rem;font-weight:700"></div>
+      </div>
+
+      <div class="admin-section-title" style="margin-top:1.25rem">📋 Como configurar o Push</div>
+      <div class="admin-create-code-form">
+        <div style="font-size:.82rem;line-height:1.8;color:var(--text-muted)">
+          <b style="color:var(--text)">1. Gerar chaves VAPID</b><br>
+          <code style="background:var(--bg-base);padding:.1rem .4rem;border-radius:4px">npx web-push generate-vapid-keys</code><br><br>
+          <b style="color:var(--text)">2. Atualizar a chave pública em script.js</b><br>
+          Procure por <code style="background:var(--bg-base);padding:.1rem .4rem;border-radius:4px">VAPID_PUBLIC_KEY</code> e substitua pelo valor gerado<br><br>
+          <b style="color:var(--text)">3. Configurar Secrets no Supabase</b><br>
+          <code style="background:var(--bg-base);padding:.1rem .4rem;border-radius:4px">npx supabase secrets set VAPID_PUBLIC_KEY="..." VAPID_PRIVATE_KEY="..." VAPID_SUBJECT="mailto:admin@studyquestxp.com.br"</code><br><br>
+          <b style="color:var(--text)">4. Deploy da Edge Function</b><br>
+          <code style="background:var(--bg-base);padding:.1rem .4rem;border-radius:4px">npx supabase functions deploy send-push --no-verify-jwt</code>
+        </div>
+      </div>`;
   }
 }
 
@@ -9859,6 +9922,116 @@ async function handleAdminAction(userId, action, defaultReason) {
     renderAdminPage();
   } else {
     showNotification('Erro ao aplicar ação.', 'error');
+  }
+}
+
+// ── Admin: funções da aba Teste ──────────────────────────────────────────────
+
+/**
+ * Envia notificação push para si mesmo via Edge Function (ignora o filtro
+ * toUserId === authUserId que existe em sendPushToUser() normal).
+ */
+async function adminTestPushSelf() {
+  const result = document.getElementById('admin-test-result');
+  if (!result) return;
+  const title = document.getElementById('test-push-title')?.value || '🧪 StudyQuest';
+  const body  = document.getElementById('test-push-body')?.value  || 'Teste de push!';
+
+  result.textContent = '⏳ Enviando...';
+  result.style.color = 'var(--text-muted)';
+
+  if (!sb || !authUserId) {
+    result.textContent = '❌ Não autenticado.';
+    result.style.color = '#f87171';
+    return;
+  }
+
+  try {
+    const { error, data: resp } = await sb.functions.invoke('send-push', {
+      body: { toUserId: authUserId, title, body, data: { page: 'dashboard', tag: 'admin-test' } },
+    });
+
+    if (error) {
+      result.textContent = `❌ Edge Function erro: ${error.message}`;
+      result.style.color = '#f87171';
+    } else if (resp?.sent > 0) {
+      result.textContent = `✅ Push enviado para ${resp.sent} dispositivo(s)!`;
+      result.style.color = '#34d399';
+    } else if (resp?.error) {
+      result.textContent = `⚠️ ${resp.error}`;
+      result.style.color = '#f59e0b';
+    } else {
+      result.textContent = `⚠️ Nenhum dispositivo recebeu (sent=0). Verifique se a Edge Function está deployada.`;
+      result.style.color = '#f59e0b';
+    }
+  } catch(e) {
+    result.textContent = `❌ Exceção: ${e.message}`;
+    result.style.color = '#f87171';
+  }
+}
+
+/** Exibe uma notificação local do browser (não passa pelo servidor). */
+async function adminTestLocalNotif() {
+  const result = document.getElementById('admin-test-result');
+  const title  = document.getElementById('test-push-title')?.value || '🧪 StudyQuest';
+  const body   = document.getElementById('test-push-body')?.value  || 'Teste local!';
+
+  if (!('Notification' in window)) {
+    if (result) { result.textContent = '❌ Notificações não suportadas neste navegador.'; result.style.color = '#f87171'; }
+    return;
+  }
+
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') {
+    if (result) { result.textContent = '🚫 Permissão negada.'; result.style.color = '#f87171'; }
+    return;
+  }
+
+  const reg = await navigator.serviceWorker?.ready.catch(() => null);
+  if (reg) {
+    await reg.showNotification(title, { body, icon: './icon.svg', badge: './icon.svg', tag: 'admin-local-test', renotify: true });
+    if (result) { result.textContent = '✅ Notificação local enviada via Service Worker!'; result.style.color = '#34d399'; }
+  } else {
+    new Notification(title, { body, icon: './icon.svg' });
+    if (result) { result.textContent = '✅ Notificação local enviada (sem SW).'; result.style.color = '#34d399'; }
+  }
+}
+
+/** Mostra o status do Service Worker na aba teste. */
+async function adminCheckSwStatus() {
+  const result = document.getElementById('admin-test-result');
+  if (!result) return;
+
+  if (!('serviceWorker' in navigator)) {
+    result.innerHTML = '❌ Service Worker não suportado.';
+    result.style.color = '#f87171';
+    return;
+  }
+
+  try {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    if (!regs.length) {
+      result.textContent = '⚠️ Nenhum Service Worker registrado.';
+      result.style.color = '#f59e0b';
+      return;
+    }
+
+    const reg  = regs[0];
+    const sub  = await reg.pushManager?.getSubscription();
+    const ctrl = navigator.serviceWorker.controller;
+
+    result.innerHTML = `
+      <div style="line-height:1.9">
+        🔧 <b>SW scope:</b> ${reg.scope}<br>
+        📡 <b>Estado:</b> ${reg.active ? '✅ Ativo' : reg.installing ? '⏳ Instalando' : '❌ Inativo'}<br>
+        🎛️ <b>Controlando aba:</b> ${ctrl ? '✅ Sim' : '⚠️ Não (recarregue a página)'}<br>
+        🔔 <b>Push subscription:</b> ${sub ? '✅ Inscrito' : '❌ Sem subscription'}<br>
+        ${sub ? `🔗 <b>Endpoint:</b> <span style="font-size:.75rem;word-break:break-all">${sub.endpoint.slice(0, 60)}...</span>` : ''}
+      </div>`;
+    result.style.color = 'var(--text)';
+  } catch(e) {
+    result.textContent = `❌ Erro: ${e.message}`;
+    result.style.color = '#f87171';
   }
 }
 
