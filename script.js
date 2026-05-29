@@ -867,6 +867,7 @@ function _navigateUI(page) {
   if (page === 'groups')       renderGroupsPage();
   if (page === 'ai')           renderAIPage();
   if (page === 'admin')        renderAdminPage();
+  if (page === 'familia')      renderFamiliaPage();
   if (authUserId) updateNotifBell();
 }
 
@@ -1006,7 +1007,7 @@ function initNavigation() {
 const _SPA_PAGES = new Set([
   'dashboard','tasks','study','subjects','missions','achievements',
   'shop','grades','stats','exams','calendar','settings',
-  'profile','friends','groups','ai','admin',
+  'profile','friends','groups','ai','admin','familia',
 ]);
 
 // Flag: primeira navegação usa replaceState (não cria entrada extra no histórico),
@@ -1055,6 +1056,7 @@ function navigateTo(page) {
   if (page === 'groups')  renderGroupsPage();
   if (page === 'ai')      renderAIPage();
   if (page === 'admin')   renderAdminPage();
+  if (page === 'familia') renderFamiliaPage();
   if (authUserId) updateNotifBell();
 }
 
@@ -1497,6 +1499,8 @@ function renderTasks() {
   const sectionsEl = document.getElementById('tasks-sections');
   const listEl = document.getElementById('tasks-list');
   renderDailyTasksSection();
+  // Carrega tarefas dos responsáveis (assíncrono, não bloqueia)
+  if (authUserId) loadParentalTasksSection().catch(()=>{});
   sectionsEl.innerHTML = '';
   listEl.innerHTML = '';
 
@@ -1645,6 +1649,9 @@ function toggleTask(id) {
 
   showXpPopup(xpGain, xpBoost);
   playSound('complete');
+
+  // 🔔 Notifica responsáveis
+  familyNotifyTaskDone(task.title);
 }
 
 function deleteTask(id) {
@@ -2028,6 +2035,9 @@ function updateStreak() {
         addXp(bonus);
         showNotification(`🔥 Streak de ${state.streak} dias! +${bonus} XP bônus!`, 'success');
       }
+      // 🔔 Notifica responsáveis em marcos de streak (7, 14, 30, 60...)
+      const streakMilestones = [3, 7, 14, 30, 60, 100];
+      if (streakMilestones.includes(state.streak)) familyNotifyStreak(state.streak);
     }
   } else if (state.lastStudyDate !== today) {
     // Streak quebrado?
@@ -2442,6 +2452,8 @@ function checkAchievements() {
     newUnlocks.forEach(ach => {
       addXp(25);
       addCoins(15);
+      // 🔔 Notifica responsáveis
+      familyNotifyAchievement(ach.name);
     });
   }
 
@@ -2675,6 +2687,8 @@ function _completePomodoroPhase() {
     showNotification('⏱️ Sessão de foco completa! +15 XP 🎉', 'success');
     playSound('complete');
     checkAchievements();
+    // 🔔 Notifica responsáveis a cada 3 Pomodoros para não ser spam
+    if (state.totalPomodoros % 3 === 0) familyNotifyPomodoro(state.totalPomodoros);
 
     // Passa para pausa
     pomodoroIsBreak  = true;
@@ -5126,6 +5140,8 @@ async function launchApp() {
     console.log('[App] App iniciado para:', state.name, '| XP:', state.xp, '| Nível:', state.level, '| Página:', _startPage);
     // Sincroniza perfil público para que amigos possam buscar
     if (authUserId) setTimeout(syncPublicProfile, 2000);
+    // Badge família
+    if (authUserId) setTimeout(() => updateFamiliaBadge().catch(()=>{}), 3000);
     // Verifica notificações de desempenho, presente surpresa e push inteligente
     setTimeout(() => {
       checkPerformanceNotifs();
@@ -9404,6 +9420,16 @@ async function handleAdminDeleteUser(userId, userName) {
 
 let _adminTab = 'usuarios';
 
+function _adminStatCard(icon, label, val, sub) {
+  sub = sub || '';
+  return '<div class="admin-stat-card">'
+    + '<div class="admin-stat-icon">' + icon + '</div>'
+    + '<div class="admin-stat-val">' + val + '</div>'
+    + '<div class="admin-stat-label">' + label + '</div>'
+    + (sub ? '<div class="admin-stat-sub">' + sub + '</div>' : '')
+    + '</div>';
+}
+
 async function renderAdminPage(tab) {
   const page = document.getElementById('page-admin');
   if (!page) return;
@@ -9717,13 +9743,6 @@ async function renderAdminPage(tab) {
 
   } else if (_adminTab === 'teste') {
     // ── Renderiza imediatamente (sem esperar o banco) ──────────────────
-    const statCard = (icon, label, val, sub = '') => `
-      <div class="admin-stat-card">
-        <div class="admin-stat-icon">${icon}</div>
-        <div class="admin-stat-val">${val}</div>
-        <div class="admin-stat-label">${label}</div>
-        ${sub ? `<div class="admin-stat-sub">${sub}</div>` : ''}
-      </div>`;
     const perm = typeof Notification !== 'undefined' ? Notification.permission : 'unknown';
     const permColor = { granted: '#34d399', denied: '#f87171', default: '#f59e0b', unknown: '#888' };
     const permLabel = { granted: '✅ Concedida', denied: '🚫 Bloqueada (reative no navegador)', default: '○ Ainda não pedida', unknown: '❓ Não suportado' };
@@ -9732,9 +9751,9 @@ async function renderAdminPage(tab) {
       <div class="admin-section-title">🔔 Notificações Push</div>
 
       <div class="admin-stat-grid" style="margin-bottom:1rem">
-        ${statCard('🔐', 'Permissão', permLabel[perm] || perm, '', `color:${permColor[perm]||'#888'}`)}
-        <div id="adm-teste-mysubs-card">${statCard('📱', 'Minha sub.', '…', 'carregando…')}</div>
-        <div id="adm-teste-totalsubs-card">${statCard('🌐', 'Total subscrito', '…', 'carregando…')}</div>
+        ${_adminStatCard('🔐', 'Permissão', permLabel[perm] || perm, '')}
+        <div id="adm-teste-mysubs-card">${_adminStatCard('📱', 'Minha sub.', '…', 'carregando…')}</div>
+        <div id="adm-teste-totalsubs-card">${_adminStatCard('🌐', 'Total subscrito', '…', 'carregando…')}</div>
       </div>
 
       <div class="admin-create-code-form" style="margin-bottom:1rem">
@@ -9788,16 +9807,16 @@ async function renderAdminPage(tab) {
       const mySubsEl  = document.getElementById('adm-teste-mysubs-card');
       const totSubsEl = document.getElementById('adm-teste-totalsubs-card');
       const pushBtn   = document.getElementById('adm-teste-push-btn');
-      if (mySubsEl)  mySubsEl.innerHTML  = statCard('📱', 'Minha sub.', mySubs > 0 ? '✅ Ativo' : '❌ Sem sub', mySubs > 0 ? 'dispositivo inscrito' : 'ative nas configurações');
-      if (totSubsEl) totSubsEl.innerHTML = statCard('🌐', 'Total subscrito', totalSubs, 'dispositivos no banco');
+      if (mySubsEl)  mySubsEl.innerHTML  = _adminStatCard('📱', 'Minha sub.', mySubs > 0 ? '✅ Ativo' : '❌ Sem sub', mySubs > 0 ? 'dispositivo inscrito' : 'ative nas configurações');
+      if (totSubsEl) totSubsEl.innerHTML = _adminStatCard('🌐', 'Total subscrito', totalSubs, 'dispositivos no banco');
       if (pushBtn && mySubs > 0) { pushBtn.disabled = false; pushBtn.removeAttribute('title'); }
       else if (pushBtn) { pushBtn.title = 'Ative as notificações primeiro'; }
     }).catch((e) => {
       console.warn('[admin teste] falha ao buscar subscriptions:', e);
       const mySubsEl  = document.getElementById('adm-teste-mysubs-card');
       const totSubsEl = document.getElementById('adm-teste-totalsubs-card');
-      if (mySubsEl)  mySubsEl.innerHTML  = statCard('📱', 'Minha sub.', '⚠️ Erro', 'tabela inacessível');
-      if (totSubsEl) totSubsEl.innerHTML = statCard('🌐', 'Total subscrito', '⚠️ Erro', 'tabela inacessível');
+      if (mySubsEl)  mySubsEl.innerHTML  = _adminStatCard('📱', 'Minha sub.', '⚠️ Erro', 'tabela inacessível');
+      if (totSubsEl) totSubsEl.innerHTML = _adminStatCard('🌐', 'Total subscrito', '⚠️ Erro', 'tabela inacessível');
     });
   }
 }
@@ -10175,4 +10194,683 @@ async function handleShopRedeemSubmit() {
     inp.value = '';
   }
   if (btn) btn.disabled = false;
+}
+
+// ============================================================
+// SISTEMA DE FAMÍLIA / CONTROLE PARENTAL
+// ============================================================
+
+/* ── Estado local ─────────────────────────────────────────── */
+let _familiaTab      = 'familia';
+let _familyConnectRole = 'parent';
+let _searchFamilyTimer = null;
+
+/* ── Helpers ─────────────────────────────────────────────── */
+function _myFamiliaId() { return authUserId || userId; }
+
+function _fmtDate(d) {
+  if (!d) return '—';
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' });
+}
+
+function _daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const due   = new Date(dateStr + 'T00:00:00');
+  return Math.round((due - today) / 86400000);
+}
+
+function _calcChildAverage(childState) {
+  if (!childState?.gradeEntries || !childState?.subjects) return null;
+  const subjectAvgs = [];
+  for (const subj of childState.subjects) {
+    const entries = childState.gradeEntries[subj.id];
+    if (!entries) continue;
+    const allNotes = Object.values(entries).flatMap(arr => arr.filter(v => v !== null && v !== undefined && v !== ''));
+    if (!allNotes.length) continue;
+    subjectAvgs.push(allNotes.reduce((a,b) => a + Number(b), 0) / allNotes.length);
+  }
+  if (!subjectAvgs.length) return null;
+  return (subjectAvgs.reduce((a,b)=>a+b,0)/subjectAvgs.length).toFixed(1);
+}
+
+/* ── Notificação parental ─────────────────────────────────── */
+async function _sendParentalNotif(receiverId, type, title, message) {
+  if (!sb || !receiverId) return;
+  try {
+    await sb.from('parental_notifications').insert({
+      sender_id: _myFamiliaId(), receiver_id: receiverId, type, title, message,
+    });
+    sendPushToUser(receiverId, title, message, { page: 'familia', tag: 'parental-notif' });
+  } catch(e) { console.warn('[Família] notif error:', e); }
+}
+
+async function notifyParentsOf(studentId, type, title, message) {
+  if (!sb || !studentId) return;
+  try {
+    const { data: conns } = await sb.from('parental_connections')
+      .select('parent_id').eq('student_id', studentId).eq('status', 'accepted');
+    if (!conns?.length) return;
+    for (const c of conns) await _sendParentalNotif(c.parent_id, type, title, message);
+  } catch(e) {}
+}
+
+/* ── Hooks públicos (chamados pelo restante do app) ──────── */
+function familyNotifyTaskDone(taskTitle) {
+  const uid = _myFamiliaId(), name = state.name || 'Seu filho';
+  notifyParentsOf(uid, 'task_done', `📚 ${name} concluiu uma tarefa!`, `"${taskTitle}" foi concluída.`);
+}
+function familyNotifyStudy(subjectName, minutes) {
+  const uid = _myFamiliaId(), name = state.name || 'Seu filho';
+  notifyParentsOf(uid, 'study', `🧠 ${name} estudou ${subjectName}!`,
+    minutes ? `Sessão de ${minutes} minuto${minutes!==1?'s':''} concluída.` : 'Sessão concluída.');
+}
+function familyNotifyPomodoro(cycles) {
+  const uid = _myFamiliaId(), name = state.name || 'Seu filho';
+  notifyParentsOf(uid, 'pomodoro', `⏰ ${name} completou ${cycles} ciclo${cycles!==1?'s':''} Pomodoro!`, 'Ótima concentração hoje!');
+}
+function familyNotifyAchievement(achieveName) {
+  const uid = _myFamiliaId(), name = state.name || 'Seu filho';
+  notifyParentsOf(uid, 'achievement', `🏅 ${name} ganhou uma conquista!`, `"${achieveName}" desbloqueada!`);
+}
+function familyNotifyStreak(days) {
+  const uid = _myFamiliaId(), name = state.name || 'Seu filho';
+  notifyParentsOf(uid, 'streak', `🔥 ${name} está em sequência de ${days} dia${days!==1?'s':''}!`, 'Continue incentivando!');
+}
+
+/* ── Renderizar página Família ───────────────────────────── */
+async function renderFamiliaPage(tab) {
+  const page = document.getElementById('page-familia');
+  if (!page) return;
+
+  if (!authUserId) {
+    page.innerHTML = `
+      <div class="page-header"><h1>👨‍👩‍👧 Família</h1></div>
+      <div class="social-empty" style="padding:2rem">
+        <div style="font-size:3rem;margin-bottom:.75rem">🔒</div>
+        <div style="font-weight:700;margin-bottom:.5rem">Login necessário</div>
+        <div style="font-size:.85rem;color:var(--text-muted)">Faça login para usar o sistema de família.</div>
+      </div>`;
+    return;
+  }
+
+  if (tab) _familiaTab = tab;
+
+  page.innerHTML = `<div class="page-header"><h1>👨‍👩‍👧 Família</h1></div><div class="social-loading">Carregando…</div>`;
+
+  const myId = _myFamiliaId();
+  let allConns = [], ptasks = [], msgs = [];
+
+  try {
+    const [r1, r2, r3] = await Promise.all([
+      sb.from('parental_connections').select('*').or(`student_id.eq.${myId},parent_id.eq.${myId}`),
+      sb.from('parental_tasks').select('*').or(`parent_id.eq.${myId},student_id.eq.${myId}`).order('created_at',{ascending:false}),
+      sb.from('parental_notifications').select('*').eq('receiver_id', myId).order('created_at',{ascending:false}).limit(30),
+    ]);
+    allConns = r1.data || [];
+    ptasks   = r2.data || [];
+    msgs     = r3.data || [];
+  } catch(e) { console.warn('[Família] load error:', e); }
+
+  const conns      = allConns.filter(c => c.status === 'accepted');
+  const pending    = allConns.filter(c => c.status === 'pending' && c.initiated_by !== myId);
+  const pendingOut = allConns.filter(c => c.status === 'pending' && c.initiated_by === myId);
+
+  const myChildren = conns.filter(c => c.parent_id  === myId).map(c => c.student_id);
+  const myParents  = conns.filter(c => c.student_id === myId).map(c => c.parent_id);
+
+  const allIds = [...new Set([
+    ...myChildren, ...myParents,
+    ...pending.map(c => c.initiated_by),
+    ...pendingOut.map(c => c.student_id === myId ? c.parent_id : c.student_id),
+  ])].filter(Boolean);
+
+  let userNames = {};
+  if (allIds.length && sb) {
+    try {
+      const { data: rows } = await sb.from('users').select('id,name').in('id', allIds);
+      if (rows) rows.forEach(r => { userNames[r.id] = r.name || '?'; });
+    } catch(e) {}
+  }
+
+  const unreadMsgs    = msgs.filter(m => !m.read).length;
+  const myPendTasks   = ptasks.filter(t => t.student_id === myId && !t.completed);
+  const pendingBadge  = pending.length ? `<span class="notif-badge-inline">${pending.length}</span>` : '';
+  const msgBadge      = unreadMsgs ? `<span class="notif-badge-inline">${unreadMsgs}</span>` : '';
+  const taskBadge     = myPendTasks.length ? `<span class="notif-badge-inline">${myPendTasks.length}</span>` : '';
+
+  const tabsHtml = `<div class="friends-tabs" style="margin-bottom:1rem">
+    ${[
+      {id:'familia',   label:`👨‍👩‍👧 Conexões${pendingBadge}`},
+      {id:'tarefas',   label:`📋 Tarefas${taskBadge}`},
+      {id:'mensagens', label:`💌 Mensagens${msgBadge}`},
+    ].map(t=>`<button class="friends-tab${_familiaTab===t.id?' active':''}" onclick="renderFamiliaPage('${t.id}')">${t.label}</button>`).join('')}
+  </div>`;
+
+  let contentHtml = '';
+
+  /* ── Tab: Conexões ─────────────────────────────────────── */
+  if (_familiaTab === 'familia') {
+    const pendingHtml = pending.length ? `
+      <div class="familia-section-title">🔔 Pedidos Recebidos</div>
+      ${pending.map(c => {
+        const oid  = c.student_id === myId ? c.parent_id : c.student_id;
+        const role = c.student_id === myId ? 'Responsável' : 'Filho(a)';
+        const nm   = userNames[oid] || oid.slice(0,8)+'…';
+        return `<div class="familia-card familia-card-pending">
+          <div class="familia-card-avatar">👤</div>
+          <div class="familia-card-info">
+            <div class="familia-card-name">${escHtml(nm)}</div>
+            <div class="familia-card-role">${role} • Aguardando resposta</div>
+          </div>
+          <div class="familia-card-actions">
+            <button class="btn-sm btn-primary" onclick="acceptFamilyConnection('${c.id}')">✅ Aceitar</button>
+            <button class="btn-sm btn-ghost"   onclick="rejectFamilyConnection('${c.id}')">✕</button>
+          </div>
+        </div>`;
+      }).join('')}` : '';
+
+    const pendingOutHtml = pendingOut.length ? `
+      <div class="familia-section-title">⏳ Pedidos Enviados</div>
+      ${pendingOut.map(c => {
+        const oid  = c.student_id === myId ? c.parent_id : c.student_id;
+        const role = c.parent_id === myId ? 'Meu filho(a)' : 'Meu responsável';
+        const nm   = userNames[oid] || oid.slice(0,8)+'…';
+        return `<div class="familia-card" style="opacity:.75">
+          <div class="familia-card-avatar">👤</div>
+          <div class="familia-card-info">
+            <div class="familia-card-name">${escHtml(nm)}</div>
+            <div class="familia-card-role">${role} · Aguardando confirmação…</div>
+          </div>
+          <button class="btn-sm btn-ghost" style="color:#f87171" onclick="cancelFamilyConnection('${c.id}')">Cancelar</button>
+        </div>`;
+      }).join('')}` : '';
+
+    const childrenHtml = myChildren.length ? `
+      <div class="familia-section-title">🎒 Meus Filhos</div>
+      ${myChildren.map(cid => {
+        const conn = conns.find(c => c.student_id===cid && c.parent_id===myId);
+        const nm   = userNames[cid] || cid.slice(0,8)+'…';
+        return `<div class="familia-card">
+          <div class="familia-card-avatar familia-avatar-child">🎒</div>
+          <div class="familia-card-info">
+            <div class="familia-card-name">${escHtml(nm)}</div>
+            <div class="familia-card-role">Filho(a) conectado(a)</div>
+          </div>
+          <div class="familia-card-actions">
+            <button class="btn-sm btn-primary" onclick="viewChildDashboard('${cid}','${escHtml(nm)}')">📊 Ver</button>
+            <button class="btn-sm btn-ghost"   onclick="openMotivationalModal('${cid}','${escHtml(nm)}')">💌</button>
+            <button class="btn-sm btn-ghost"   style="color:#f87171" onclick="removeFamilyConnection('${conn?.id||''}')">✕</button>
+          </div>
+        </div>`;
+      }).join('')}` : '';
+
+    const parentsHtml = myParents.length ? `
+      <div class="familia-section-title">👨‍👩‍👧 Meus Responsáveis</div>
+      ${myParents.map(pid => {
+        const conn = conns.find(c => c.parent_id===pid && c.student_id===myId);
+        const nm   = userNames[pid] || pid.slice(0,8)+'…';
+        return `<div class="familia-card">
+          <div class="familia-card-avatar familia-avatar-parent">👨‍👩‍👧</div>
+          <div class="familia-card-info">
+            <div class="familia-card-name">${escHtml(nm)}</div>
+            <div class="familia-card-role">Responsável conectado</div>
+          </div>
+          <button class="btn-sm btn-ghost" style="color:#f87171" onclick="removeFamilyConnection('${conn?.id||''}')">Desconectar</button>
+        </div>`;
+      }).join('')}` : '';
+
+    const hasAny = myChildren.length || myParents.length || pending.length || pendingOut.length;
+    contentHtml = `
+      ${pendingHtml}${pendingOutHtml}${childrenHtml}${parentsHtml}
+      ${!hasAny ? `<div class="social-empty" style="padding:2rem">
+        <div style="font-size:3rem;margin-bottom:.75rem">👨‍👩‍👧</div>
+        <div style="font-weight:700;margin-bottom:.5rem">Nenhuma conexão ainda</div>
+        <div style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem">Conecte-se com responsáveis ou filhos para começar.</div>
+      </div>` : ''}
+      <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1rem">
+        <button class="btn-primary"   onclick="openFamilyConnectModal('parent')">➕ Adicionar Responsável</button>
+        <button class="btn-secondary" onclick="openFamilyConnectModal('child')">➕ Adicionar Filho(a)</button>
+      </div>`;
+  }
+
+  /* ── Tab: Tarefas ──────────────────────────────────────── */
+  else if (_familiaTab === 'tarefas') {
+    const myCreated  = ptasks.filter(t => t.parent_id === myId);
+    const myReceived = ptasks.filter(t => t.student_id === myId);
+
+    const _ptaskCard = (t, isReceived) => {
+      const otherId  = isReceived ? t.parent_id : t.student_id;
+      const otherNm  = userNames[otherId] || '?';
+      const days     = _daysUntil(t.due_date);
+      const dueTag   = t.due_date
+        ? (days < 0 ? `<span style="color:#f87171">Atrasada</span>`
+          : days === 0 ? `<span style="color:#f59e0b">Hoje</span>`
+          : `<span style="color:var(--text-muted)">${days}d</span>`)
+        : '';
+      return `<div class="parental-task-card${t.completed?' ptask-done':''}">
+        <div class="ptask-icon">${t.completed?'✅':'📋'}</div>
+        <div class="ptask-info">
+          <div class="ptask-title">${escHtml(t.title)}</div>
+          <div class="ptask-meta">${isReceived?'De':'Para'}: <b>${escHtml(otherNm)}</b> · ⚡${t.xp_reward} XP ${dueTag}</div>
+          ${t.description?`<div class="ptask-desc">${escHtml(t.description)}</div>`:''}
+        </div>
+        ${isReceived && !t.completed
+          ? `<button class="btn-sm btn-primary" style="flex-shrink:0" onclick="completeParentalTask('${t.id}',${t.xp_reward},'${escHtml(t.title)}','${t.parent_id}')">✅ Concluir</button>`
+          : isReceived && t.completed ? `<span style="font-size:.75rem;color:#34d399;flex-shrink:0">Concluída 🎉</span>`
+          : !t.completed ? `<button class="btn-sm btn-ghost" style="color:#f87171;flex-shrink:0" onclick="deleteParentalTask('${t.id}')">🗑️</button>` : ''}
+      </div>`;
+    };
+
+    const recvHtml = myReceived.length
+      ? `<div class="familia-section-title">📥 Tarefas dos Responsáveis</div>${myReceived.map(t=>_ptaskCard(t,true)).join('')}` : '';
+    const sentHtml = myCreated.length
+      ? `<div class="familia-section-title">📤 Tarefas que Enviei</div>${myCreated.map(t=>_ptaskCard(t,false)).join('')}` : '';
+
+    contentHtml = `
+      ${recvHtml}${sentHtml}
+      ${!myReceived.length && !myCreated.length
+        ? `<div class="social-empty" style="padding:1.5rem">
+            <div style="font-size:2.5rem;margin-bottom:.5rem">📋</div>
+            <div style="font-weight:700">Nenhuma tarefa parental</div>
+          </div>` : ''}
+      ${myChildren.length ? `<div style="margin-top:1rem">
+        <div class="familia-section-title">➕ Criar Tarefa</div>
+        <div style="display:flex;flex-wrap:wrap;gap:.5rem">
+          ${myChildren.map(cid=>{
+            const nm=userNames[cid]||cid.slice(0,8)+'…';
+            return `<button class="btn-secondary btn-sm" onclick="openParentalTaskModal('${cid}','${escHtml(nm)}')">📋 Para ${escHtml(nm)}</button>`;
+          }).join('')}
+        </div>
+      </div>` : ''}`;
+  }
+
+  /* ── Tab: Mensagens ────────────────────────────────────── */
+  else if (_familiaTab === 'mensagens') {
+    if (msgs.some(m => !m.read)) {
+      sb.from('parental_notifications').update({read:true}).eq('receiver_id',myId).then(()=>{});
+    }
+    const icons = {task_done:'📚',study:'🧠',pomodoro:'⏰',achievement:'🏅',streak:'🔥',motivational:'💌',new_task:'📋',connection:'🔗',info:'ℹ️'};
+    const msgsHtml = msgs.length ? msgs.map(m => {
+      const senderNm = userNames[m.sender_id] || m.sender_id?.slice(0,8)+'…';
+      const dt = new Date(m.created_at);
+      const ts = dt.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+      return `<div class="familia-msg-card">
+        <div class="familia-msg-icon">${icons[m.type]||'🔔'}</div>
+        <div class="familia-msg-body">
+          <div class="familia-msg-title">${escHtml(m.title)}</div>
+          ${m.message?`<div class="familia-msg-text">${escHtml(m.message)}</div>`:''}
+          <div class="familia-msg-meta">${escHtml(senderNm)} · ${ts}</div>
+        </div>
+      </div>`;
+    }).join('')
+    : `<div class="social-empty" style="padding:1.5rem"><div style="font-size:2.5rem;margin-bottom:.5rem">💌</div><div style="font-weight:700">Nenhuma mensagem</div></div>`;
+
+    contentHtml = `
+      <div class="familia-section-title">📨 Notificações Familiares</div>
+      ${msgsHtml}
+      ${myChildren.length ? `<div style="margin-top:1rem">
+        <div class="familia-section-title">💌 Enviar Mensagem</div>
+        <div style="display:flex;flex-wrap:wrap;gap:.5rem">
+          ${myChildren.map(cid=>{
+            const nm=userNames[cid]||cid.slice(0,8)+'…';
+            return `<button class="btn-secondary btn-sm" onclick="openMotivationalModal('${cid}','${escHtml(nm)}')">💌 Para ${escHtml(nm)}</button>`;
+          }).join('')}
+        </div>
+      </div>` : ''}`;
+  }
+
+  page.innerHTML = `
+    <div class="page-header"><h1>👨‍👩‍👧 Família</h1></div>
+    <div class="page-content">${tabsHtml}${contentHtml}</div>`;
+
+  _updateParentalSettingsSummary(myChildren.length, myParents.length, pending.length);
+  updateFamiliaBadge();
+}
+
+/* ── Resumo nas configurações ─────────────────────────────── */
+function _updateParentalSettingsSummary(children, parents, pendingCount) {
+  const el = document.getElementById('settings-parental-summary');
+  if (!el) return;
+  const parts = [];
+  if (parents)      parts.push(`${parents} responsável${parents>1?'is':''}`);
+  if (children)     parts.push(`${children} filho${children>1?'s':''}`);
+  if (pendingCount) parts.push(`${pendingCount} pedido${pendingCount>1?'s':''} pendente${pendingCount>1?'s':''}`);
+  el.textContent = parts.length ? parts.join(' · ') : 'Nenhuma conexão ainda.';
+}
+
+/* ── Dashboard do filho ───────────────────────────────────── */
+async function viewChildDashboard(childId, childName) {
+  const page = document.getElementById('page-familia');
+  if (!page) return;
+  page.innerHTML = `
+    <div class="page-header">
+      <button class="btn-back" onclick="renderFamiliaPage('familia')">‹ Voltar</button>
+      <h1>📊 ${escHtml(childName)}</h1>
+    </div>
+    <div class="social-loading">Carregando dados…</div>`;
+  try {
+    const { data: row } = await sb.from('users').select('data,name').eq('id', childId).single();
+    if (!row) throw new Error('Not found');
+    const cd  = row.data || {};
+    const avg = _calcChildAverage(cd);
+    const approvalAvg = cd.settings?.schoolAverage || 7;
+    const avgColor = avg === null ? '#888' : Number(avg) >= approvalAvg ? '#34d399' : '#f87171';
+    const now = new Date();
+    const weekStart = new Date(now); weekStart.setDate(now.getDate()-now.getDay()); weekStart.setHours(0,0,0,0);
+    let xpWeek = 0;
+    Object.entries(cd.xpHistory||{}).forEach(([d,x]) => { if (new Date(d) >= weekStart) xpWeek += (x||0); });
+    const subjects = cd.subjects || [];
+    const doneTasks = (cd.tasks||[]).filter(t=>t.done).slice(-5).reverse();
+    const pendTasks = (cd.tasks||[]).filter(t=>!t.done).slice(0,5);
+    const exams     = (cd.exams||[]).slice(-5).reverse();
+
+    const sc2 = (icon,label,val,sub='') =>
+      `<div class="admin-stat-card"><div class="admin-stat-icon">${icon}</div><div class="admin-stat-val">${val}</div><div class="admin-stat-label">${label}</div>${sub?`<div class="admin-stat-sub">${sub}</div>`:''}</div>`;
+
+    page.innerHTML = `
+      <div class="page-header">
+        <button class="btn-back" onclick="renderFamiliaPage('familia')">‹ Voltar</button>
+        <h1>📊 ${escHtml(childName)}</h1>
+      </div>
+      <div class="page-content">
+        <div class="familia-section-title">⚡ Resumo</div>
+        <div class="admin-stat-grid" style="margin-bottom:1rem">
+          ${sc2('⚡','XP Total', cd.xp||0, `Nível ${cd.level||1}`)}
+          ${sc2('🔥','Sequência', `${cd.streak||0} dias`, cd.maxStreak?`Recorde: ${cd.maxStreak}d`:'')}
+          ${sc2('📊','Média Geral', avg!==null?`<span style="color:${avgColor}">${avg}</span>`:'—', avg!==null?(Number(avg)>=approvalAvg?'✅ Aprovado':'⚠️ Atenção'):'Sem notas')}
+          ${sc2('⚡','XP semana', xpWeek, `${cd.totalTasksDone||0} tarefas`)}
+          ${sc2('⏱️','Pomodoros', cd.totalPomodoros||0, 'sessões')}
+          ${sc2('📚','Conteúdos', cd.totalStudied||0, 'estudados')}
+        </div>
+
+        ${subjects.length ? `
+        <div class="familia-section-title">📚 Matérias</div>
+        <div class="familia-subjects-grid">
+          ${subjects.map(s => {
+            const sE = cd.gradeEntries?.[s.id]||{};
+            const aN = Object.values(sE).flatMap(a=>a.filter(v=>v!==null&&v!==undefined&&v!==''));
+            const sA = aN.length ? (aN.reduce((a,b)=>a+Number(b),0)/aN.length).toFixed(1) : null;
+            const sc3 = sA!==null?(Number(sA)>=approvalAvg?'#34d399':'#f87171'):'var(--text-muted)';
+            return `<div class="familia-subject-card">
+              <span style="font-size:1.3rem">${s.icon||'📚'}</span>
+              <div>
+                <div style="font-weight:700;font-size:.88rem">${escHtml(s.name)}</div>
+                <div style="font-size:.8rem;color:${sc3};font-weight:700">${sA!==null?'Média '+sA:'Sem notas'}</div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>` : ''}
+
+        ${exams.length ? `
+        <div class="familia-section-title" style="margin-top:1rem">📝 Provas</div>
+        <div class="familia-list">
+          ${exams.map(e => {
+            const subj = subjects.find(s=>s.id===e.subjectId);
+            const g    = e.grade!==null&&e.grade!==undefined ? e.grade : null;
+            const gc   = g!==null?(Number(g)>=approvalAvg?'#34d399':'#f87171'):'var(--text-muted)';
+            return `<div class="familia-list-item">
+              <span>${subj?.icon||'📝'} ${escHtml(e.name||'Prova')}</span>
+              <span style="color:${gc};font-weight:700">${g!==null?g:_fmtDate(e.examDate)}</span>
+            </div>`;
+          }).join('')}
+        </div>` : ''}
+
+        ${pendTasks.length ? `
+        <div class="familia-section-title" style="margin-top:1rem">⏳ Tarefas Pendentes</div>
+        <div class="familia-list">
+          ${pendTasks.map(t=>{
+            const subj=subjects.find(s=>s.id===t.subjectId);
+            return `<div class="familia-list-item">
+              <span>${subj?.icon||'📋'} ${escHtml(t.title)}</span>
+              <span style="color:var(--text-muted);font-size:.8rem">${t.dueDate?_fmtDate(t.dueDate):''}</span>
+            </div>`;
+          }).join('')}
+        </div>` : ''}
+
+        ${doneTasks.length ? `
+        <div class="familia-section-title" style="margin-top:1rem">✅ Concluídas Recentes</div>
+        <div class="familia-list">
+          ${doneTasks.map(t=>`<div class="familia-list-item"><span>✅ ${escHtml(t.title)}</span><span style="color:#34d399;font-size:.8rem">Concluída</span></div>`).join('')}
+        </div>` : ''}
+
+        <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1.25rem">
+          <button class="btn-secondary" onclick="openMotivationalModal('${childId}','${escHtml(childName)}')">💌 Enviar Mensagem</button>
+          <button class="btn-primary"   onclick="openParentalTaskModal('${childId}','${escHtml(childName)}')">📋 Criar Tarefa</button>
+        </div>
+      </div>`;
+  } catch(e) {
+    page.innerHTML = `
+      <div class="page-header">
+        <button class="btn-back" onclick="renderFamiliaPage('familia')">‹ Voltar</button>
+        <h1>📊 ${escHtml(childName)}</h1>
+      </div>
+      <div class="social-empty" style="padding:2rem">
+        <div style="font-size:2.5rem;margin-bottom:.5rem">⚠️</div>
+        <div style="font-weight:700">Não foi possível carregar os dados.</div>
+        <div style="font-size:.83rem;color:var(--text-muted);margin-top:.25rem">Configure as políticas RLS no Supabase.</div>
+      </div>`;
+    console.warn('[Família]', e);
+  }
+}
+
+/* ── Modal: Conectar ──────────────────────────────────────── */
+function openFamilyConnectModal(role) {
+  _familyConnectRole = role;
+  const isParent = role === 'parent';
+  const titleEl  = document.getElementById('familia-connect-title');
+  const descEl   = document.getElementById('familia-connect-desc');
+  if (titleEl) titleEl.textContent = isParent ? '➕ Adicionar Responsável' : '➕ Adicionar Filho(a)';
+  if (descEl)  descEl.textContent  = isParent ? 'Busque o responsável pelo nome ou e-mail.' : 'Busque seu filho(a) pelo nome ou e-mail.';
+  const search  = document.getElementById('familia-connect-search');
+  const results = document.getElementById('familia-connect-results');
+  const status  = document.getElementById('familia-connect-status');
+  if (search)  search.value       = '';
+  if (results) results.innerHTML  = '';
+  if (status)  status.textContent = '';
+  openModal('modal-familia-connect');
+}
+
+async function searchFamilyUser(query) {
+  const results = document.getElementById('familia-connect-results');
+  if (!results) return;
+  clearTimeout(_searchFamilyTimer);
+  if (!query || query.length < 2) { results.innerHTML = ''; return; }
+  _searchFamilyTimer = setTimeout(async () => {
+    results.innerHTML = '<div style="padding:.5rem;font-size:.83rem;color:var(--text-muted)">Buscando…</div>';
+    try {
+      const { data: rows } = await sb.from('users')
+        .select('id,name,email').or(`name.ilike.%${query}%,email.ilike.%${query}%`)
+        .neq('id', _myFamiliaId()).limit(8);
+      if (!rows?.length) { results.innerHTML = '<div style="padding:.5rem;font-size:.83rem;color:var(--text-muted)">Nenhum usuário encontrado.</div>'; return; }
+      results.innerHTML = rows.map(r => `
+        <div class="familia-search-result" onclick="sendFamilyConnectionTo('${r.id}','${escHtml(r.name||r.id)}')">
+          <span class="familia-search-avatar">👤</span>
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:.88rem">${escHtml(r.name||'?')}</div>
+            <div style="font-size:.78rem;color:var(--text-muted)">${escHtml(r.email||r.id.slice(0,8)+'…')}</div>
+          </div>
+          <button class="btn-sm btn-primary">Conectar</button>
+        </div>`).join('');
+    } catch(e) { results.innerHTML = '<div style="padding:.5rem;font-size:.83rem;color:#f87171">Erro na busca.</div>'; }
+  }, 350);
+}
+
+async function sendFamilyConnectionTo(otherId, otherName) {
+  const status = document.getElementById('familia-connect-status');
+  if (!sb) return;
+  const myId     = _myFamiliaId();
+  const isParent = _familyConnectRole === 'parent';
+  // isParent=true → eu sou PAI, quero adicionar filho → eu busquei o filho (otherId = studentId)
+  // isParent=false → eu sou FILHO, quero adicionar pai → eu busquei o pai (otherId = parentId)
+  const studentId = isParent ? otherId : myId;
+  const parentId  = isParent ? myId    : otherId;
+  try {
+    const { data: ex } = await sb.from('parental_connections').select('id,status')
+      .eq('student_id',studentId).eq('parent_id',parentId).maybeSingle();
+    if (ex) {
+      if (status) { status.textContent = ex.status==='accepted'?'✅ Já conectados!':'⏳ Pedido já enviado.'; status.style.color='#f59e0b'; }
+      return;
+    }
+  } catch(e) {}
+  try {
+    await sb.from('parental_connections').insert({ student_id:studentId, parent_id:parentId, status:'pending', initiated_by:myId });
+    const myName = state.name||'Alguém';
+    const notifTitle = isParent ? `👨‍👩‍👧 ${myName} quer se conectar como responsável` : `🎒 ${myName} quer te adicionar como responsável`;
+    await _sendParentalNotif(otherId, 'connection', notifTitle, 'Acesse Família para aceitar ou recusar.');
+    if (status) { status.textContent = `✅ Pedido enviado para ${otherName}!`; status.style.color='#34d399'; }
+    showNotification(`Pedido enviado para ${otherName}!`, 'success');
+    setTimeout(() => closeModal('modal-familia-connect'), 1500);
+  } catch(e) {
+    if (status) { status.textContent = '❌ Erro ao enviar pedido.'; status.style.color='#f87171'; }
+  }
+}
+
+async function acceptFamilyConnection(id) {
+  try { await sb.from('parental_connections').update({status:'accepted'}).eq('id',id); showNotification('Conexão aceita! 🎉','success'); renderFamiliaPage('familia'); }
+  catch(e) { showNotification('Erro ao aceitar.','error'); }
+}
+async function rejectFamilyConnection(id) {
+  try { await sb.from('parental_connections').update({status:'rejected'}).eq('id',id); showNotification('Pedido recusado.','info'); renderFamiliaPage('familia'); }
+  catch(e) { showNotification('Erro.','error'); }
+}
+async function cancelFamilyConnection(id) {
+  try { await sb.from('parental_connections').delete().eq('id',id); showNotification('Pedido cancelado.','info'); renderFamiliaPage('familia'); }
+  catch(e) { showNotification('Erro.','error'); }
+}
+async function removeFamilyConnection(id) {
+  if (!id || !confirm('Remover esta conexão familiar?')) return;
+  try { await sb.from('parental_connections').delete().eq('id',id); showNotification('Conexão removida.','info'); renderFamiliaPage('familia'); }
+  catch(e) { showNotification('Erro ao remover.','error'); }
+}
+
+/* ── Tarefas Parentais ────────────────────────────────────── */
+function openParentalTaskModal(studentId, studentName) {
+  document.getElementById('parental-task-student-id').value = studentId;
+  document.getElementById('pt-title').value  = '';
+  document.getElementById('pt-desc').value   = '';
+  document.getElementById('pt-xp').value     = '50';
+  document.getElementById('pt-result').textContent = '';
+  const d = new Date(); d.setDate(d.getDate()+7);
+  document.getElementById('pt-due').value = d.toISOString().slice(0,10);
+  openModal('modal-parental-task');
+}
+
+async function submitParentalTask() {
+  const studentId = document.getElementById('parental-task-student-id').value;
+  const title     = document.getElementById('pt-title').value.trim();
+  const desc      = document.getElementById('pt-desc').value.trim();
+  const xp        = parseInt(document.getElementById('pt-xp').value)||50;
+  const due       = document.getElementById('pt-due').value||null;
+  const result    = document.getElementById('pt-result');
+  if (!title) { result.textContent='⚠️ Título obrigatório.'; result.style.color='#f59e0b'; return; }
+  try {
+    await sb.from('parental_tasks').insert({ parent_id:_myFamiliaId(), student_id:studentId, title, description:desc, xp_reward:xp, due_date:due });
+    await _sendParentalNotif(studentId,'new_task',`📋 Nova tarefa: "${title}"`, desc||`Prazo: ${due?_fmtDate(due):'sem prazo'} · ⚡${xp} XP`);
+    result.textContent='✅ Tarefa criada!'; result.style.color='#34d399';
+    showNotification('Tarefa criada!','success');
+    setTimeout(() => { closeModal('modal-parental-task'); renderFamiliaPage('tarefas'); }, 1000);
+  } catch(e) { result.textContent='❌ Erro ao criar.'; result.style.color='#f87171'; }
+}
+
+async function completeParentalTask(taskId, xpReward, taskTitle, parentId) {
+  try {
+    await sb.from('parental_tasks').update({completed:true, completed_at:new Date().toISOString()}).eq('id',taskId);
+    const gained = xpReward||50;
+    state.xp           += gained;
+    state.totalXpEarned = (state.totalXpEarned||0)+gained;
+    checkLevelUp(); saveState();
+    showNotification(`+${gained} XP! "${taskTitle}" concluída! 🎉`,'success');
+    const myName = state.name||'Seu filho';
+    await _sendParentalNotif(parentId,'task_done',`📚 ${myName} concluiu uma tarefa!`,`"${taskTitle}" concluída. +${gained} XP`);
+    renderFamiliaPage('tarefas');
+  } catch(e) { showNotification('Erro ao concluir.','error'); }
+}
+
+async function deleteParentalTask(taskId) {
+  if (!confirm('Excluir esta tarefa?')) return;
+  try { await sb.from('parental_tasks').delete().eq('id',taskId); showNotification('Tarefa excluída.','info'); renderFamiliaPage('tarefas'); }
+  catch(e) { showNotification('Erro.','error'); }
+}
+
+/* ── Mensagem motivacional ────────────────────────────────── */
+function openMotivationalModal(studentId, studentName) {
+  document.getElementById('motiv-student-id').value      = studentId;
+  document.getElementById('motiv-student-name').textContent = studentName;
+  document.getElementById('motiv-message').value         = '';
+  document.getElementById('motiv-result').textContent    = '';
+  openModal('modal-motivational');
+}
+
+async function submitMotivationalMessage() {
+  const studentId = document.getElementById('motiv-student-id').value;
+  const msg       = document.getElementById('motiv-message').value.trim();
+  const result    = document.getElementById('motiv-result');
+  if (!msg) { result.textContent='⚠️ Escreva uma mensagem.'; result.style.color='#f59e0b'; return; }
+  try {
+    await _sendParentalNotif(studentId,'motivational',`💌 Mensagem de ${state.name||'Seu responsável'}`, msg);
+    result.textContent='✅ Enviada! 💌'; result.style.color='#34d399';
+    showNotification('Mensagem enviada!','success');
+    setTimeout(()=>closeModal('modal-motivational'), 1200);
+  } catch(e) { result.textContent='❌ Erro.'; result.style.color='#f87171'; }
+}
+
+/* ── Badge de pendentes na nav ───────────────────────────── */
+async function updateFamiliaBadge() {
+  if (!sb || !authUserId) return;
+  const myId = _myFamiliaId();
+  try {
+    const [r1, r2] = await Promise.all([
+      sb.from('parental_connections').select('id',{count:'exact',head:true})
+        .eq('status','pending').neq('initiated_by',myId)
+        .or(`student_id.eq.${myId},parent_id.eq.${myId}`),
+      sb.from('parental_notifications').select('id',{count:'exact',head:true})
+        .eq('receiver_id',myId).eq('read',false),
+    ]);
+    const total = (r1.count||0)+(r2.count||0);
+    const badge = document.getElementById('familia-nav-badge');
+    if (badge) { badge.textContent=total||''; badge.style.display=total?'':'none'; }
+  } catch(e) {}
+}
+
+/* ── Seção de tarefas parentais na aba Tarefas ───────────── */
+async function loadParentalTasksSection() {
+  if (!sb || !authUserId) return;
+  const myId = _myFamiliaId();
+  try {
+    const { data: ptasks } = await sb.from('parental_tasks')
+      .select('*').eq('student_id', myId).eq('completed', false)
+      .order('due_date', { ascending: true });
+    const section = document.getElementById('parental-tasks-section');
+    const list    = document.getElementById('parental-tasks-list');
+    if (!section || !list) return;
+    if (!ptasks || !ptasks.length) { section.style.display = 'none'; return; }
+    // Busca nomes dos pais
+    const pids = [...new Set(ptasks.map(t => t.parent_id))];
+    let pNames = {};
+    try {
+      const { data: rows } = await sb.from('users').select('id,name').in('id', pids);
+      if (rows) rows.forEach(r => { pNames[r.id] = r.name || '?'; });
+    } catch(e) {}
+    section.style.display = '';
+    list.innerHTML = ptasks.map(t => {
+      const nm   = pNames[t.parent_id] || '?';
+      const days = _daysUntil(t.due_date);
+      const dTag = t.due_date
+        ? (days < 0 ? `<span style="color:#f87171;font-size:.75rem"> Atrasada</span>`
+          : days === 0 ? `<span style="color:#f59e0b;font-size:.75rem"> Hoje</span>`
+          : `<span style="color:var(--text-muted);font-size:.75rem"> ${days}d</span>`)
+        : '';
+      return `<div class="parental-task-card" style="margin-bottom:.4rem">
+        <div class="ptask-icon">📋</div>
+        <div class="ptask-info" style="flex:1">
+          <div class="ptask-title">${escHtml(t.title)}</div>
+          <div class="ptask-meta">De: <b>${escHtml(nm)}</b> · ⚡${t.xp_reward} XP${dTag}</div>
+        </div>
+        <button class="btn-sm btn-primary" style="flex-shrink:0"
+          onclick="completeParentalTask('${t.id}',${t.xp_reward},'${escHtml(t.title)}','${t.parent_id}')">✅</button>
+      </div>`;
+    }).join('');
+  } catch(e) { console.warn('[Família] loadParentalTasksSection:', e); }
 }

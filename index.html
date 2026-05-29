@@ -207,6 +207,9 @@
     <div class="nav-items">
       <a class="nav-item active" data-page="dashboard">🏠 Dashboard</a>
       <a class="nav-item" data-page="friends">👥 Amigos</a>
+      <a class="nav-item" data-page="familia" id="sidebar-familia-link" style="position:relative">
+        👨‍👩‍👧 Família<span id="familia-nav-badge"></span>
+      </a>
       <a class="nav-item" data-page="groups">🏰 Grupos</a>
       <a class="nav-item" data-page="subjects">📚 Matérias</a>
       <a class="nav-item" data-page="tasks">✅ Tarefas</a>
@@ -408,6 +411,15 @@
         </div>
       </div>
       <div id="daily-tasks-section"></div>
+      <!-- Tarefas dos Responsáveis (carregada dinamicamente) -->
+      <div id="parental-tasks-section" style="display:none;margin-bottom:.75rem">
+        <div class="tasks-section-header" style="cursor:pointer" onclick="navigateTo('familia')">
+          <span class="tasks-section-icon">👨‍👩‍👧</span>
+          <span class="tasks-section-title">Tarefas dos Responsáveis</span>
+          <span class="tasks-section-link" style="margin-left:auto;font-size:.78rem;color:var(--primary)">Ver todas →</span>
+        </div>
+        <div id="parental-tasks-list"></div>
+      </div>
       <div id="tasks-sections"></div>
       <div id="tasks-list" class="tasks-list"></div>
     </div>
@@ -891,6 +903,24 @@
         </div>
       </div>
 
+      <!-- SEÇÃO: CONTROLE PARENTAL -->
+      <div class="settings-section" id="settings-parental-section">
+        <div class="settings-section-title">👨‍👩‍👧 Controle Parental</div>
+        <div class="settings-card">
+          <div class="settings-row">
+            <div class="settings-row-info">
+              <span class="settings-row-label">🔗 Conexões Familiares</span>
+              <span class="settings-row-desc">Conecte responsáveis ou filhos à sua conta</span>
+            </div>
+            <button class="btn-settings-action" onclick="navigateTo('familia')">Gerenciar →</button>
+          </div>
+          <div class="settings-divider"></div>
+          <div id="settings-parental-summary" style="padding:.25rem 0;font-size:.83rem;color:var(--text-muted)">
+            Carregando conexões…
+          </div>
+        </div>
+      </div>
+
       <!-- SEÇÃO: ZONA DE PERIGO -->
       <div class="settings-section">
         <div class="settings-section-title danger-title">⚠️ Zona de Perigo</div>
@@ -938,6 +968,9 @@
 
     <!-- ===== ADMIN ===== -->
     <div id="page-admin" class="page"></div>
+
+    <!-- ===== FAMÍLIA ===== -->
+    <div id="page-familia" class="page"></div>
 
     <!-- ===== CALENDÁRIO ===== -->
     <div id="page-calendar" class="page">
@@ -1557,6 +1590,83 @@
     <div class="modal-btns">
       <button class="btn-secondary" data-close="modal-redeem">Cancelar</button>
       <button class="btn-primary" id="redeem-submit-btn" onclick="handleRedeemSubmit()">🎁 Resgatar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Nova Conexão Familiar -->
+<div class="modal-overlay" id="modal-familia-connect">
+  <div class="modal" style="max-width:420px">
+    <h2 class="modal-title" id="familia-connect-title">👨‍👩‍👧 Conectar Família</h2>
+    <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem" id="familia-connect-desc">
+      Digite o nome ou e-mail da pessoa para encontrá-la.
+    </p>
+    <div class="auth-field">
+      <label class="auth-label">🔍 Buscar por nome ou e-mail</label>
+      <input type="text" id="familia-connect-search" placeholder="Ex: Ana Lima ou ana@email.com"
+        oninput="searchFamilyUser(this.value)" autocomplete="off" style="font-size:16px">
+    </div>
+    <div id="familia-connect-results" style="margin-top:.5rem;max-height:200px;overflow-y:auto"></div>
+    <div id="familia-connect-status" style="margin-top:.5rem;font-size:.85rem;font-weight:700;min-height:1.2rem"></div>
+    <div class="modal-btns">
+      <button class="btn-secondary" data-close="modal-familia-connect">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Criar Tarefa Parental -->
+<div class="modal-overlay" id="modal-parental-task">
+  <div class="modal" style="max-width:420px">
+    <h2 class="modal-title">📋 Nova Tarefa para Filho</h2>
+    <input type="hidden" id="parental-task-student-id">
+    <div class="profile-field" style="margin-bottom:.75rem">
+      <label class="grades-label">📌 Título da Tarefa *</label>
+      <input type="text" id="pt-title" placeholder="Ex: Revisar Matemática" style="font-size:16px">
+    </div>
+    <div class="profile-field" style="margin-bottom:.75rem">
+      <label class="grades-label">📝 Descrição (opcional)</label>
+      <textarea id="pt-desc" placeholder="Detalhes da tarefa..." rows="2"
+        style="width:100%;box-sizing:border-box;border-radius:8px;padding:.6rem;font-size:.85rem;resize:vertical;background:var(--bg-card);border:1.5px solid var(--border);color:var(--text)"></textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem">
+      <div class="profile-field">
+        <label class="grades-label">⚡ XP de Recompensa</label>
+        <input type="number" id="pt-xp" min="0" max="500" value="50" style="font-size:16px">
+      </div>
+      <div class="profile-field">
+        <label class="grades-label">📅 Prazo</label>
+        <input type="date" id="pt-due" style="font-size:16px">
+      </div>
+    </div>
+    <div id="pt-result" style="font-size:.85rem;font-weight:700;min-height:1.2rem;margin-bottom:.5rem"></div>
+    <div class="modal-btns">
+      <button class="btn-secondary" data-close="modal-parental-task">Cancelar</button>
+      <button class="btn-primary" onclick="submitParentalTask()">➕ Criar Tarefa</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Mensagem Motivacional -->
+<div class="modal-overlay" id="modal-motivational">
+  <div class="modal" style="max-width:380px;text-align:center">
+    <div style="font-size:2.5rem;margin-bottom:.5rem">💌</div>
+    <h2 class="modal-title">Mensagem Motivacional</h2>
+    <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:1rem">
+      Envie uma mensagem de incentivo para <strong id="motiv-student-name">seu filho</strong>.
+    </p>
+    <input type="hidden" id="motiv-student-id">
+    <textarea id="motiv-message" rows="3" placeholder="Ex: Continue assim! Você consegue! 🔥"
+      style="width:100%;box-sizing:border-box;border-radius:10px;padding:.75rem;font-size:.9rem;resize:none;background:var(--bg-card);border:1.5px solid var(--border);color:var(--text);margin-bottom:.5rem"></textarea>
+    <div style="display:flex;flex-wrap:wrap;gap:.4rem;justify-content:center;margin-bottom:.75rem">
+      <button class="chip-btn" onclick="document.getElementById('motiv-message').value='Boa sorte na prova! 🍀'">🍀 Boa sorte!</button>
+      <button class="chip-btn" onclick="document.getElementById('motiv-message').value='Você consegue! 💪'">💪 Você consegue!</button>
+      <button class="chip-btn" onclick="document.getElementById('motiv-message').value='Continue assim! 🔥 Estou orgulhoso(a)!'">🔥 Orgulho!</button>
+      <button class="chip-btn" onclick="document.getElementById('motiv-message').value='Foco nos estudos! Vai valer a pena! 🎯'">🎯 Foco!</button>
+    </div>
+    <div id="motiv-result" style="font-size:.85rem;font-weight:700;min-height:1.2rem;margin-bottom:.5rem"></div>
+    <div class="modal-btns">
+      <button class="btn-secondary" data-close="modal-motivational">Cancelar</button>
+      <button class="btn-primary" onclick="submitMotivationalMessage()">📤 Enviar</button>
     </div>
   </div>
 </div>

@@ -5185,3 +5185,201 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
   letter-spacing: .05em;
   padding: .75rem 0 .25rem;
 }
+
+/* ============================================================
+   SISTEMA DE FAMÍLIA / CONTROLE PARENTAL
+   ============================================================ */
+
+/* ── Título de seção ─────────────────────────────────────── */
+.familia-section-title {
+  font-size: .78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  margin: 1rem 0 .5rem;
+}
+
+/* ── Card de conexão ─────────────────────────────────────── */
+.familia-card {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: .75rem 1rem;
+  margin-bottom: .5rem;
+  transition: border-color .2s;
+}
+.familia-card-pending {
+  border-color: rgba(245,158,11,.4);
+  background: rgba(245,158,11,.04);
+}
+.familia-card-avatar {
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  background: rgba(124,58,237,.15);
+  border: 2px solid rgba(124,58,237,.25);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+.familia-avatar-child  { background: rgba(16,185,129,.12); border-color: rgba(16,185,129,.3); }
+.familia-avatar-parent { background: rgba(99,102,241,.12); border-color: rgba(99,102,241,.3); }
+
+.familia-card-info   { flex: 1; min-width: 0; }
+.familia-card-name   { font-weight: 700; font-size: .92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.familia-card-role   { font-size: .78rem; color: var(--text-muted); margin-top: .1rem; }
+.familia-card-actions { display: flex; gap: .4rem; flex-shrink: 0; flex-wrap: wrap; }
+
+/* ── Resultado de busca ───────────────────────────────────── */
+.familia-search-result {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  padding: .55rem .65rem;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background .15s;
+  border-bottom: 1px solid var(--border);
+}
+.familia-search-result:last-child { border-bottom: none; }
+.familia-search-result:hover      { background: rgba(124,58,237,.08); }
+.familia-search-avatar {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: rgba(124,58,237,.15);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+/* ── Tarefa parental ─────────────────────────────────────── */
+.parental-task-card {
+  display: flex;
+  align-items: flex-start;
+  gap: .75rem;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-left: 4px solid var(--primary);
+  border-radius: 12px;
+  padding: .75rem 1rem;
+  margin-bottom: .5rem;
+  transition: opacity .2s;
+}
+.parental-task-card.ptask-done {
+  opacity: .6;
+  border-left-color: #34d399;
+}
+.ptask-icon { font-size: 1.4rem; flex-shrink: 0; margin-top: .1rem; }
+.ptask-info { flex: 1; min-width: 0; }
+.ptask-title { font-weight: 700; font-size: .9rem; margin-bottom: .2rem; }
+.ptask-meta  { font-size: .78rem; color: var(--text-muted); display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
+.ptask-desc  { font-size: .8rem; color: var(--text-muted); margin-top: .25rem; }
+
+/* ── Cards de matéria (dashboard filho) ──────────────────── */
+.familia-subjects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: .6rem;
+}
+.familia-subject-card {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: .65rem .8rem;
+}
+
+/* ── Lista simples (provas / tarefas) ────────────────────── */
+.familia-list { background: var(--bg-card); border: 1.5px solid var(--border); border-radius: 12px; overflow: hidden; }
+.familia-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  padding: .6rem .9rem;
+  font-size: .85rem;
+  border-bottom: 1px solid var(--border);
+}
+.familia-list-item:last-child { border-bottom: none; }
+
+/* ── Mensagens ───────────────────────────────────────────── */
+.familia-msg-card {
+  display: flex;
+  gap: .75rem;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: .75rem 1rem;
+  margin-bottom: .5rem;
+}
+.familia-msg-unread { border-color: rgba(124,58,237,.5); background: rgba(124,58,237,.04); }
+.familia-msg-icon   { font-size: 1.5rem; flex-shrink: 0; }
+.familia-msg-body   { flex: 1; min-width: 0; }
+.familia-msg-title  { font-weight: 700; font-size: .88rem; margin-bottom: .2rem; }
+.familia-msg-text   { font-size: .83rem; color: var(--text-muted); margin-bottom: .25rem; word-break: break-word; }
+.familia-msg-meta   { font-size: .74rem; color: var(--text-muted); }
+
+/* ── Botão Voltar ────────────────────────────────────────── */
+.btn-back {
+  background: none;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: .3rem .75rem;
+  font-size: .85rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color .15s, color .15s;
+  margin-right: .5rem;
+}
+.btn-back:hover { border-color: var(--primary); color: var(--primary); }
+
+/* ── Badge inline (na tab) ───────────────────────────────── */
+.notif-badge-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  font-size: .65rem;
+  font-weight: 800;
+  margin-left: .3rem;
+  vertical-align: middle;
+}
+
+/* ── Chip buttons (mensagem motivacional) ────────────────── */
+.chip-btn {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  padding: .3rem .75rem;
+  font-size: .8rem;
+  cursor: pointer;
+  color: var(--text);
+  transition: border-color .15s, background .15s;
+}
+.chip-btn:hover { border-color: var(--primary); background: rgba(124,58,237,.08); }
+
+/* ── Família nav badge ───────────────────────────────────── */
+#familia-nav-badge {
+  display: none;
+  position: absolute;
+  top: 2px; right: 2px;
+  min-width: 16px; height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  font-size: .6rem;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+}
