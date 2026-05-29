@@ -1596,20 +1596,23 @@
 
 <!-- Modal: Nova Conexão Familiar -->
 <div class="modal-overlay" id="modal-familia-connect">
-  <div class="modal" style="max-width:420px">
+  <div class="modal" style="max-width:460px">
     <h2 class="modal-title" id="familia-connect-title">👨‍👩‍👧 Conectar Família</h2>
-    <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem" id="familia-connect-desc">
-      Digite o nome ou e-mail da pessoa para encontrá-la.
+    <p style="font-size:.84rem;color:var(--text-muted);margin-bottom:.75rem" id="familia-connect-desc">
+      Busque pelo nome ou @código do usuário.
     </p>
-    <div class="auth-field">
-      <label class="auth-label">🔍 Buscar por nome ou e-mail</label>
-      <input type="text" id="familia-connect-search" placeholder="Ex: Ana Lima ou ana@email.com"
-        oninput="searchFamilyUser(this.value)" autocomplete="off" style="font-size:16px">
+    <div class="friends-search-bar" style="margin-bottom:.25rem">
+      <input type="text" id="familia-connect-search"
+        placeholder="🔍 Nome ou @codigo"
+        oninput="searchFamilyUser(this.value)"
+        onkeydown="if(event.key==='Enter')searchFamilyUser(this.value)"
+        autocomplete="off">
+      <button class="btn-primary" onclick="searchFamilyUser(document.getElementById('familia-connect-search').value)">Buscar</button>
     </div>
-    <div id="familia-connect-results" style="margin-top:.5rem;max-height:200px;overflow-y:auto"></div>
+    <div id="familia-connect-results" style="max-height:260px;overflow-y:auto"></div>
     <div id="familia-connect-status" style="margin-top:.5rem;font-size:.85rem;font-weight:700;min-height:1.2rem"></div>
-    <div class="modal-btns">
-      <button class="btn-secondary" data-close="modal-familia-connect">Cancelar</button>
+    <div class="modal-btns" style="margin-top:.75rem">
+      <button class="btn-secondary" data-close="modal-familia-connect">Fechar</button>
     </div>
   </div>
 </div>
@@ -1643,6 +1646,18 @@
       <button class="btn-secondary" data-close="modal-parental-task">Cancelar</button>
       <button class="btn-primary" onclick="submitParentalTask()">➕ Criar Tarefa</button>
     </div>
+  </div>
+</div>
+
+<!-- Modal: Perfil do Membro Familiar -->
+<div class="modal-overlay" id="modal-familia-profile">
+  <div class="modal" style="max-width:380px;text-align:center">
+    <div id="fp-avatar" style="font-size:3rem;margin-bottom:.25rem">👤</div>
+    <div id="fp-name" style="font-size:1.2rem;font-weight:800;margin-bottom:.15rem"></div>
+    <div id="fp-role" style="font-size:.8rem;color:var(--text-muted);margin-bottom:.25rem"></div>
+    <div id="fp-stats" style="display:flex;gap:.75rem;justify-content:center;margin-bottom:1.25rem;flex-wrap:wrap"></div>
+    <div id="fp-actions" style="display:flex;flex-direction:column;gap:.5rem"></div>
+    <button class="btn-secondary" data-close="modal-familia-profile" style="margin-top:.75rem;width:100%">Fechar</button>
   </div>
 </div>
 

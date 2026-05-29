@@ -10392,17 +10392,13 @@ async function renderFamiliaPage(tab) {
       ${myChildren.map(cid => {
         const conn = conns.find(c => c.student_id===cid && c.parent_id===myId);
         const nm   = userNames[cid] || cid.slice(0,8)+'…';
-        return `<div class="familia-card">
+        return `<div class="familia-card familia-card-clickable" onclick="openFamilyMemberProfile('${cid}','${escHtml(nm)}','child','${conn?.id||''}')">
           <div class="familia-card-avatar familia-avatar-child">🎒</div>
           <div class="familia-card-info">
             <div class="familia-card-name">${escHtml(nm)}</div>
-            <div class="familia-card-role">Filho(a) conectado(a)</div>
+            <div class="familia-card-role">Filho(a) · Toque para ver opções</div>
           </div>
-          <div class="familia-card-actions">
-            <button class="btn-sm btn-primary" onclick="viewChildDashboard('${cid}','${escHtml(nm)}')">📊 Ver</button>
-            <button class="btn-sm btn-ghost"   onclick="openMotivationalModal('${cid}','${escHtml(nm)}')">💌</button>
-            <button class="btn-sm btn-ghost"   style="color:#f87171" onclick="removeFamilyConnection('${conn?.id||''}')">✕</button>
-          </div>
+          <span class="familia-card-chevron">›</span>
         </div>`;
       }).join('')}` : '';
 
@@ -10411,13 +10407,13 @@ async function renderFamiliaPage(tab) {
       ${myParents.map(pid => {
         const conn = conns.find(c => c.parent_id===pid && c.student_id===myId);
         const nm   = userNames[pid] || pid.slice(0,8)+'…';
-        return `<div class="familia-card">
+        return `<div class="familia-card familia-card-clickable" onclick="openFamilyMemberProfile('${pid}','${escHtml(nm)}','parent','${conn?.id||''}')">
           <div class="familia-card-avatar familia-avatar-parent">👨‍👩‍👧</div>
           <div class="familia-card-info">
             <div class="familia-card-name">${escHtml(nm)}</div>
-            <div class="familia-card-role">Responsável conectado</div>
+            <div class="familia-card-role">Responsável · Toque para ver opções</div>
           </div>
-          <button class="btn-sm btn-ghost" style="color:#f87171" onclick="removeFamilyConnection('${conn?.id||''}')">Desconectar</button>
+          <span class="familia-card-chevron">›</span>
         </div>`;
       }).join('')}` : '';
 
@@ -10655,6 +10651,92 @@ async function viewChildDashboard(childId, childName) {
   }
 }
 
+/* ── Perfil de membro familiar (modal com ações) ─────────── */
+async function openFamilyMemberProfile(memberId, memberName, role, connId) {
+  // role: 'child' | 'parent'
+  const avatarEl  = document.getElementById('fp-avatar');
+  const nameEl    = document.getElementById('fp-name');
+  const roleEl    = document.getElementById('fp-role');
+  const statsEl   = document.getElementById('fp-stats');
+  const actionsEl = document.getElementById('fp-actions');
+
+  if (!avatarEl) return;
+
+  // Reset
+  avatarEl.textContent  = role === 'child' ? '🎒' : '👨‍👩‍👧';
+  nameEl.textContent    = memberName;
+  roleEl.textContent    = role === 'child' ? 'Filho(a) conectado(a)' : 'Responsável conectado';
+  statsEl.innerHTML     = '<span style="color:var(--text-muted);font-size:.82rem">Carregando…</span>';
+  actionsEl.innerHTML   = '';
+
+  openModal('modal-familia-profile');
+
+  // Carrega dados básicos do membro
+  try {
+    const { data: row } = await sb.from('users').select('data,name,level,xp').eq('id', memberId).single();
+    if (row) {
+      const cd = row.data || {};
+      // Avatar
+      const userObj = {
+        avatar: cd.avatar || '🧙', avatarType: cd.avatarType || 'emoji',
+        avatarUrl: cd.avatarUrl || '', equippedFrame: cd.cosmetics?.equippedFrame || null,
+        name: row.name || memberName,
+      };
+      avatarEl.innerHTML = '';
+      avatarEl.style.fontSize = '3rem';
+      const avatarDiv = document.createElement('div');
+      avatarDiv.innerHTML = _avatarHtml(userObj, 'friend-profile-avatar');
+      avatarEl.appendChild(avatarDiv.firstChild);
+
+      // Stats
+      const streak = cd.streak || 0;
+      const avg    = _calcChildAverage(cd);
+      statsEl.innerHTML = `
+        <div style="text-align:center">
+          <div style="font-weight:800;font-size:1.1rem">${row.level || 1}</div>
+          <div style="font-size:.72rem;color:var(--text-muted)">Nível</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-weight:800;font-size:1.1rem">${row.xp || 0}</div>
+          <div style="font-size:.72rem;color:var(--text-muted)">XP</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-weight:800;font-size:1.1rem">${streak}🔥</div>
+          <div style="font-size:.72rem;color:var(--text-muted)">Streak</div>
+        </div>
+        ${avg !== null ? `<div style="text-align:center">
+          <div style="font-weight:800;font-size:1.1rem;color:${Number(avg)>=7?'#34d399':'#f87171'}">${avg}</div>
+          <div style="font-size:.72rem;color:var(--text-muted)">Média</div>
+        </div>` : ''}`;
+    }
+  } catch(e) {
+    statsEl.innerHTML = '<span style="color:var(--text-muted);font-size:.82rem">Sem dados</span>';
+  }
+
+  // Ações contextuais
+  if (role === 'child') {
+    actionsEl.innerHTML = `
+      <button class="btn-primary" style="width:100%" onclick="closeModal('modal-familia-profile');viewChildDashboard('${memberId}','${escHtml(memberName)}')">
+        📊 Ver Progresso Completo
+      </button>
+      <button class="btn-secondary" style="width:100%" onclick="closeModal('modal-familia-profile');openParentalTaskModal('${memberId}','${escHtml(memberName)}')">
+        📋 Criar Tarefa
+      </button>
+      <button class="btn-secondary" style="width:100%" onclick="closeModal('modal-familia-profile');openMotivationalModal('${memberId}','${escHtml(memberName)}')">
+        💌 Enviar Mensagem Motivacional
+      </button>
+      <button class="btn-ghost" style="width:100%;color:#f87171;margin-top:.25rem" onclick="closeModal('modal-familia-profile');removeFamilyConnection('${connId}')">
+        🔌 Desconectar
+      </button>`;
+  } else {
+    // parent
+    actionsEl.innerHTML = `
+      <button class="btn-ghost" style="width:100%;color:#f87171" onclick="closeModal('modal-familia-profile');removeFamilyConnection('${connId}')">
+        🔌 Desconectar
+      </button>`;
+  }
+}
+
 /* ── Modal: Conectar ──────────────────────────────────────── */
 function openFamilyConnectModal(role) {
   _familyConnectRole = role;
@@ -10673,27 +10755,33 @@ function openFamilyConnectModal(role) {
 }
 
 async function searchFamilyUser(query) {
-  const results = document.getElementById('familia-connect-results');
-  if (!results) return;
+  const resultsEl = document.getElementById('familia-connect-results');
+  if (!resultsEl) return;
   clearTimeout(_searchFamilyTimer);
-  if (!query || query.length < 2) { results.innerHTML = ''; return; }
+  if (!query || query.trim().length < 2) { resultsEl.innerHTML = ''; return; }
   _searchFamilyTimer = setTimeout(async () => {
-    results.innerHTML = '<div style="padding:.5rem;font-size:.83rem;color:var(--text-muted)">Buscando…</div>';
+    resultsEl.innerHTML = '<div class="social-loading" style="padding:.75rem;font-size:.85rem">Buscando…</div>';
     try {
-      const { data: rows } = await sb.from('users')
-        .select('id,name,email').or(`name.ilike.%${query}%,email.ilike.%${query}%`)
-        .neq('id', _myFamiliaId()).limit(8);
-      if (!rows?.length) { results.innerHTML = '<div style="padding:.5rem;font-size:.83rem;color:var(--text-muted)">Nenhum usuário encontrado.</div>'; return; }
-      results.innerHTML = rows.map(r => `
-        <div class="familia-search-result" onclick="sendFamilyConnectionTo('${r.id}','${escHtml(r.name||r.id)}')">
-          <span class="familia-search-avatar">👤</span>
-          <div style="flex:1">
-            <div style="font-weight:700;font-size:.88rem">${escHtml(r.name||'?')}</div>
-            <div style="font-size:.78rem;color:var(--text-muted)">${escHtml(r.email||r.id.slice(0,8)+'…')}</div>
+      const found = await searchUsers(query.trim());
+      if (!found.length) {
+        resultsEl.innerHTML = '<div class="social-empty" style="padding:.75rem;font-size:.85rem">Nenhum usuário encontrado.</div>';
+        return;
+      }
+      resultsEl.innerHTML = found.map(u => `
+        <div class="friend-card search-result" style="cursor:pointer" onclick="sendFamilyConnectionTo('${u.id}','${escHtml(u.name)}')">
+          ${_avatarHtml(u, 'friend-avatar')}
+          <div class="friend-info">
+            <div class="friend-name">${escHtml(u.name)}</div>
+            <div class="friend-username">@${escHtml(u.username)}</div>
+            <div class="friend-level">⚔️ Nível ${u.level} · ✨ ${u.xp} XP</div>
           </div>
-          <button class="btn-sm btn-primary">Conectar</button>
+          <button class="btn-add-friend" onclick="event.stopPropagation();sendFamilyConnectionTo('${u.id}','${escHtml(u.name)}')">
+            Conectar
+          </button>
         </div>`).join('');
-    } catch(e) { results.innerHTML = '<div style="padding:.5rem;font-size:.83rem;color:#f87171">Erro na busca.</div>'; }
+    } catch(e) {
+      resultsEl.innerHTML = '<div style="padding:.5rem;font-size:.83rem;color:#f87171">Erro na busca.</div>';
+    }
   }, 350);
 }
 

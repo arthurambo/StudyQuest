@@ -4291,6 +4291,19 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
   border-radius: 8px;
 }
 
+.btn-ghost {
+  background: transparent;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: .45rem .9rem;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.btn-ghost:hover { border-color: var(--primary); background: rgba(124,58,237,.06); }
+
 @media (max-width: 500px) {
   .profile-stats-row { grid-template-columns: repeat(3, 1fr); }
   .profile-page-hero { flex-direction: column; text-align: center; }
@@ -5232,6 +5245,10 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
 .familia-card-name   { font-weight: 700; font-size: .92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .familia-card-role   { font-size: .78rem; color: var(--text-muted); margin-top: .1rem; }
 .familia-card-actions { display: flex; gap: .4rem; flex-shrink: 0; flex-wrap: wrap; }
+.familia-card-clickable { cursor: pointer; transition: border-color .15s, transform .1s; }
+.familia-card-clickable:hover  { border-color: var(--primary); transform: translateX(2px); }
+.familia-card-clickable:active { transform: scale(.98); }
+.familia-card-chevron { font-size: 1.4rem; color: var(--text-muted); flex-shrink: 0; line-height: 1; }
 
 /* ── Resultado de busca ───────────────────────────────────── */
 .familia-search-result {
