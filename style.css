@@ -5203,6 +5203,56 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
    SISTEMA DE FAMÍLIA / CONTROLE PARENTAL
    ============================================================ */
 
+/* ── Tabs da página Família ──────────────────────────────── */
+.familia-tabs {
+  display: flex;
+  gap: .6rem;
+  margin-bottom: 1.25rem;
+}
+.familia-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .3rem;
+  padding: .75rem .5rem;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: .8rem;
+  transition: border-color .2s, background .2s, color .2s, box-shadow .2s;
+  position: relative;
+}
+.familia-tab:hover {
+  border-color: rgba(124,58,237,.45);
+  background: rgba(124,58,237,.05);
+  color: var(--text);
+}
+.familia-tab.active {
+  border-color: var(--primary);
+  background: rgba(124,58,237,.12);
+  color: var(--primary);
+  box-shadow: 0 0 16px rgba(124,58,237,.18);
+}
+.ft-icon {
+  font-size: 1.45rem;
+  line-height: 1;
+}
+.ft-label {
+  font-size: .78rem;
+  font-weight: 800;
+  letter-spacing: .01em;
+}
+.familia-tab .notif-badge-inline {
+  position: absolute;
+  top: .4rem;
+  right: .5rem;
+}
+
 /* ── Título de seção ─────────────────────────────────────── */
 .familia-section-title {
   font-size: .78rem;

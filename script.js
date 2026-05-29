@@ -10222,17 +10222,30 @@ function _daysUntil(dateStr) {
 }
 
 function _calcChildAverage(childState) {
-  if (!childState?.gradeEntries || !childState?.subjects) return null;
-  const subjectAvgs = [];
+  if (!childState?.subjects) return null;
+  const allNums = [];
+
+  // 1) gradeEntries: { subjectId: { typeId: [val,...] } }
+  const ge = childState.gradeEntries || {};
   for (const subj of childState.subjects) {
-    const entries = childState.gradeEntries[subj.id];
+    const entries = ge[subj.id];
     if (!entries) continue;
-    const allNotes = Object.values(entries).flatMap(arr => arr.filter(v => v !== null && v !== undefined && v !== ''));
-    if (!allNotes.length) continue;
-    subjectAvgs.push(allNotes.reduce((a,b) => a + Number(b), 0) / allNotes.length);
+    Object.values(entries).forEach(arr => {
+      (arr || []).forEach(v => {
+        if (v !== null && v !== undefined && v !== '') allNums.push(Number(v));
+      });
+    });
   }
-  if (!subjectAvgs.length) return null;
-  return (subjectAvgs.reduce((a,b)=>a+b,0)/subjectAvgs.length).toFixed(1);
+
+  // 2) exams: [{ grade, subjectId, ... }]  — inclui notas de provas
+  (childState.exams || []).forEach(e => {
+    if (e.grade !== null && e.grade !== undefined && e.grade !== '') {
+      allNums.push(Number(e.grade));
+    }
+  });
+
+  if (!allNums.length) return null;
+  return (allNums.reduce((a,b) => a + b, 0) / allNums.length).toFixed(1);
 }
 
 /* ── Notificação parental ─────────────────────────────────── */
@@ -10340,12 +10353,16 @@ async function renderFamiliaPage(tab) {
   const msgBadge      = unreadMsgs ? `<span class="notif-badge-inline">${unreadMsgs}</span>` : '';
   const taskBadge     = myPendTasks.length ? `<span class="notif-badge-inline">${myPendTasks.length}</span>` : '';
 
-  const tabsHtml = `<div class="friends-tabs" style="margin-bottom:1rem">
+  const tabsHtml = `<div class="familia-tabs">
     ${[
-      {id:'familia',   label:`👨‍👩‍👧 Conexões${pendingBadge}`},
-      {id:'tarefas',   label:`📋 Tarefas${taskBadge}`},
-      {id:'mensagens', label:`💌 Mensagens${msgBadge}`},
-    ].map(t=>`<button class="friends-tab${_familiaTab===t.id?' active':''}" onclick="renderFamiliaPage('${t.id}')">${t.label}</button>`).join('')}
+      {id:'familia',   icon:'👨‍👩‍👧', label:'Conexões',  badge:pendingBadge},
+      {id:'mensagens', icon:'💌',     label:'Mensagens', badge:msgBadge},
+    ].map(t=>`
+      <button class="familia-tab${_familiaTab===t.id?' active':''}" onclick="renderFamiliaPage('${t.id}')">
+        <span class="ft-icon">${t.icon}</span>
+        <span class="ft-label">${t.label}</span>
+        ${t.badge}
+      </button>`).join('')}
   </div>`;
 
   let contentHtml = '';
@@ -10429,55 +10446,6 @@ async function renderFamiliaPage(tab) {
         <button class="btn-primary"   onclick="openFamilyConnectModal('parent')">➕ Adicionar Responsável</button>
         <button class="btn-secondary" onclick="openFamilyConnectModal('child')">➕ Adicionar Filho(a)</button>
       </div>`;
-  }
-
-  /* ── Tab: Tarefas (só para responsáveis criarem) ──────── */
-  else if (_familiaTab === 'tarefas') {
-    // Só mostra tarefas que eu criei como pai — estudante conclui pela aba Tarefas
-    const myCreated = ptasks.filter(t => t.parent_id === myId);
-
-    const _ptaskCard = (t) => {
-      const nm   = userNames[t.student_id] || '?';
-      const days = _daysUntil(t.due_date);
-      const dueTag = t.due_date
-        ? (days < 0 ? `<span class="ptask-due late">Atrasada</span>`
-          : days === 0 ? `<span class="ptask-due today">Hoje</span>`
-          : `<span class="ptask-due">${days}d</span>`)
-        : '';
-      return `<div class="parental-task-card${t.completed ? ' ptask-done' : ''}">
-        <div class="ptask-icon">${t.completed ? '✅' : '📋'}</div>
-        <div class="ptask-info">
-          <div class="ptask-title">${escHtml(t.title)}</div>
-          <div class="ptask-meta">Para: <b>${escHtml(nm)}</b> · ⚡${t.xp_reward} XP ${dueTag}</div>
-          ${t.description ? `<div class="ptask-desc">${escHtml(t.description)}</div>` : ''}
-          ${t.completed ? `<div class="ptask-desc" style="color:#34d399">✅ Concluída pelo estudante</div>` : ''}
-        </div>
-        ${!t.completed ? `<button class="btn-sm btn-ghost" style="color:#f87171;flex-shrink:0" onclick="deleteParentalTask('${t.id}')">🗑️</button>` : ''}
-      </div>`;
-    };
-
-    const sentHtml = myCreated.length
-      ? `<div class="familia-section-title">📤 Tarefas Criadas por Mim</div>${myCreated.map(t => _ptaskCard(t)).join('')}` : '';
-
-    contentHtml = `
-      ${sentHtml}
-      ${!myCreated.length
-        ? `<div class="social-empty" style="padding:1.5rem">
-            <div style="font-size:2.5rem;margin-bottom:.5rem">📋</div>
-            <div style="font-weight:700">Nenhuma tarefa criada ainda</div>
-            <div style="font-size:.83rem;color:var(--text-muted);margin-top:.25rem">
-              Crie tarefas para seus filhos clicando em um deles na aba Conexões.
-            </div>
-          </div>` : ''}
-      ${myChildren.length ? `<div style="margin-top:1rem">
-        <div class="familia-section-title">➕ Criar Nova Tarefa</div>
-        <div style="display:flex;flex-wrap:wrap;gap:.5rem">
-          ${myChildren.map(cid=>{
-            const nm=userNames[cid]||cid.slice(0,8)+'…';
-            return `<button class="btn-secondary btn-sm" onclick="openParentalTaskModal('${cid}','${escHtml(nm)}')">📋 Para ${escHtml(nm)}</button>`;
-          }).join('')}
-        </div>
-      </div>` : ''}`;
   }
 
   /* ── Tab: Mensagens ────────────────────────────────────── */
@@ -10591,16 +10559,17 @@ async function viewChildDashboard(childId, childName) {
       return `<span class="child-grade-badge" style="background:${c}20;color:${c};border-color:${c}40">${g}</span>`;
     };
 
-    // Matérias com médias
+    // Matérias com médias (gradeEntries + provas daquela matéria)
     const subjectsHtml = subjects.length ? subjects.map(s => {
       const sE  = gradeEntries[s.id] || {};
-      const aN  = Object.values(sE).flatMap(a => a.filter(v => v !== null && v !== undefined && v !== ''));
-      const sA  = aN.length ? (aN.reduce((a, b) => a + Number(b), 0) / aN.length).toFixed(1) : null;
+      const fromEntries = Object.values(sE).flatMap(a => (a || []).filter(v => v !== null && v !== undefined && v !== '').map(Number));
+      const fromExams   = exams.filter(e => e.subjectId === s.id && e.grade !== null && e.grade !== undefined && e.grade !== '').map(e => Number(e.grade));
+      const aN  = [...fromEntries, ...fromExams];
+      const sA  = aN.length ? (aN.reduce((a, b) => a + b, 0) / aN.length).toFixed(1) : null;
       const sc  = sA !== null ? (Number(sA) >= approvalAvg ? '#34d399' : '#f87171') : 'var(--text-muted)';
-      // Barra de progresso da média
       const barPct = sA !== null ? Math.min((Number(sA) / 10) * 100, 100) : 0;
       return `<div class="child-subject-row">
-        <span class="child-subj-icon">${s.icon || '📚'}</span>
+        <span class="child-subj-icon">${s.icon || s.emoji || '📚'}</span>
         <div class="child-subj-info">
           <div class="child-subj-name">${escHtml(s.name)}</div>
           <div class="child-subj-bar-wrap">
@@ -10627,6 +10596,7 @@ async function viewChildDashboard(childId, childName) {
     // Tarefas pendentes
     const pendHtml = pendTasks.length ? pendTasks.map(t => {
       const subj = subjects.find(s => s.id === t.subjectId);
+      const taskName = t.name || t.title || '(sem nome)';
       const days = _daysUntil(t.dueDate);
       const dTag = t.dueDate
         ? (days < 0 ? `<span style="color:#f87171;font-size:.75rem">Atrasada</span>`
@@ -10634,24 +10604,28 @@ async function viewChildDashboard(childId, childName) {
           : `<span style="color:var(--text-muted);font-size:.75rem">${days}d</span>`)
         : '';
       return `<div class="child-list-row">
-        <span>${subj?.icon || '📋'} ${escHtml(t.title)}</span>
+        <span>${subj?.icon || subj?.emoji || '📋'} ${escHtml(taskName)}</span>
         ${dTag}
       </div>`;
     }).join('') : `<div style="color:var(--text-muted);font-size:.85rem;padding:.5rem 0">Nenhuma tarefa pendente.</div>`;
 
     // Tarefas concluídas
-    const doneHtml = doneTasks.length ? doneTasks.map(t =>
-      `<div class="child-list-row">
-        <span>✅ ${escHtml(t.title)}</span>
+    const doneHtml = doneTasks.length ? doneTasks.map(t => {
+      const taskName = t.name || t.title || '(sem nome)';
+      const subj = subjects.find(s => s.id === t.subjectId);
+      return `<div class="child-list-row">
+        <span>${subj?.icon || subj?.emoji || '✅'} ${escHtml(taskName)}</span>
         <span style="color:#34d399;font-size:.78rem;font-weight:700">Concluída</span>
-      </div>`).join('')
+      </div>`;
+    }).join('')
       : `<div style="color:var(--text-muted);font-size:.85rem;padding:.5rem 0">Sem tarefas concluídas recentes.</div>`;
 
-    // Conteúdos estudados
+    // Conteúdos estudados  (campo correto é 'content')
     const studiedHtml = studyItems.length ? studyItems.map(i => {
       const subj = subjects.find(s => s.id === i.subjectId);
+      const itemName = i.content || i.title || i.name || '(sem título)';
       return `<div class="child-list-row">
-        <span>📘 ${escHtml(i.title || i.name || 'Conteúdo')}</span>
+        <span>${subj?.icon || subj?.emoji || '📘'} ${escHtml(itemName)}</span>
         <span style="color:#34d399;font-size:.78rem">Estudado</span>
       </div>`;
     }).join('') : `<div style="color:var(--text-muted);font-size:.85rem;padding:.5rem 0">Sem conteúdos estudados registrados.</div>`;
@@ -10935,7 +10909,7 @@ async function submitParentalTask() {
     await _sendParentalNotif(studentId,'new_task',`📋 Nova tarefa: "${title}"`, desc||`Prazo: ${due?_fmtDate(due):'sem prazo'} · ⚡${xp} XP`);
     result.textContent='✅ Tarefa criada!'; result.style.color='#34d399';
     showNotification('Tarefa criada!','success');
-    setTimeout(() => { closeModal('modal-parental-task'); renderFamiliaPage('tarefas'); }, 1000);
+    setTimeout(() => { closeModal('modal-parental-task'); renderFamiliaPage('familia'); }, 1000);
   } catch(e) { result.textContent='❌ Erro ao criar.'; result.style.color='#f87171'; }
 }
 
@@ -10979,7 +10953,7 @@ async function completeParentalTask(taskId, xpReward, taskTitle, parentId) {
 
 async function deleteParentalTask(taskId) {
   if (!confirm('Excluir esta tarefa?')) return;
-  try { await sb.from('parental_tasks').delete().eq('id',taskId); showNotification('Tarefa excluída.','info'); renderFamiliaPage('tarefas'); }
+  try { await sb.from('parental_tasks').delete().eq('id',taskId); showNotification('Tarefa excluída.','info'); renderFamiliaPage('familia'); }
   catch(e) { showNotification('Erro.','error'); }
 }
 
