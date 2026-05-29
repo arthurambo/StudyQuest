@@ -10431,48 +10431,46 @@ async function renderFamiliaPage(tab) {
       </div>`;
   }
 
-  /* ── Tab: Tarefas ──────────────────────────────────────── */
+  /* ── Tab: Tarefas (só para responsáveis criarem) ──────── */
   else if (_familiaTab === 'tarefas') {
-    const myCreated  = ptasks.filter(t => t.parent_id === myId);
-    const myReceived = ptasks.filter(t => t.student_id === myId);
+    // Só mostra tarefas que eu criei como pai — estudante conclui pela aba Tarefas
+    const myCreated = ptasks.filter(t => t.parent_id === myId);
 
-    const _ptaskCard = (t, isReceived) => {
-      const otherId  = isReceived ? t.parent_id : t.student_id;
-      const otherNm  = userNames[otherId] || '?';
-      const days     = _daysUntil(t.due_date);
-      const dueTag   = t.due_date
-        ? (days < 0 ? `<span style="color:#f87171">Atrasada</span>`
-          : days === 0 ? `<span style="color:#f59e0b">Hoje</span>`
-          : `<span style="color:var(--text-muted)">${days}d</span>`)
+    const _ptaskCard = (t) => {
+      const nm   = userNames[t.student_id] || '?';
+      const days = _daysUntil(t.due_date);
+      const dueTag = t.due_date
+        ? (days < 0 ? `<span class="ptask-due late">Atrasada</span>`
+          : days === 0 ? `<span class="ptask-due today">Hoje</span>`
+          : `<span class="ptask-due">${days}d</span>`)
         : '';
-      return `<div class="parental-task-card${t.completed?' ptask-done':''}">
-        <div class="ptask-icon">${t.completed?'✅':'📋'}</div>
+      return `<div class="parental-task-card${t.completed ? ' ptask-done' : ''}">
+        <div class="ptask-icon">${t.completed ? '✅' : '📋'}</div>
         <div class="ptask-info">
           <div class="ptask-title">${escHtml(t.title)}</div>
-          <div class="ptask-meta">${isReceived?'De':'Para'}: <b>${escHtml(otherNm)}</b> · ⚡${t.xp_reward} XP ${dueTag}</div>
-          ${t.description?`<div class="ptask-desc">${escHtml(t.description)}</div>`:''}
+          <div class="ptask-meta">Para: <b>${escHtml(nm)}</b> · ⚡${t.xp_reward} XP ${dueTag}</div>
+          ${t.description ? `<div class="ptask-desc">${escHtml(t.description)}</div>` : ''}
+          ${t.completed ? `<div class="ptask-desc" style="color:#34d399">✅ Concluída pelo estudante</div>` : ''}
         </div>
-        ${isReceived && !t.completed
-          ? `<button class="btn-sm btn-primary" style="flex-shrink:0" onclick="completeParentalTask('${t.id}',${t.xp_reward},'${escHtml(t.title)}','${t.parent_id}')">✅ Concluir</button>`
-          : isReceived && t.completed ? `<span style="font-size:.75rem;color:#34d399;flex-shrink:0">Concluída 🎉</span>`
-          : !t.completed ? `<button class="btn-sm btn-ghost" style="color:#f87171;flex-shrink:0" onclick="deleteParentalTask('${t.id}')">🗑️</button>` : ''}
+        ${!t.completed ? `<button class="btn-sm btn-ghost" style="color:#f87171;flex-shrink:0" onclick="deleteParentalTask('${t.id}')">🗑️</button>` : ''}
       </div>`;
     };
 
-    const recvHtml = myReceived.length
-      ? `<div class="familia-section-title">📥 Tarefas dos Responsáveis</div>${myReceived.map(t=>_ptaskCard(t,true)).join('')}` : '';
     const sentHtml = myCreated.length
-      ? `<div class="familia-section-title">📤 Tarefas que Enviei</div>${myCreated.map(t=>_ptaskCard(t,false)).join('')}` : '';
+      ? `<div class="familia-section-title">📤 Tarefas Criadas por Mim</div>${myCreated.map(t => _ptaskCard(t)).join('')}` : '';
 
     contentHtml = `
-      ${recvHtml}${sentHtml}
-      ${!myReceived.length && !myCreated.length
+      ${sentHtml}
+      ${!myCreated.length
         ? `<div class="social-empty" style="padding:1.5rem">
             <div style="font-size:2.5rem;margin-bottom:.5rem">📋</div>
-            <div style="font-weight:700">Nenhuma tarefa parental</div>
+            <div style="font-weight:700">Nenhuma tarefa criada ainda</div>
+            <div style="font-size:.83rem;color:var(--text-muted);margin-top:.25rem">
+              Crie tarefas para seus filhos clicando em um deles na aba Conexões.
+            </div>
           </div>` : ''}
       ${myChildren.length ? `<div style="margin-top:1rem">
-        <div class="familia-section-title">➕ Criar Tarefa</div>
+        <div class="familia-section-title">➕ Criar Nova Tarefa</div>
         <div style="display:flex;flex-wrap:wrap;gap:.5rem">
           ${myChildren.map(cid=>{
             const nm=userNames[cid]||cid.slice(0,8)+'…';
@@ -10540,30 +10538,123 @@ function _updateParentalSettingsSummary(children, parents, pendingCount) {
 async function viewChildDashboard(childId, childName) {
   const page = document.getElementById('page-familia');
   if (!page) return;
+
   page.innerHTML = `
     <div class="page-header">
       <button class="btn-back" onclick="renderFamiliaPage('familia')">‹ Voltar</button>
       <h1>📊 ${escHtml(childName)}</h1>
     </div>
     <div class="social-loading">Carregando dados…</div>`;
-  try {
-    const { data: row } = await sb.from('users').select('data,name').eq('id', childId).single();
-    if (!row) throw new Error('Not found');
-    const cd  = row.data || {};
-    const avg = _calcChildAverage(cd);
-    const approvalAvg = cd.settings?.schoolAverage || 7;
-    const avgColor = avg === null ? '#888' : Number(avg) >= approvalAvg ? '#34d399' : '#f87171';
-    const now = new Date();
-    const weekStart = new Date(now); weekStart.setDate(now.getDate()-now.getDay()); weekStart.setHours(0,0,0,0);
-    let xpWeek = 0;
-    Object.entries(cd.xpHistory||{}).forEach(([d,x]) => { if (new Date(d) >= weekStart) xpWeek += (x||0); });
-    const subjects = cd.subjects || [];
-    const doneTasks = (cd.tasks||[]).filter(t=>t.done).slice(-5).reverse();
-    const pendTasks = (cd.tasks||[]).filter(t=>!t.done).slice(0,5);
-    const exams     = (cd.exams||[]).slice(-5).reverse();
 
-    const sc2 = (icon,label,val,sub='') =>
-      `<div class="admin-stat-card"><div class="admin-stat-icon">${icon}</div><div class="admin-stat-val">${val}</div><div class="admin-stat-label">${label}</div>${sub?`<div class="admin-stat-sub">${sub}</div>`:''}</div>`;
+  try {
+    const { data: row, error } = await sb.from('users')
+      .select('data,name,level,xp').eq('id', childId).single();
+
+    if (error || !row) throw new Error(error?.message || 'Not found');
+
+    const cd  = (typeof row.data === 'object' && row.data) ? row.data : {};
+    const approvalAvg = Number(cd.settings?.schoolAverage) || 7;
+    const subjects    = cd.subjects || [];
+    const gradeEntries = cd.gradeEntries || {};
+    const exams       = [...(cd.exams || [])].reverse().slice(0, 8);
+    const allTasks    = cd.tasks || [];
+    const doneTasks   = allTasks.filter(t => t.done).slice(-6).reverse();
+    const pendTasks   = allTasks.filter(t => !t.done).slice(0, 6);
+    const studyItems  = (cd.studyItems || []).filter(i => i.done).slice(-5).reverse();
+
+    // Média geral
+    const avg = _calcChildAverage(cd);
+    const avgColor = avg === null ? 'var(--text-muted)' : Number(avg) >= approvalAvg ? '#34d399' : '#f87171';
+
+    // XP da semana
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - now.getDay());
+    weekStart.setHours(0, 0, 0, 0);
+    let xpWeek = 0;
+    Object.entries(cd.xpHistory || {}).forEach(([d, x]) => {
+      if (new Date(d + 'T00:00:00') >= weekStart) xpWeek += (x || 0);
+    });
+
+    // Helper: mini stat pill
+    const pill = (icon, val, label) => `
+      <div class="child-stat-pill">
+        <span class="csp-icon">${icon}</span>
+        <div><div class="csp-val">${val}</div><div class="csp-lbl">${label}</div></div>
+      </div>`;
+
+    // Helper: lista com nota colorida
+    const gradeTag = (g) => {
+      if (g === null || g === undefined || g === '') return '';
+      const n = Number(g);
+      const c = n >= approvalAvg ? '#34d399' : '#f87171';
+      return `<span class="child-grade-badge" style="background:${c}20;color:${c};border-color:${c}40">${g}</span>`;
+    };
+
+    // Matérias com médias
+    const subjectsHtml = subjects.length ? subjects.map(s => {
+      const sE  = gradeEntries[s.id] || {};
+      const aN  = Object.values(sE).flatMap(a => a.filter(v => v !== null && v !== undefined && v !== ''));
+      const sA  = aN.length ? (aN.reduce((a, b) => a + Number(b), 0) / aN.length).toFixed(1) : null;
+      const sc  = sA !== null ? (Number(sA) >= approvalAvg ? '#34d399' : '#f87171') : 'var(--text-muted)';
+      // Barra de progresso da média
+      const barPct = sA !== null ? Math.min((Number(sA) / 10) * 100, 100) : 0;
+      return `<div class="child-subject-row">
+        <span class="child-subj-icon">${s.icon || '📚'}</span>
+        <div class="child-subj-info">
+          <div class="child-subj-name">${escHtml(s.name)}</div>
+          <div class="child-subj-bar-wrap">
+            <div class="child-subj-bar" style="width:${barPct}%;background:${sc}"></div>
+          </div>
+        </div>
+        <span class="child-grade-badge" style="background:${sA!==null?sc+'20':'transparent'};color:${sc};border-color:${sA!==null?sc+'40':'var(--border)'}">${sA !== null ? sA : '—'}</span>
+      </div>`;
+    }).join('') : `<div style="color:var(--text-muted);font-size:.85rem;padding:.5rem 0">Sem matérias cadastradas.</div>`;
+
+    // Provas
+    const examsHtml = exams.length ? exams.map(e => {
+      const subj = subjects.find(s => s.id === e.subjectId);
+      const g    = (e.grade !== null && e.grade !== undefined) ? e.grade : null;
+      return `<div class="child-list-row">
+        <span>${subj?.icon || '📝'} ${escHtml(e.name || subj?.name || 'Prova')}</span>
+        <div style="display:flex;align-items:center;gap:.5rem">
+          <span style="font-size:.78rem;color:var(--text-muted)">${_fmtDate(e.examDate)}</span>
+          ${gradeTag(g)}
+        </div>
+      </div>`;
+    }).join('') : `<div style="color:var(--text-muted);font-size:.85rem;padding:.5rem 0">Sem provas registradas.</div>`;
+
+    // Tarefas pendentes
+    const pendHtml = pendTasks.length ? pendTasks.map(t => {
+      const subj = subjects.find(s => s.id === t.subjectId);
+      const days = _daysUntil(t.dueDate);
+      const dTag = t.dueDate
+        ? (days < 0 ? `<span style="color:#f87171;font-size:.75rem">Atrasada</span>`
+          : days === 0 ? `<span style="color:#f59e0b;font-size:.75rem">Hoje</span>`
+          : `<span style="color:var(--text-muted);font-size:.75rem">${days}d</span>`)
+        : '';
+      return `<div class="child-list-row">
+        <span>${subj?.icon || '📋'} ${escHtml(t.title)}</span>
+        ${dTag}
+      </div>`;
+    }).join('') : `<div style="color:var(--text-muted);font-size:.85rem;padding:.5rem 0">Nenhuma tarefa pendente.</div>`;
+
+    // Tarefas concluídas
+    const doneHtml = doneTasks.length ? doneTasks.map(t =>
+      `<div class="child-list-row">
+        <span>✅ ${escHtml(t.title)}</span>
+        <span style="color:#34d399;font-size:.78rem;font-weight:700">Concluída</span>
+      </div>`).join('')
+      : `<div style="color:var(--text-muted);font-size:.85rem;padding:.5rem 0">Sem tarefas concluídas recentes.</div>`;
+
+    // Conteúdos estudados
+    const studiedHtml = studyItems.length ? studyItems.map(i => {
+      const subj = subjects.find(s => s.id === i.subjectId);
+      return `<div class="child-list-row">
+        <span>📘 ${escHtml(i.title || i.name || 'Conteúdo')}</span>
+        <span style="color:#34d399;font-size:.78rem">Estudado</span>
+      </div>`;
+    }).join('') : `<div style="color:var(--text-muted);font-size:.85rem;padding:.5rem 0">Sem conteúdos estudados registrados.</div>`;
 
     page.innerHTML = `
       <div class="page-header">
@@ -10571,71 +10662,53 @@ async function viewChildDashboard(childId, childName) {
         <h1>📊 ${escHtml(childName)}</h1>
       </div>
       <div class="page-content">
-        <div class="familia-section-title">⚡ Resumo</div>
-        <div class="admin-stat-grid" style="margin-bottom:1rem">
-          ${sc2('⚡','XP Total', cd.xp||0, `Nível ${cd.level||1}`)}
-          ${sc2('🔥','Sequência', `${cd.streak||0} dias`, cd.maxStreak?`Recorde: ${cd.maxStreak}d`:'')}
-          ${sc2('📊','Média Geral', avg!==null?`<span style="color:${avgColor}">${avg}</span>`:'—', avg!==null?(Number(avg)>=approvalAvg?'✅ Aprovado':'⚠️ Atenção'):'Sem notas')}
-          ${sc2('⚡','XP semana', xpWeek, `${cd.totalTasksDone||0} tarefas`)}
-          ${sc2('⏱️','Pomodoros', cd.totalPomodoros||0, 'sessões')}
-          ${sc2('📚','Conteúdos', cd.totalStudied||0, 'estudados')}
+
+        <!-- Hero stats -->
+        <div class="child-stats-hero">
+          ${pill('⚡', cd.xp || 0, `XP · Nível ${cd.level || 1}`)}
+          ${pill('🔥', `${cd.streak || 0}d`, cd.maxStreak ? `Recorde ${cd.maxStreak}d` : 'Streak')}
+          ${pill('📊', avg !== null ? `<span style="color:${avgColor}">${avg}</span>` : '—', avg !== null ? (Number(avg) >= approvalAvg ? '✅ Aprovado' : '⚠️ Atenção') : 'Média geral')}
+          ${pill('⚡', xpWeek, 'XP esta semana')}
+          ${pill('✅', cd.totalTasksDone || 0, 'Tarefas feitas')}
+          ${pill('⏱️', cd.totalPomodoros || 0, 'Pomodoros')}
         </div>
 
-        ${subjects.length ? `
-        <div class="familia-section-title">📚 Matérias</div>
-        <div class="familia-subjects-grid">
-          ${subjects.map(s => {
-            const sE = cd.gradeEntries?.[s.id]||{};
-            const aN = Object.values(sE).flatMap(a=>a.filter(v=>v!==null&&v!==undefined&&v!==''));
-            const sA = aN.length ? (aN.reduce((a,b)=>a+Number(b),0)/aN.length).toFixed(1) : null;
-            const sc3 = sA!==null?(Number(sA)>=approvalAvg?'#34d399':'#f87171'):'var(--text-muted)';
-            return `<div class="familia-subject-card">
-              <span style="font-size:1.3rem">${s.icon||'📚'}</span>
-              <div>
-                <div style="font-weight:700;font-size:.88rem">${escHtml(s.name)}</div>
-                <div style="font-size:.8rem;color:${sc3};font-weight:700">${sA!==null?'Média '+sA:'Sem notas'}</div>
-              </div>
-            </div>`;
-          }).join('')}
-        </div>` : ''}
+        <!-- Matérias -->
+        <div class="child-section">
+          <div class="child-section-title">📚 Matérias e Médias</div>
+          <div class="child-section-body">${subjectsHtml}</div>
+        </div>
 
-        ${exams.length ? `
-        <div class="familia-section-title" style="margin-top:1rem">📝 Provas</div>
-        <div class="familia-list">
-          ${exams.map(e => {
-            const subj = subjects.find(s=>s.id===e.subjectId);
-            const g    = e.grade!==null&&e.grade!==undefined ? e.grade : null;
-            const gc   = g!==null?(Number(g)>=approvalAvg?'#34d399':'#f87171'):'var(--text-muted)';
-            return `<div class="familia-list-item">
-              <span>${subj?.icon||'📝'} ${escHtml(e.name||'Prova')}</span>
-              <span style="color:${gc};font-weight:700">${g!==null?g:_fmtDate(e.examDate)}</span>
-            </div>`;
-          }).join('')}
-        </div>` : ''}
+        <!-- Provas -->
+        <div class="child-section">
+          <div class="child-section-title">📝 Provas</div>
+          <div class="child-section-body">${examsHtml}</div>
+        </div>
 
-        ${pendTasks.length ? `
-        <div class="familia-section-title" style="margin-top:1rem">⏳ Tarefas Pendentes</div>
-        <div class="familia-list">
-          ${pendTasks.map(t=>{
-            const subj=subjects.find(s=>s.id===t.subjectId);
-            return `<div class="familia-list-item">
-              <span>${subj?.icon||'📋'} ${escHtml(t.title)}</span>
-              <span style="color:var(--text-muted);font-size:.8rem">${t.dueDate?_fmtDate(t.dueDate):''}</span>
-            </div>`;
-          }).join('')}
-        </div>` : ''}
+        <!-- Tarefas pendentes -->
+        <div class="child-section">
+          <div class="child-section-title">⏳ Tarefas Pendentes</div>
+          <div class="child-section-body">${pendHtml}</div>
+        </div>
 
-        ${doneTasks.length ? `
-        <div class="familia-section-title" style="margin-top:1rem">✅ Concluídas Recentes</div>
-        <div class="familia-list">
-          ${doneTasks.map(t=>`<div class="familia-list-item"><span>✅ ${escHtml(t.title)}</span><span style="color:#34d399;font-size:.8rem">Concluída</span></div>`).join('')}
-        </div>` : ''}
+        <!-- Tarefas concluídas -->
+        <div class="child-section">
+          <div class="child-section-title">✅ Tarefas Concluídas Recentes</div>
+          <div class="child-section-body">${doneHtml}</div>
+        </div>
+
+        <!-- Conteúdos estudados -->
+        <div class="child-section">
+          <div class="child-section-title">📘 Conteúdos Estudados</div>
+          <div class="child-section-body">${studiedHtml}</div>
+        </div>
 
         <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1.25rem">
-          <button class="btn-secondary" onclick="openMotivationalModal('${childId}','${escHtml(childName)}')">💌 Enviar Mensagem</button>
           <button class="btn-primary"   onclick="openParentalTaskModal('${childId}','${escHtml(childName)}')">📋 Criar Tarefa</button>
+          <button class="btn-secondary" onclick="openMotivationalModal('${childId}','${escHtml(childName)}')">💌 Mensagem</button>
         </div>
       </div>`;
+
   } catch(e) {
     page.innerHTML = `
       <div class="page-header">
@@ -10645,9 +10718,10 @@ async function viewChildDashboard(childId, childName) {
       <div class="social-empty" style="padding:2rem">
         <div style="font-size:2.5rem;margin-bottom:.5rem">⚠️</div>
         <div style="font-weight:700">Não foi possível carregar os dados.</div>
-        <div style="font-size:.83rem;color:var(--text-muted);margin-top:.25rem">Configure as políticas RLS no Supabase.</div>
+        <div style="font-size:.83rem;color:var(--text-muted);margin-top:.5rem">${e.message}</div>
+        <div style="font-size:.78rem;color:var(--text-muted);margin-top:.25rem">Verifique a política RLS no Supabase.</div>
       </div>`;
-    console.warn('[Família]', e);
+    console.warn('[Família] viewChildDashboard:', e);
   }
 }
 
@@ -10788,12 +10862,11 @@ async function searchFamilyUser(query) {
 async function sendFamilyConnectionTo(otherId, otherName) {
   const status = document.getElementById('familia-connect-status');
   if (!sb) return;
-  const myId     = _myFamiliaId();
-  const isParent = _familyConnectRole === 'parent';
-  // isParent=true → eu sou PAI, quero adicionar filho → eu busquei o filho (otherId = studentId)
-  // isParent=false → eu sou FILHO, quero adicionar pai → eu busquei o pai (otherId = parentId)
-  const studentId = isParent ? otherId : myId;
-  const parentId  = isParent ? myId    : otherId;
+  const myId = _myFamiliaId();
+  // role='parent' → estou adicionando um RESPONSÁVEL → eu sou o estudante, o outro é o pai
+  // role='child'  → estou adicionando um FILHO      → eu sou o pai, o outro é o estudante
+  const studentId = _familyConnectRole === 'parent' ? myId    : otherId;
+  const parentId  = _familyConnectRole === 'parent' ? otherId : myId;
   try {
     const { data: ex } = await sb.from('parental_connections').select('id,status')
       .eq('student_id',studentId).eq('parent_id',parentId).maybeSingle();
@@ -10805,7 +10878,11 @@ async function sendFamilyConnectionTo(otherId, otherName) {
   try {
     await sb.from('parental_connections').insert({ student_id:studentId, parent_id:parentId, status:'pending', initiated_by:myId });
     const myName = state.name||'Alguém';
-    const notifTitle = isParent ? `👨‍👩‍👧 ${myName} quer se conectar como responsável` : `🎒 ${myName} quer te adicionar como responsável`;
+    // role='parent' → eu adicionei o outro como meu responsável → aviso para ele que sou estudante
+    // role='child'  → eu adicionei o outro como meu filho        → aviso para ele que sou responsável
+    const notifTitle = _familyConnectRole === 'parent'
+      ? `🎒 ${myName} quer te adicionar como responsável`
+      : `👨‍👩‍👧 ${myName} quer se conectar como responsável de você`;
     await _sendParentalNotif(otherId, 'connection', notifTitle, 'Acesse Família para aceitar ou recusar.');
     if (status) { status.textContent = `✅ Pedido enviado para ${otherName}!`; status.style.color='#34d399'; }
     showNotification(`Pedido enviado para ${otherName}!`, 'success');
@@ -10864,16 +10941,40 @@ async function submitParentalTask() {
 
 async function completeParentalTask(taskId, xpReward, taskTitle, parentId) {
   try {
-    await sb.from('parental_tasks').update({completed:true, completed_at:new Date().toISOString()}).eq('id',taskId);
-    const gained = xpReward||50;
-    state.xp           += gained;
-    state.totalXpEarned = (state.totalXpEarned||0)+gained;
-    checkLevelUp(); saveState();
-    showNotification(`+${gained} XP! "${taskTitle}" concluída! 🎉`,'success');
-    const myName = state.name||'Seu filho';
-    await _sendParentalNotif(parentId,'task_done',`📚 ${myName} concluiu uma tarefa!`,`"${taskTitle}" concluída. +${gained} XP`);
-    renderFamiliaPage('tarefas');
-  } catch(e) { showNotification('Erro ao concluir.','error'); }
+    await sb.from('parental_tasks')
+      .update({ completed: true, completed_at: new Date().toISOString() })
+      .eq('id', taskId);
+
+    const gained = xpReward || 50;
+
+    // Usa addXp() que cuida de: nível, dailyXp, xpHistory, updateDashboard, checkMissionGoals
+    addXp(gained);
+    // Conta como dia de estudo → streak + calendário
+    markStudyToday();
+    // Conta para missões
+    updateMissionProgress('tasksToday', 1);
+    updateWeeklyMissionProgress('tasksThisWeek', 1);
+    state.totalTasksDone = (state.totalTasksDone || 0) + 1;
+    saveState();
+
+    showNotification(`+${gained} XP! "${taskTitle}" concluída! 🎉`, 'success');
+    showXpPopup(gained, false);
+    playSound('complete');
+
+    // Atualiza a seção na aba Tarefas sem recarregar a página toda
+    loadParentalTasksSection().catch(() => {});
+
+    // Notifica o pai
+    const myName = state.name || 'Seu filho';
+    _sendParentalNotif(parentId, 'task_done',
+      `📚 ${myName} concluiu uma tarefa!`,
+      `"${taskTitle}" concluída. +${gained} XP`
+    ).catch(() => {});
+
+  } catch(e) {
+    console.error('[completeParentalTask]', e);
+    showNotification('Erro ao concluir tarefa.', 'error');
+  }
 }
 
 async function deleteParentalTask(taskId) {

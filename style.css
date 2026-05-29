@@ -5213,42 +5213,7 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
   margin: 1rem 0 .5rem;
 }
 
-/* ── Card de conexão ─────────────────────────────────────── */
-.familia-card {
-  display: flex;
-  align-items: center;
-  gap: .75rem;
-  background: var(--bg-card);
-  border: 1.5px solid var(--border);
-  border-radius: 14px;
-  padding: .75rem 1rem;
-  margin-bottom: .5rem;
-  transition: border-color .2s;
-}
-.familia-card-pending {
-  border-color: rgba(245,158,11,.4);
-  background: rgba(245,158,11,.04);
-}
-.familia-card-avatar {
-  width: 42px; height: 42px;
-  border-radius: 50%;
-  background: rgba(124,58,237,.15);
-  border: 2px solid rgba(124,58,237,.25);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.3rem;
-  flex-shrink: 0;
-}
-.familia-avatar-child  { background: rgba(16,185,129,.12); border-color: rgba(16,185,129,.3); }
-.familia-avatar-parent { background: rgba(99,102,241,.12); border-color: rgba(99,102,241,.3); }
-
-.familia-card-info   { flex: 1; min-width: 0; }
-.familia-card-name   { font-weight: 700; font-size: .92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.familia-card-role   { font-size: .78rem; color: var(--text-muted); margin-top: .1rem; }
-.familia-card-actions { display: flex; gap: .4rem; flex-shrink: 0; flex-wrap: wrap; }
-.familia-card-clickable { cursor: pointer; transition: border-color .15s, transform .1s; }
-.familia-card-clickable:hover  { border-color: var(--primary); transform: translateX(2px); }
-.familia-card-clickable:active { transform: scale(.98); }
-.familia-card-chevron { font-size: 1.4rem; color: var(--text-muted); flex-shrink: 0; line-height: 1; }
+/* ── Card de conexão — ver bloco melhorado no final ──────── */
 
 /* ── Resultado de busca ───────────────────────────────────── */
 .familia-search-result {
@@ -5324,22 +5289,7 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
 }
 .familia-list-item:last-child { border-bottom: none; }
 
-/* ── Mensagens ───────────────────────────────────────────── */
-.familia-msg-card {
-  display: flex;
-  gap: .75rem;
-  background: var(--bg-card);
-  border: 1.5px solid var(--border);
-  border-radius: 12px;
-  padding: .75rem 1rem;
-  margin-bottom: .5rem;
-}
-.familia-msg-unread { border-color: rgba(124,58,237,.5); background: rgba(124,58,237,.04); }
-.familia-msg-icon   { font-size: 1.5rem; flex-shrink: 0; }
-.familia-msg-body   { flex: 1; min-width: 0; }
-.familia-msg-title  { font-weight: 700; font-size: .88rem; margin-bottom: .2rem; }
-.familia-msg-text   { font-size: .83rem; color: var(--text-muted); margin-bottom: .25rem; word-break: break-word; }
-.familia-msg-meta   { font-size: .74rem; color: var(--text-muted); }
+/* ── Mensagens — ver bloco melhorado no final ────────────── */
 
 /* ── Botão Voltar ────────────────────────────────────────── */
 .btn-back {
@@ -5400,3 +5350,249 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
   line-height: 16px;
   text-align: center;
 }
+
+/* ============================================================
+   CHILD DASHBOARD — viewChildDashboard()
+   ============================================================ */
+
+/* Hero stats row */
+.child-stats-hero {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+  margin-bottom: 1.25rem;
+}
+
+/* Individual stat pill */
+.child-stat-pill {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  flex: 1 1 140px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: .65rem 1rem;
+  transition: border-color .2s, box-shadow .2s;
+}
+.child-stat-pill:hover {
+  border-color: rgba(124,58,237,.4);
+  box-shadow: 0 0 14px rgba(124,58,237,.12);
+}
+.csp-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.csp-val {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.1;
+}
+.csp-lbl {
+  font-size: .72rem;
+  color: var(--text-muted);
+  line-height: 1.2;
+  margin-top: .1rem;
+}
+
+/* Section containers */
+.child-section {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 16px;
+  padding: 1rem 1.1rem;
+  margin-bottom: .85rem;
+  overflow: hidden;
+}
+.child-section-title {
+  font-size: .8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  margin-bottom: .65rem;
+  padding-bottom: .45rem;
+  border-bottom: 1px solid var(--border);
+}
+.child-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+}
+
+/* Subject row with progress bar */
+.child-subject-row {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .4rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.child-subject-row:last-child { border-bottom: none; }
+.child-subj-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  width: 1.6rem;
+  text-align: center;
+}
+.child-subj-info {
+  flex: 1;
+  min-width: 0;
+}
+.child-subj-name {
+  font-size: .84rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: .25rem;
+}
+.child-subj-bar-wrap {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--bg-card2);
+  overflow: hidden;
+}
+.child-subj-bar {
+  height: 100%;
+  border-radius: 999px;
+  transition: width .4s ease;
+  min-width: 2px;
+}
+
+/* Grade badge (colored pill) */
+.child-grade-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  height: 1.6rem;
+  padding: 0 .45rem;
+  border-radius: 8px;
+  border: 1.5px solid transparent;
+  font-size: .8rem;
+  font-weight: 800;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* Generic list row (exams, tasks, study items) */
+.child-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  padding: .45rem .1rem;
+  border-bottom: 1px solid var(--border);
+  font-size: .84rem;
+  color: var(--text);
+}
+.child-list-row:last-child { border-bottom: none; }
+.child-list-row > span:first-child {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ============================================================
+   FAMÍLIA PAGE — improved messages & connections design
+   ============================================================ */
+
+/* Improved message card */
+.familia-msg-card {
+  display: flex;
+  gap: .75rem;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: .85rem 1rem;
+  margin-bottom: .55rem;
+  transition: border-color .2s, box-shadow .2s;
+}
+.familia-msg-card:hover {
+  border-color: rgba(124,58,237,.3);
+  box-shadow: 0 2px 12px rgba(124,58,237,.08);
+}
+.familia-msg-unread {
+  border-color: rgba(124,58,237,.55);
+  background: rgba(124,58,237,.05);
+  box-shadow: 0 0 14px rgba(124,58,237,.1);
+}
+.familia-msg-icon {
+  font-size: 1.6rem;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 12px;
+  background: var(--bg-card2);
+}
+.familia-msg-body   { flex: 1; min-width: 0; }
+.familia-msg-title  { font-weight: 800; font-size: .9rem; margin-bottom: .2rem; color: var(--text); }
+.familia-msg-text   { font-size: .83rem; color: var(--text-muted); margin-bottom: .3rem; word-break: break-word; line-height: 1.4; }
+.familia-msg-meta   { font-size: .73rem; color: var(--text-dim); }
+
+/* Connection / family member cards — improved */
+.familia-card {
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 16px;
+  padding: .9rem 1.1rem;
+  margin-bottom: .6rem;
+  transition: border-color .2s, box-shadow .2s;
+}
+.familia-card-pending {
+  border-color: rgba(245,158,11,.35);
+  background: rgba(245,158,11,.04);
+}
+.familia-card-clickable {
+  cursor: pointer;
+}
+.familia-card-clickable:hover {
+  border-color: rgba(124,58,237,.5);
+  box-shadow: 0 4px 18px rgba(124,58,237,.14);
+}
+.familia-card-avatar {
+  width: 2.8rem;
+  height: 2.8rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  flex-shrink: 0;
+  background: var(--bg-card2);
+  border: 2px solid var(--border);
+}
+.familia-avatar-child  { background: rgba(124,58,237,.15); border-color: rgba(124,58,237,.3); }
+.familia-avatar-parent { background: rgba(6,182,212,.15);  border-color: rgba(6,182,212,.3); }
+.familia-card-info  { flex: 1; min-width: 0; }
+.familia-card-name  { font-weight: 800; font-size: .95rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.familia-card-role  { font-size: .78rem; color: var(--text-muted); margin-top: .15rem; }
+.familia-card-actions { display: flex; gap: .4rem; flex-shrink: 0; }
+.familia-card-chevron { font-size: 1.5rem; color: var(--text-dim); flex-shrink: 0; line-height: 1; transition: color .2s, transform .2s; }
+.familia-card-clickable:hover .familia-card-chevron { color: var(--primary); transform: translateX(2px); }
+
+/* ── Parental task due-date badges ───────────────────────── */
+.ptask-due {
+  font-size: .74rem;
+  font-weight: 700;
+  padding: .15rem .45rem;
+  border-radius: 6px;
+  background: var(--bg-card2);
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.ptask-due.late  { background: rgba(239,68,68,.15);  color: #f87171; }
+.ptask-due.today { background: rgba(245,158,11,.15); color: #fbbf24; }
