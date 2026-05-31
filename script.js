@@ -875,6 +875,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Always init UI components first
   initSetup();
   initNavigation();
+  _restoreNavGroups();   // restaura grupos abertos da sidebar
   initModals();
   initPomodoro();
   initCalendar();
@@ -1038,6 +1039,8 @@ function navigateTo(page) {
   document.querySelectorAll('.bottom-nav-item[data-page]').forEach(el => {
     el.classList.toggle('active', el.dataset.page === page);
   });
+  // Abre o grupo da sidebar que contém esta página
+  _openNavGroupForPage(page);
   closeSidebar();
 
   if (page === 'subjects') renderSubjects();
@@ -1068,6 +1071,51 @@ function toggleSidebar() {
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebar-overlay').classList.remove('active');
+}
+
+/* ── Grupos colapsáveis da sidebar ───────────────────────── */
+// Mapa: página → id do grupo
+const _NAV_GROUP_MAP = {
+  tasks:'escola', exams:'escola', grades:'escola', study:'escola', ai:'escola',
+  missions:'hub', shop:'hub', achievements:'hub',
+  friends:'conexoes', groups:'conexoes', familia:'conexoes',
+  subjects:'organizacao', stats:'organizacao', calendar:'organizacao',
+};
+
+function toggleNavGroup(groupId) {
+  const el = document.getElementById('navgroup-' + groupId);
+  if (!el) return;
+  const isOpen = el.classList.contains('open');
+  // Fecha todos os outros grupos
+  document.querySelectorAll('.nav-group.open').forEach(g => {
+    if (g !== el) g.classList.remove('open');
+  });
+  el.classList.toggle('open', !isOpen);
+  // Persiste estado dos grupos
+  try {
+    const opened = [...document.querySelectorAll('.nav-group.open')].map(g => g.id.replace('navgroup-',''));
+    localStorage.setItem('sq_nav_groups', JSON.stringify(opened));
+  } catch(e) {}
+}
+
+function _openNavGroupForPage(page) {
+  const groupId = _NAV_GROUP_MAP[page];
+  if (!groupId) return;
+  const el = document.getElementById('navgroup-' + groupId);
+  if (el && !el.classList.contains('open')) {
+    document.querySelectorAll('.nav-group.open').forEach(g => g.classList.remove('open'));
+    el.classList.add('open');
+  }
+}
+
+function _restoreNavGroups() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('sq_nav_groups') || '[]');
+    saved.forEach(id => {
+      const el = document.getElementById('navgroup-' + id);
+      if (el) el.classList.add('open');
+    });
+  } catch(e) {}
 }
 
 // ============================================================

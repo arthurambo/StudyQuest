@@ -215,27 +215,77 @@
       <span class="profile-edit-hint">✏️</span>
     </div>
     <div class="nav-items">
+
+      <!-- ── Solto: Dashboard ── -->
       <a class="nav-item active" data-page="dashboard">🏠 Dashboard</a>
-      <a class="nav-item" data-page="friends">👥 Amigos</a>
-      <a class="nav-item" data-page="familia">👨‍👩‍👧 Família</a>
-      <a class="nav-item" data-page="groups">🏰 Grupos</a>
-      <a class="nav-item" data-page="subjects">📚 Matérias</a>
-      <a class="nav-item" data-page="tasks">✅ Tarefas</a>
-      <a class="nav-item" data-page="exams">📝 Provas</a>
-      <a class="nav-item" data-page="missions">🎯 Missões</a>
-      <a class="nav-item" data-page="achievements">🏆 Conquistas</a>
-      <a class="nav-item" data-page="shop">🛒 Loja</a>
-      <a class="nav-item" data-page="grades">🎓 Notas</a>
-      <a class="nav-item" data-page="study">📘 Estudo</a>
-      <a class="nav-item" data-page="stats">📊 Estatísticas</a>
-      <a class="nav-item" data-page="calendar">📅 Calendário</a>
-      <a class="nav-item" data-page="ai">🧠 IA Educacional</a>
-      <a class="nav-item" data-page="settings">⚙️ Configurações</a>
-      <a class="nav-item nav-item-admin" data-page="admin" id="sidebar-admin-link" style="display:none">👑 Admin</a>
+
+      <!-- ── Grupo: Escola ── -->
+      <div class="nav-group" id="navgroup-escola">
+        <button class="nav-group-header" onclick="toggleNavGroup('escola')">
+          <span class="nav-group-icon">📖</span>
+          <span class="nav-group-label">Escola</span>
+          <span class="nav-group-arrow">›</span>
+        </button>
+        <div class="nav-group-items">
+          <a class="nav-item nav-item-child" data-page="tasks">✅ Tarefas</a>
+          <a class="nav-item nav-item-child" data-page="exams">📝 Provas</a>
+          <a class="nav-item nav-item-child" data-page="grades">🎓 Notas</a>
+          <a class="nav-item nav-item-child" data-page="study">📘 Estudo</a>
+          <a class="nav-item nav-item-child" data-page="ai">🧠 IA Educacional</a>
+        </div>
+      </div>
+
+      <!-- ── Grupo: Hub ── -->
+      <div class="nav-group" id="navgroup-hub">
+        <button class="nav-group-header" onclick="toggleNavGroup('hub')">
+          <span class="nav-group-icon">⚔️</span>
+          <span class="nav-group-label">Hub</span>
+          <span class="nav-group-arrow">›</span>
+        </button>
+        <div class="nav-group-items">
+          <a class="nav-item nav-item-child" data-page="missions">🎯 Missões</a>
+          <a class="nav-item nav-item-child" data-page="shop">🛒 Loja</a>
+          <a class="nav-item nav-item-child" data-page="achievements">🏆 Conquistas</a>
+        </div>
+      </div>
+
+      <!-- ── Grupo: Conexões ── -->
+      <div class="nav-group" id="navgroup-conexoes">
+        <button class="nav-group-header" onclick="toggleNavGroup('conexoes')">
+          <span class="nav-group-icon">👥</span>
+          <span class="nav-group-label">Conexões</span>
+          <span class="nav-group-arrow">›</span>
+        </button>
+        <div class="nav-group-items">
+          <a class="nav-item nav-item-child" data-page="friends">👥 Amigos</a>
+          <a class="nav-item nav-item-child" data-page="groups">🏰 Grupos</a>
+          <a class="nav-item nav-item-child" data-page="familia" id="sidebar-familia-link" style="position:relative">👨‍👩‍👧 Família<span id="familia-nav-badge"></span></a>
+        </div>
+      </div>
+
+      <!-- ── Grupo: Organização ── -->
+      <div class="nav-group" id="navgroup-organizacao">
+        <button class="nav-group-header" onclick="toggleNavGroup('organizacao')">
+          <span class="nav-group-icon">📊</span>
+          <span class="nav-group-label">Organização</span>
+          <span class="nav-group-arrow">›</span>
+        </button>
+        <div class="nav-group-items">
+          <a class="nav-item nav-item-child" data-page="subjects">📚 Matérias</a>
+          <a class="nav-item nav-item-child" data-page="stats">📊 Estatísticas</a>
+          <a class="nav-item nav-item-child" data-page="calendar">📅 Calendário</a>
+        </div>
+      </div>
+
+      <!-- ── Soltos: parte de baixo ── -->
+      <div class="nav-divider"></div>
       <a class="nav-item nav-item-notif" id="sidebar-notif-btn" onclick="openNotifPanel()" style="cursor:pointer">
         🔔 Notificações<span class="notif-bell-badge notif-badge-sidebar" style="display:none"></span>
       </a>
       <a class="nav-item" data-page="shop" onclick="navigateTo('shop');setTimeout(()=>renderShop('redeem'),50)">🎟️ Resgatar Código</a>
+      <a class="nav-item" data-page="settings">⚙️ Configurações</a>
+      <a class="nav-item nav-item-admin" data-page="admin" id="sidebar-admin-link" style="display:none">👑 Admin</a>
+
     </div>
     <div class="sidebar-bottom">
       <button class="theme-toggle" id="theme-toggle">🌙 Modo Claro</button>

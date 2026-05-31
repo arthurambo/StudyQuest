@@ -286,7 +286,62 @@ select option { background: var(--bg-card); }
 .user-name { font-weight: 800; font-size: 0.95rem; }
 .user-level { font-size: 0.75rem; color: var(--level-color); font-weight: 700; }
 
-.nav-items { flex: 1; padding: 1rem 0; }
+.nav-items { flex: 1; padding: .6rem 0; overflow-y: auto; }
+
+/* ── Grupos colapsáveis da sidebar ──────────────────────── */
+.nav-group { margin-bottom: 2px; }
+
+.nav-group-header {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  width: 100%;
+  padding: .6rem 1.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-weight: 800;
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  transition: color .2s, background .2s;
+  text-align: left;
+}
+.nav-group-header:hover { color: var(--text); background: rgba(124,58,237,.05); }
+
+.nav-group-icon { font-size: 1rem; flex-shrink: 0; }
+.nav-group-label { flex: 1; }
+.nav-group-arrow {
+  font-size: 1.1rem;
+  line-height: 1;
+  transition: transform .25s cubic-bezier(.4,0,.2,1);
+  color: var(--text-dim);
+}
+
+/* Items filhos (dentro do grupo) */
+.nav-group-items {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height .28s cubic-bezier(.4,0,.2,1);
+}
+.nav-group.open .nav-group-items { max-height: 400px; }
+.nav-group.open .nav-group-arrow { transform: rotate(90deg); color: var(--primary); }
+.nav-group.open .nav-group-header { color: var(--text); }
+
+.nav-item-child {
+  padding-left: 2.6rem !important;
+  font-size: .86rem !important;
+  font-weight: 600 !important;
+}
+
+/* Divider entre blocos */
+.nav-divider {
+  height: 1px;
+  background: var(--border);
+  margin: .6rem 1.2rem;
+}
+
 
 .nav-item {
   display: flex;
