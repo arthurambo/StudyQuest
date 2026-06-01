@@ -1689,15 +1689,18 @@
       <textarea id="pt-desc" placeholder="Detalhes da tarefa..." rows="2"
         style="width:100%;box-sizing:border-box;border-radius:8px;padding:.6rem;font-size:.85rem;resize:vertical;background:var(--bg-card);border:1.5px solid var(--border);color:var(--text)"></textarea>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem">
-      <div class="profile-field">
-        <label class="grades-label">⚡ XP de Recompensa</label>
-        <input type="number" id="pt-xp" min="0" max="500" value="50" style="font-size:16px">
+    <div class="profile-field" style="margin-bottom:.75rem">
+      <label class="grades-label">📊 Dificuldade</label>
+      <div style="display:flex;gap:.5rem;margin-top:.4rem">
+        <button type="button" class="diff-btn pt-diff-btn active" data-diff="easy" onclick="selectParentalDifficulty('easy')">😊 Fácil (10 XP)</button>
+        <button type="button" class="diff-btn pt-diff-btn" data-diff="medium" onclick="selectParentalDifficulty('medium')">😤 Médio (20 XP)</button>
+        <button type="button" class="diff-btn pt-diff-btn" data-diff="hard" onclick="selectParentalDifficulty('hard')">💀 Difícil (40 XP)</button>
       </div>
-      <div class="profile-field">
-        <label class="grades-label">📅 Prazo</label>
-        <input type="date" id="pt-due" style="font-size:16px">
-      </div>
+      <input type="hidden" id="pt-difficulty" value="easy">
+    </div>
+    <div class="profile-field" style="margin-bottom:.75rem">
+      <label class="grades-label">📅 Prazo</label>
+      <input type="date" id="pt-due" style="font-size:16px">
     </div>
     <div id="pt-result" style="font-size:.85rem;font-weight:700;min-height:1.2rem;margin-bottom:.5rem"></div>
     <div class="modal-btns">
@@ -1740,6 +1743,25 @@
     <div class="modal-btns">
       <button class="btn-secondary" data-close="modal-motivational">Cancelar</button>
       <button class="btn-primary" onclick="submitMotivationalMessage()">📤 Enviar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Adicionar Criança Sem Conta -->
+<div class="modal-overlay" id="modal-child-without-account">
+  <div class="modal" style="max-width:380px">
+    <h2 class="modal-title">➕ Adicionar Criança</h2>
+    <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem">
+      Adicione uma criança menor que não possui conta própria.
+    </p>
+    <div class="profile-field" style="margin-bottom:.75rem">
+      <label class="grades-label">👶 Nome da Criança</label>
+      <input type="text" id="cwa-name" placeholder="Ex: João" style="font-size:16px">
+    </div>
+    <div id="cwa-result" style="font-size:.85rem;font-weight:700;min-height:1.2rem;margin-bottom:.5rem"></div>
+    <div class="modal-btns">
+      <button class="btn-secondary" data-close="modal-child-without-account">Cancelar</button>
+      <button class="btn-primary" onclick="addChildWithoutAccount()">➕ Adicionar</button>
     </div>
   </div>
 </div>

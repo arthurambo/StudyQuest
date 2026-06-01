@@ -386,6 +386,7 @@ let state = {
   totalStudied: 0,
   favoriteSubject: '',
   cosmetics: { ownedFrames: [], ownedBanners: [], equippedFrame: null, equippedBanner: null },
+  childrenWithoutAccounts: [],  // [{id, name}] — filhos sem conta própria
   localNotifs: [],          // [{id, icon, message, timestamp, read}] — notifs de desempenho
   surpriseGifts: [],        // [{uid, icon, name, type, value, timestamp}] — presentes do sistema
   lastSurpriseGiftDate: '', // 'YYYY-MM-DD' — controla 1 presente por dia
@@ -10269,6 +10270,22 @@ function _daysUntil(dateStr) {
   return Math.round((due - today) / 86400000);
 }
 
+// Formata a data para exibição: "hoje", "amanhã", "ontem", "atrasada", ou a data
+function _formatDueDate(dateStr) {
+  if (!dateStr) return '';
+  const days = _daysUntil(dateStr);
+  if (days < 0) return 'atrasada';
+  if (days === 0) return 'hoje';
+  if (days === 1) return 'amanhã';
+  if (days === -1) return 'ontem';
+
+  // Para datas futuras, mostra a data formatada
+  const date = new Date(dateStr + 'T00:00:00');
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${day}/${month}`;
+}
+
 function _calcChildAverage(childState) {
   if (!childState?.subjects) return null;
   const allNums = [];
@@ -10452,7 +10469,8 @@ async function renderFamiliaPage(tab) {
         </div>`;
       }).join('')}` : '';
 
-    const childrenHtml = myChildren.length ? `
+    const childrenWithoutAccounts = state.childrenWithoutAccounts || [];
+    const childrenHtml = (myChildren.length || childrenWithoutAccounts.length) ? `
       <div class="familia-section-title">🎒 Meus Filhos</div>
       ${myChildren.map(cid => {
         const conn = conns.find(c => c.student_id===cid && c.parent_id===myId);
@@ -10462,6 +10480,16 @@ async function renderFamiliaPage(tab) {
           <div class="familia-card-info">
             <div class="familia-card-name">${escHtml(nm)}</div>
             <div class="familia-card-role">Filho(a) · Toque para ver opções</div>
+          </div>
+          <span class="familia-card-chevron">›</span>
+        </div>`;
+      }).join('')}
+      ${childrenWithoutAccounts.map(child => {
+        return `<div class="familia-card familia-card-clickable" onclick="openChildWithoutAccountProfile('${escHtml(child.id)}','${escHtml(child.name)}')">
+          <div class="familia-card-avatar familia-avatar-child">👶</div>
+          <div class="familia-card-info">
+            <div class="familia-card-name">${escHtml(child.name)}</div>
+            <div class="familia-card-role">Filho(a) (sem conta) · Toque para ver opções</div>
           </div>
           <span class="familia-card-chevron">›</span>
         </div>`;
@@ -10482,7 +10510,7 @@ async function renderFamiliaPage(tab) {
         </div>`;
       }).join('')}` : '';
 
-    const hasAny = myChildren.length || myParents.length || pending.length || pendingOut.length;
+    const hasAny = myChildren.length || myParents.length || pending.length || pendingOut.length || childrenWithoutAccounts.length;
     contentHtml = `
       ${pendingHtml}${pendingOutHtml}${childrenHtml}${parentsHtml}
       ${!hasAny ? `<div class="social-empty" style="padding:2rem">
@@ -10493,6 +10521,7 @@ async function renderFamiliaPage(tab) {
       <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1rem">
         <button class="btn-primary"   onclick="openFamilyConnectModal('parent')">➕ Adicionar Responsável</button>
         <button class="btn-secondary" onclick="openFamilyConnectModal('child')">➕ Adicionar Filho(a)</button>
+        <button class="btn-secondary" onclick="openAddChildWithoutAccountModal()">➕ Adicionar Criança</button>
       </div>`;
   }
 
@@ -10646,10 +10675,10 @@ async function viewChildDashboard(childId, childName) {
       const subj = subjects.find(s => s.id === t.subjectId);
       const taskName = t.name || t.title || '(sem nome)';
       const days = _daysUntil(t.dueDate);
+      const dateFormatted = _formatDueDate(t.dueDate);
+      const dateColor = days < 0 ? '#f87171' : days === 0 ? '#f59e0b' : 'var(--text-muted)';
       const dTag = t.dueDate
-        ? (days < 0 ? `<span style="color:#f87171;font-size:.75rem">Atrasada</span>`
-          : days === 0 ? `<span style="color:#f59e0b;font-size:.75rem">Hoje</span>`
-          : `<span style="color:var(--text-muted);font-size:.75rem">${days}d</span>`)
+        ? `<span style="color:${dateColor};font-size:.75rem">${dateFormatted}</span>`
         : '';
       return `<div class="child-list-row">
         <span>${subj?.icon || subj?.emoji || '📋'} ${escHtml(taskName)}</span>
@@ -10937,23 +10966,37 @@ function openParentalTaskModal(studentId, studentName) {
   document.getElementById('parental-task-student-id').value = studentId;
   document.getElementById('pt-title').value  = '';
   document.getElementById('pt-desc').value   = '';
-  document.getElementById('pt-xp').value     = '50';
+  document.getElementById('pt-difficulty').value = 'easy';
   document.getElementById('pt-result').textContent = '';
+
+  // Reset difficulty buttons
+  document.querySelectorAll('.pt-diff-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.diff === 'easy');
+  });
+
   const d = new Date(); d.setDate(d.getDate()+7);
   document.getElementById('pt-due').value = d.toISOString().slice(0,10);
   openModal('modal-parental-task');
+}
+
+function selectParentalDifficulty(diff) {
+  document.getElementById('pt-difficulty').value = diff;
+  document.querySelectorAll('.pt-diff-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.diff === diff);
+  });
 }
 
 async function submitParentalTask() {
   const studentId = document.getElementById('parental-task-student-id').value;
   const title     = document.getElementById('pt-title').value.trim();
   const desc      = document.getElementById('pt-desc').value.trim();
-  const xp        = parseInt(document.getElementById('pt-xp').value)||50;
+  const difficulty = document.getElementById('pt-difficulty').value || 'easy';
+  const xp        = XP_REWARDS[difficulty] || 10;
   const due       = document.getElementById('pt-due').value||null;
   const result    = document.getElementById('pt-result');
   if (!title) { result.textContent='⚠️ Título obrigatório.'; result.style.color='#f59e0b'; return; }
   try {
-    await sb.from('parental_tasks').insert({ parent_id:_myFamiliaId(), student_id:studentId, title, description:desc, xp_reward:xp, due_date:due });
+    await sb.from('parental_tasks').insert({ parent_id:_myFamiliaId(), student_id:studentId, title, description:desc, difficulty, xp_reward:xp, due_date:due });
     await _sendParentalNotif(studentId,'new_task',`📋 Nova tarefa: "${title}"`, desc||`Prazo: ${due?_fmtDate(due):'sem prazo'} · ⚡${xp} XP`);
     result.textContent='✅ Tarefa criada!'; result.style.color='#34d399';
     showNotification('Tarefa criada!','success');
@@ -11068,10 +11111,10 @@ async function loadParentalTasksSection() {
     list.innerHTML = ptasks.map(t => {
       const nm   = pNames[t.parent_id] || '?';
       const days = _daysUntil(t.due_date);
+      const dateFormatted = _formatDueDate(t.due_date);
+      const dateColor = days < 0 ? '#f87171' : days === 0 ? '#f59e0b' : 'var(--text-muted)';
       const dTag = t.due_date
-        ? (days < 0 ? `<span style="color:#f87171;font-size:.75rem"> Atrasada</span>`
-          : days === 0 ? `<span style="color:#f59e0b;font-size:.75rem"> Hoje</span>`
-          : `<span style="color:var(--text-muted);font-size:.75rem"> ${days}d</span>`)
+        ? `<span style="color:${dateColor};font-size:.75rem"> ${dateFormatted}</span>`
         : '';
       return `<div class="parental-task-card" style="margin-bottom:.4rem">
         <div class="ptask-icon">📋</div>
@@ -11084,4 +11127,70 @@ async function loadParentalTasksSection() {
       </div>`;
     }).join('');
   } catch(e) { console.warn('[Família] loadParentalTasksSection:', e); }
+}
+
+/* ── Crianças sem conta ──────────────────────────────────── */
+function openAddChildWithoutAccountModal() {
+  const inp = document.getElementById('cwa-name');
+  if (inp) {
+    inp.value = '';
+    inp.focus();
+  }
+  const result = document.getElementById('cwa-result');
+  if (result) result.textContent = '';
+  openModal('modal-child-without-account');
+}
+
+function addChildWithoutAccount() {
+  const nameInp = document.getElementById('cwa-name');
+  const name = nameInp ? nameInp.value.trim() : '';
+  const result = document.getElementById('cwa-result');
+
+  if (!name) {
+    if (result) { result.textContent = '⚠️ Digite o nome da criança.'; result.style.color = '#f59e0b'; }
+    return;
+  }
+
+  if (!state.childrenWithoutAccounts) state.childrenWithoutAccounts = [];
+
+  const id = 'child_' + Date.now();
+  state.childrenWithoutAccounts.push({ id, name });
+  saveState();
+
+  if (result) { result.textContent = '✅ Criança adicionada!'; result.style.color = '#34d399'; }
+  showNotification(`Criança ${name} adicionada!`, 'success');
+  setTimeout(() => { closeModal('modal-child-without-account'); renderFamiliaPage('familia'); }, 1000);
+}
+
+function removeChildWithoutAccount(childId) {
+  if (!confirm('Remover esta criança?')) return;
+  state.childrenWithoutAccounts = (state.childrenWithoutAccounts || []).filter(c => c.id !== childId);
+  saveState();
+  showNotification('Criança removida.', 'info');
+  renderFamiliaPage('familia');
+}
+
+function openChildWithoutAccountProfile(childId, childName) {
+  const avatarEl = document.getElementById('fp-avatar');
+  const nameEl = document.getElementById('fp-name');
+  const roleEl = document.getElementById('fp-role');
+  const statsEl = document.getElementById('fp-stats');
+  const actionsEl = document.getElementById('fp-actions');
+
+  if (!avatarEl) return;
+
+  avatarEl.textContent = '👶';
+  nameEl.textContent = childName;
+  roleEl.textContent = 'Filho(a) conectado(a) - Sem conta';
+  statsEl.innerHTML = '<span style="color:var(--text-muted);font-size:.82rem">Sem dados</span>';
+
+  actionsEl.innerHTML = `
+    <button class="btn-primary" style="width:100%" onclick="closeModal('modal-familia-profile');openParentalTaskModal('${childId}','${escHtml(childName)}')">
+      📋 Criar Tarefa
+    </button>
+    <button class="btn-ghost" style="width:100%;color:#f87171;margin-top:.25rem" onclick="closeModal('modal-familia-profile');removeChildWithoutAccount('${childId}')">
+      🗑️ Remover
+    </button>`;
+
+  openModal('modal-familia-profile');
 }
