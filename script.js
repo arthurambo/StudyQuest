@@ -7372,16 +7372,30 @@ async function disablePushNotifications() {
  * @param {string} body       - Corpo da mensagem
  * @param {object} data       - Dados extras { page, tag, icon }
  */
+// Flag: se a Edge Function retornar 404 uma vez, desativa push na sessão inteira
+let _pushFunctionUnavailable = false;
+
 async function sendPushToUser(toUserId, title, body, data = {}) {
   if (!sb || !toUserId || toUserId === authUserId) return;
+  if (_pushFunctionUnavailable) return;   // já sabe que não existe, não tenta de novo
   try {
-    // Chama a Edge Function via Supabase Functions
     const { error } = await sb.functions.invoke('send-push', {
       body: { toUserId, title, body, data },
     });
-    if (error) console.warn('[Push] Edge Function erro:', error.message);
+    if (error) {
+      // 404 = Edge Function não deployada; desativa silenciosamente
+      if (error.message?.includes('404') || error.status === 404 || String(error).includes('404')) {
+        _pushFunctionUnavailable = true;
+      } else {
+        console.warn('[Push] Edge Function erro:', error.message);
+      }
+    }
   } catch (e) {
-    console.warn('[Push] Falha ao invocar Edge Function:', e.message);
+    if (String(e.message).includes('404')) {
+      _pushFunctionUnavailable = true;
+    } else {
+      console.warn('[Push] Falha ao invocar Edge Function:', e.message);
+    }
   }
 }
 
@@ -11188,40 +11202,104 @@ async function loadParentalTasksSection() {
       names[child.id] = child.name;
     });
 
-    const section = document.getElementById('parental-tasks-section');
-    const list = document.getElementById('parental-tasks-list');
-    if (!section || !list) return;
+    // SEPARA EM DUAS CATEGORIAS
+    const tasksForMeFiltered = ptasks.filter(t => t.isForMe);
+    const tasksFromMeFiltered = ptasks.filter(t => t.isFromMe);
 
-    section.style.display = '';
-    list.innerHTML = ptasks.sort((a, b) => {
-      const aDate = a.due_date ? new Date(a.due_date) : new Date('2999-12-31');
-      const bDate = b.due_date ? new Date(b.due_date) : new Date('2999-12-31');
-      return aDate - bDate;
-    }).map(t => {
-      const parentName = names[t.parent_id] || '?';
-      const studentName = t.isLocal ? names[t.childId] : names[t.student_id] || '?';
+    // Helper para armazenar dados das tarefas e acessar sem onclick inline
+    window._parentalTasksCache = {};
+    ptasks.forEach(t => { window._parentalTasksCache[t.id] = t; });
+
+    const sortByDue = (a, b) => {
+      const aD = a.due_date ? new Date(a.due_date) : new Date('2999-12-31');
+      const bD = b.due_date ? new Date(b.due_date) : new Date('2999-12-31');
+      return aD - bD;
+    };
+
+    const dueTag = (t) => {
+      if (!t.due_date) return '';
       const days = _daysUntil(t.due_date);
-      const dateFormatted = _formatDueDate(t.due_date);
-      const dateColor = days < 0 ? '#f87171' : days === 0 ? '#f59e0b' : 'var(--text-muted)';
-      const dTag = t.due_date
-        ? `<span style="color:${dateColor};font-size:.75rem"> ${dateFormatted}</span>`
-        : '';
+      const color = days < 0 ? '#f87171' : days === 0 ? '#f59e0b' : 'var(--text-muted)';
+      return `<span style="color:${color};font-size:.75rem"> ${_formatDueDate(t.due_date)}</span>`;
+    };
 
-      const metaText = t.isForMe || t.isLocal
-        ? (t.isLocal ? `Para: <b>${escHtml(studentName)}</b> · ⚡${t.xp_reward} XP${dTag}` : `De: <b>${escHtml(parentName)}</b> · ⚡${t.xp_reward} XP${dTag}`)
-        : `Para: <b>${escHtml(studentName)}</b> · ⚡${t.xp_reward} XP${dTag}`;
+    // ── Seção: tarefas criadas PARA mim pelos responsáveis ──
+    const sectionResponsaveis = document.getElementById('parental-tasks-section');
+    const listResponsaveis = document.getElementById('parental-tasks-list');
+    if (sectionResponsaveis && listResponsaveis) {
+      if (!tasksForMeFiltered.length) {
+        sectionResponsaveis.style.display = 'none';
+      } else {
+        sectionResponsaveis.style.display = '';
+        listResponsaveis.innerHTML = [...tasksForMeFiltered].sort(sortByDue).map(t => {
+          const parentName = names[t.parent_id] || '?';
+          return `<div class="parental-task-card" style="margin-bottom:.4rem" data-ptask-id="${t.id}">
+            <div class="ptask-icon">📋</div>
+            <div class="ptask-info" style="flex:1">
+              <div class="ptask-title">${escHtml(t.title)}</div>
+              <div class="ptask-meta">De: <b>${escHtml(parentName)}</b> · ⚡${t.xp_reward} XP${dueTag(t)}</div>
+              ${t.description ? `<div class="ptask-desc">${escHtml(t.description)}</div>` : ''}
+            </div>
+            <button class="btn-sm btn-primary" style="flex-shrink:0;min-width:2.2rem"
+              data-action="complete-ptask" data-id="${t.id}"
+              title="Marcar como concluída">✅</button>
+          </div>`;
+        }).join('');
 
-      return `<div class="parental-task-card" style="margin-bottom:.4rem">
-        <div class="ptask-icon">📋</div>
-        <div class="ptask-info" style="flex:1">
-          <div class="ptask-title">${escHtml(t.title)}</div>
-          <div class="ptask-meta">${metaText}</div>
-        </div>
-        ${t.isForMe ? `<button class="btn-sm btn-primary" style="flex-shrink:0"
-          onclick="completeParentalTask('${t.id}',${t.xp_reward},'${escHtml(t.title)}','${t.parent_id}')">✅</button>` : ''}
-      </div>`;
-    }).join('');
-  } catch(e) { console.warn('[Família] loadParentalTasksSection:', e); }
+        // Listener único via delegação — evita problemas com aspas no onclick inline
+        listResponsaveis.onclick = (e) => {
+          const btn = e.target.closest('[data-action="complete-ptask"]');
+          if (!btn) return;
+          const id = btn.dataset.id;
+          const task = window._parentalTasksCache[id];
+          if (task) completeParentalTask(id, task.xp_reward, task.title, task.parent_id);
+        };
+      }
+    }
+
+    // ── Seção: tarefas que criei PARA meus filhos ──
+    const sectionFilhos = document.getElementById('children-tasks-section');
+    const listFilhos = document.getElementById('children-tasks-list');
+    if (sectionFilhos && listFilhos) {
+      if (!tasksFromMeFiltered.length) {
+        sectionFilhos.style.display = 'none';
+      } else {
+        sectionFilhos.style.display = '';
+        listFilhos.innerHTML = [...tasksFromMeFiltered].sort(sortByDue).map(t => {
+          const studentName = t.isLocal ? names[t.childId] : (names[t.student_id] || '?');
+          const completedBadge = t.completed
+            ? '<span style="color:#34d399;font-size:.75rem;margin-left:.3rem">✅ Concluída</span>' : '';
+          return `<div class="parental-task-card" style="margin-bottom:.4rem;opacity:${t.completed ? 0.6 : 1}" data-ptask-id="${t.id}">
+            <div class="ptask-icon">${t.isLocal ? '👶' : '🎒'}</div>
+            <div class="ptask-info" style="flex:1">
+              <div class="ptask-title" style="${t.completed ? 'text-decoration:line-through' : ''}">${escHtml(t.title)}</div>
+              <div class="ptask-meta">Para: <b>${escHtml(studentName)}</b> · ⚡${t.xp_reward} XP${dueTag(t)}${completedBadge}</div>
+            </div>
+            ${!t.completed ? `<button class="btn-sm btn-ghost" style="color:#f87171;flex-shrink:0;min-width:2.2rem"
+              data-action="delete-ptask" data-id="${t.id}" title="Excluir tarefa">🗑️</button>` : ''}
+          </div>`;
+        }).join('');
+
+        listFilhos.onclick = async (e) => {
+          const btn = e.target.closest('[data-action="delete-ptask"]');
+          if (!btn) return;
+          const id = btn.dataset.id;
+          if (!confirm('Excluir esta tarefa?')) return;
+          try {
+            await sb.from('parental_tasks').delete().eq('id', id);
+            showNotification('Tarefa excluída.', 'info');
+            loadParentalTasksSection().catch(() => {});
+          } catch(err) {
+            showNotification('Erro ao excluir.', 'error');
+          }
+        };
+      }
+    }
+  } catch(e) {
+    console.warn('[Família] loadParentalTasksSection:', e);
+    // Log detalhado para debug
+    console.error('[DEBUG] Erro completo:', e.message, e.stack);
+  }
 }
 
 /* ── Crianças sem conta ──────────────────────────────────── */
