@@ -1027,6 +1027,8 @@ function navigateTo(page) {
         history.replaceState({ page }, '', '/' + page);
         _navInitialized = true;
       }
+      // Salva a página atual para que persista entre refreshes
+      localStorage.setItem('sq_current_page', page);
     } catch(e) {}
   }
 
@@ -5178,11 +5180,13 @@ async function launchApp() {
     autoArchiveTasks();
     generateDailyTasks();
     updateAllUI();
-    // Determina página inicial: URL atual → sessionStorage (vindo do 404.html) → dashboard
+    // Determina página inicial: URL atual → localStorage (persistido entre refreshes) → sessionStorage (404.html) → dashboard
     const _urlPage = window.location.pathname.replace(/^\//, '').split('/')[0];
+    const _savedPage = localStorage.getItem('sq_current_page');
     const _storedPage = sessionStorage.getItem('sq_spa_redirect');
     sessionStorage.removeItem('sq_spa_redirect');
     const _startPage = (_SPA_PAGES.has(_storedPage) && _storedPage)
+                    || (_SPA_PAGES.has(_savedPage)   && _savedPage)
                     || (_SPA_PAGES.has(_urlPage)     && _urlPage)
                     || 'dashboard';
     navigateTo(_startPage);
@@ -11093,37 +11097,80 @@ async function loadParentalTasksSection() {
   if (!sb || !authUserId) return;
   const myId = _myFamiliaId();
   try {
-    const { data: ptasks } = await sb.from('parental_tasks')
+    // Carrega DUAS categorias de tarefas:
+    // 1. Tarefas criadas PARA mim por pais (student_id = myId)
+    // 2. Tarefas que criei PARA meus filhos (parent_id = myId) - para mostrar que estão pendentes
+    // 3. Tarefas para crianças sem conta (student_id começa com 'child_')
+    const { data: tasksForMe } = await sb.from('parental_tasks')
       .select('*').eq('student_id', myId).eq('completed', false)
       .order('due_date', { ascending: true });
-    const section = document.getElementById('parental-tasks-section');
-    const list    = document.getElementById('parental-tasks-list');
-    if (!section || !list) return;
-    if (!ptasks || !ptasks.length) { section.style.display = 'none'; return; }
-    // Busca nomes dos pais
-    const pids = [...new Set(ptasks.map(t => t.parent_id))];
-    let pNames = {};
+
+    const { data: tasksFromMe } = await sb.from('parental_tasks')
+      .select('*').eq('parent_id', myId).eq('completed', false)
+      .order('due_date', { ascending: true });
+
+    // Combina as tarefas (remover duplicatas, manter diferentes)
+    const tasksMap = new Map();
+    (tasksForMe || []).forEach(t => tasksMap.set(t.id, { ...t, isForMe: true }));
+    (tasksFromMe || []).forEach(t => {
+      if (!tasksMap.has(t.id)) {
+        tasksMap.set(t.id, { ...t, isFromMe: true });
+      }
+    });
+
+    const ptasks = Array.from(tasksMap.values());
+    if (!ptasks || !ptasks.length) {
+      const section = document.getElementById('parental-tasks-section');
+      const list = document.getElementById('parental-tasks-list');
+      if (section) section.style.display = 'none';
+      return;
+    }
+
+    // Busca nomes dos pais/filhos envolvidos
+    const ids = [...new Set([...ptasks.map(t => t.parent_id), ...ptasks.map(t => t.student_id)])];
+    let names = {};
     try {
-      const { data: rows } = await sb.from('users').select('id,name').in('id', pids);
-      if (rows) rows.forEach(r => { pNames[r.id] = r.name || '?'; });
+      const { data: rows } = await sb.from('users').select('id,name').in('id', ids);
+      if (rows) rows.forEach(r => { names[r.id] = r.name || '?'; });
     } catch(e) {}
+
+    // Adiciona nomes das crianças sem conta
+    const childrenWithoutAccounts = state.childrenWithoutAccounts || [];
+    childrenWithoutAccounts.forEach(child => {
+      names[child.id] = child.name;
+    });
+
+    const section = document.getElementById('parental-tasks-section');
+    const list = document.getElementById('parental-tasks-list');
+    if (!section || !list) return;
+
     section.style.display = '';
-    list.innerHTML = ptasks.map(t => {
-      const nm   = pNames[t.parent_id] || '?';
+    list.innerHTML = ptasks.sort((a, b) => {
+      const aDate = a.due_date ? new Date(a.due_date) : new Date('2999-12-31');
+      const bDate = b.due_date ? new Date(b.due_date) : new Date('2999-12-31');
+      return aDate - bDate;
+    }).map(t => {
+      const parentName = names[t.parent_id] || '?';
+      const studentName = names[t.student_id] || '?';
       const days = _daysUntil(t.due_date);
       const dateFormatted = _formatDueDate(t.due_date);
       const dateColor = days < 0 ? '#f87171' : days === 0 ? '#f59e0b' : 'var(--text-muted)';
       const dTag = t.due_date
         ? `<span style="color:${dateColor};font-size:.75rem"> ${dateFormatted}</span>`
         : '';
+
+      const metaText = t.isForMe
+        ? `De: <b>${escHtml(parentName)}</b> · ⚡${t.xp_reward} XP${dTag}`
+        : `Para: <b>${escHtml(studentName)}</b> · ⚡${t.xp_reward} XP${dTag}`;
+
       return `<div class="parental-task-card" style="margin-bottom:.4rem">
         <div class="ptask-icon">📋</div>
         <div class="ptask-info" style="flex:1">
           <div class="ptask-title">${escHtml(t.title)}</div>
-          <div class="ptask-meta">De: <b>${escHtml(nm)}</b> · ⚡${t.xp_reward} XP${dTag}</div>
+          <div class="ptask-meta">${metaText}</div>
         </div>
-        <button class="btn-sm btn-primary" style="flex-shrink:0"
-          onclick="completeParentalTask('${t.id}',${t.xp_reward},'${escHtml(t.title)}','${t.parent_id}')">✅</button>
+        ${t.isForMe ? `<button class="btn-sm btn-primary" style="flex-shrink:0"
+          onclick="completeParentalTask('${t.id}',${t.xp_reward},'${escHtml(t.title)}','${t.parent_id}')">✅</button>` : ''}
       </div>`;
     }).join('');
   } catch(e) { console.warn('[Família] loadParentalTasksSection:', e); }
