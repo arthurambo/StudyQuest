@@ -386,8 +386,12 @@ let state = {
   totalStudied: 0,
   favoriteSubject: '',
   cosmetics: { ownedFrames: [], ownedBanners: [], equippedFrame: null, equippedBanner: null },
-  childrenWithoutAccounts: [],  // [{id, name}] — filhos sem conta própria
-  childrenTasksLocal: [],       // [{id, childId, title, description, difficulty, xp_reward, due_date, completed, created_at}] — tarefas locais para crianças sem conta
+  childrenWithoutAccounts: [],     // [{id, name}] — filhos sem conta própria
+  childrenTasksLocal: [],          // [{id, childId, title, ...}] — tarefas locais para crianças sem conta
+  receivedParentalTasks: [],       // [{id, parent_id, title, xp_reward, due_date, ...}] — tarefas recebidas de responsáveis (cache local do filho)
+  myParentalTasksCreated: [],      // [{id, student_id, title, ...}] — tarefas criadas pelo pai (cache local do pai)
+  completedParentalTaskIds: [],    // [id, ...] — IDs de tarefas parentais já concluídas
+  completedParentalTaskDates: {},  // {'YYYY-MM-DD': [{id, title, xp}]} — para o calendário
   localNotifs: [],          // [{id, icon, message, timestamp, read}] — notifs de desempenho
   surpriseGifts: [],        // [{uid, icon, name, type, value, timestamp}] — presentes do sistema
   lastSurpriseGiftDate: '', // 'YYYY-MM-DD' — controla 1 presente por dia
@@ -814,6 +818,42 @@ function _mergeCloudState(localState, cloudData) {
   if (localDate === today && cloudDate !== today && localTasks.length > 0) {
     merged.dailyTasks     = localTasks;
     merged.dailyTasksDate = localDate;
+  }
+
+  // ── Crianças sem conta: preserva o array com mais dados ────────────────
+  // (evita perder dados quando nuvem ainda não sincronizou)
+  const localChildren = localState.childrenWithoutAccounts || [];
+  const cloudChildren = cloudData.childrenWithoutAccounts  || [];
+  if (localChildren.length > cloudChildren.length) {
+    merged.childrenWithoutAccounts = localChildren;
+  }
+
+  // ── Tarefas locais (crianças sem conta): preserva o array mais completo
+  const localChildTasks = localState.childrenTasksLocal || [];
+  const cloudChildTasks = cloudData.childrenTasksLocal  || [];
+  if (localChildTasks.length > cloudChildTasks.length) {
+    merged.childrenTasksLocal = localChildTasks;
+  }
+
+  // ── Cache de tarefas parentais criadas pelo pai ────────────────────────
+  const localParentalCreated = localState.myParentalTasksCreated || [];
+  const cloudParentalCreated = cloudData.myParentalTasksCreated  || [];
+  if (localParentalCreated.length > cloudParentalCreated.length) {
+    merged.myParentalTasksCreated = localParentalCreated;
+  }
+
+  // ── Cache de tarefas recebidas pelo filho ───────────────────────────────
+  const localReceived = localState.receivedParentalTasks || [];
+  const cloudReceived = cloudData.receivedParentalTasks  || [];
+  if (localReceived.length > cloudReceived.length) {
+    merged.receivedParentalTasks = localReceived;
+  }
+
+  // ── IDs concluídos: une os dois conjuntos ───────────────────────────────
+  const localCompleted = new Set(localState.completedParentalTaskIds || []);
+  const cloudCompleted = new Set(cloudData.completedParentalTaskIds  || []);
+  if (localCompleted.size > 0 || cloudCompleted.size > 0) {
+    merged.completedParentalTaskIds = [...new Set([...localCompleted, ...cloudCompleted])];
   }
 
   return merged;
@@ -1552,7 +1592,8 @@ function renderTasks() {
   const listEl = document.getElementById('tasks-list');
   renderDailyTasksSection();
   // Carrega tarefas dos responsáveis (assíncrono, não bloqueia)
-  if (authUserId) loadParentalTasksSection().catch(()=>{});
+  // Carrega tarefas dos responsáveis (para filhos) e tarefas criadas (para pais)
+  loadParentalTasksSection().catch(()=>{});
   sectionsEl.innerHTML = '';
   listEl.innerHTML = '';
 
@@ -3113,9 +3154,12 @@ function renderCalendar() {
     // ── Coleta bolinhas do dia ───────────────────────────────────
     const dotEntries = []; // { type: 'task'|'exam'|'study' }
 
-    // Tarefas com prazo neste dia
+    // Tarefas com prazo neste dia (normais + parentais concluídas)
     const dayTasks = state.tasks.filter(t => t.dueDate === dateStr);
     dayTasks.forEach(() => dotEntries.push('task'));
+    // Tarefas parentais concluídas neste dia
+    const ptasksDone = (state.completedParentalTaskDates || {})[dateStr] || [];
+    ptasksDone.forEach(() => dotEntries.push('task'));
 
     // Provas marcadas para este dia
     const dayExams = state.exams.filter(e => e.examDate === dateStr);
@@ -3152,8 +3196,9 @@ function showCalDay(dateStr, el) {
   const xp      = state.xpHistory[dateStr] || 0;
   const studied = state.studyDays && state.studyDays.includes(dateStr);
 
-  // Tarefas com prazo neste dia
+  // Tarefas com prazo neste dia (normais + parentais)
   const dayTasks = state.tasks.filter(t => t.dueDate === dateStr);
+  const ptasksDone = (state.completedParentalTaskDates || {})[dateStr] || [];
   // Provas com data neste dia
   const dayExams = state.exams.filter(e => e.examDate === dateStr);
 
@@ -3187,12 +3232,17 @@ function showCalDay(dateStr, el) {
     </div>`;
   }).join('');
 
+  const ptaskRows = ptasksDone.map(pt => `<div class="cal-detail-item">
+    <div class="cal-dot cal-dot-task"></div>
+    <div><span class="cal-detail-name">✅ ${escHtml(pt.title)}</span><span class="cal-detail-xp"> +${pt.xp} XP</span><span class="cal-detail-subj" style="color:var(--primary)">Tarefa do responsável</span></div>
+  </div>`).join('');
+
   const studyRow = studied ? `<div class="cal-detail-item">
     <div class="cal-dot cal-dot-study"></div>
     <div><span class="cal-detail-name">📚 Dia de estudo</span>${xp ? `<span class="cal-detail-xp"> +${xp} XP</span>` : ''}</div>
   </div>` : '';
 
-  const isEmpty = !dayTasks.length && !dayExams.length && !studied;
+  const isEmpty = !dayTasks.length && !dayExams.length && !studied && !ptasksDone.length;
 
   document.getElementById('cal-day-detail').innerHTML = `
     <div class="cal-detail-header">
@@ -3205,7 +3255,7 @@ function showCalDay(dateStr, el) {
       <span><span class="cal-dot cal-dot-study"></span> Estudo</span>
     </div>
     ${isEmpty ? '<p class="cal-detail-empty">Nenhum evento neste dia.</p>' : ''}
-    ${taskRows}${examRows}${studyRow}
+    ${taskRows}${ptaskRows}${examRows}${studyRow}
   `;
 }
 
@@ -5098,13 +5148,18 @@ async function launchApp() {
         new Promise(resolve => setTimeout(() => { console.warn('[Supabase] Timeout ao carregar dados — continuando.'); resolve(null); }, 7000))
       ]);
       if (cloudState) {
-        state = _mergeCloudState(state, cloudState);
+        // Para Google Auth: usa espelho local como base para preservar dados só-locais
+        // (childrenWithoutAccounts, childrenTasksLocal, etc.) mesmo que a nuvem esteja desatualizada
+        const localMirror = loadLocalData() || {};
+        state = _mergeCloudState({ ...state, ...localMirror }, cloudState);
         saveLocalData(state); // espelha no localStorage para fallback offline
         console.log('[Supabase] State aplicado — XP:', state.xp,
                     '| Nível:', state.level, '| Nome:', state.name);
       } else {
-        // Primeiro login ou timeout — sem dados na nuvem ainda. State permanece no default.
-        console.log('[Supabase] Sem dados na nuvem (ou timeout) — novo usuário Google / fallback.');
+        // Primeiro login ou timeout — usa espelho local se existir
+        const localMirror = loadLocalData();
+        if (localMirror) state = { ...state, ...localMirror };
+        console.log('[Supabase] Sem dados na nuvem (ou timeout) — usando espelho local / novo usuário.');
       }
     } else {
       // Offline com conta Google → usa espelho local (gravado por saveLocalData)
@@ -10558,7 +10613,7 @@ async function renderFamiliaPage(tab) {
         <div class="familia-msg-icon">${icons[m.type]||'🔔'}</div>
         <div class="familia-msg-body">
           <div class="familia-msg-title">${escHtml(m.title)}</div>
-          ${m.message?`<div class="familia-msg-text">${escHtml(m.message)}</div>`:''}
+          ${(()=>{ let msg = m.message || ''; try { const p = JSON.parse(msg); if (p._pt||p.__ptask) msg=''; } catch(e){} return msg ? `<div class="familia-msg-text">${escHtml(msg)}</div>` : ''; })()}
           <div class="familia-msg-meta">${escHtml(senderNm)} · ${ts}</div>
         </div>
       </div>`;
@@ -11035,13 +11090,55 @@ async function submitParentalTask() {
       result.textContent='✅ Tarefa criada!'; result.style.color='#34d399';
       showNotification('Tarefa criada!','success');
     } else {
-      // Salva no Supabase para filhos com conta
-      await sb.from('parental_tasks').insert({ parent_id:_myFamiliaId(), student_id:studentId, title, description:desc, difficulty, xp_reward:xp, due_date:due });
-      await _sendParentalNotif(studentId,'new_task',`📋 Nova tarefa: "${title}"`, desc||`Prazo: ${due?_fmtDate(due):'sem prazo'} · ⚡${xp} XP`);
+      // ── Salva cache local PRIMEIRO (funciona mesmo sem RLS no Supabase) ──
+      const localId = 'local_' + Date.now();
+      if (!state.myParentalTasksCreated) state.myParentalTasksCreated = [];
+      state.myParentalTasksCreated.push({
+        id:         localId,
+        parent_id:  _myFamiliaId(),
+        student_id: studentId,
+        title, description: desc, difficulty, xp_reward: xp,
+        due_date: due, completed: false,
+        created_at: new Date().toISOString(),
+      });
+      saveState();
+
+      // ── Tenta salvar no Supabase (secundário — não bloqueia se falhar) ──
+      if (sb) {
+        sb.from('parental_tasks')
+          .insert({ parent_id:_myFamiliaId(), student_id:studentId, title, description:desc, xp_reward:xp, due_date:due, completed:false, created_at:new Date().toISOString() })
+          .then(({ error }) => { if (error) console.warn('[ParentalTask] Supabase insert falhou:', error.message); })
+          .catch(e => console.warn('[ParentalTask] Supabase insert exception:', e));
+      }
+
       result.textContent='✅ Tarefa criada!'; result.style.color='#34d399';
       showNotification('Tarefa criada!','success');
+
+      // ── Envia notificação com dados da tarefa (payload mínimo p/ evitar truncamento) ──
+      try {
+        // Campos curtos para caber em qualquer tamanho de coluna
+        const taskPayload = JSON.stringify({
+          _pt: 1,          // flag: é uma tarefa parental
+          _i: localId,     // id
+          _p: _myFamiliaId(), // parent_id
+          _t: title,       // title
+          _x: xp,          // xp_reward
+          _d: due || '',   // due_date
+        });
+        await _sendParentalNotif(studentId, 'new_task', `📋 Nova tarefa: "${title}"`, taskPayload);
+      } catch(e) { console.warn('[ParentalNotif]', e); }
     }
-    setTimeout(() => { closeModal('modal-parental-task'); renderFamiliaPage('familia'); }, 1000);
+    // Para crianças sem conta: vai para Tasks para ver "Tarefas dos Filhos"
+    // Para filhos com conta: fica na Família
+    const isChildWithoutAccount = studentId.startsWith('child_');
+    setTimeout(() => {
+      closeModal('modal-parental-task');
+      if (isChildWithoutAccount) {
+        navigateTo('tasks');
+      } else {
+        renderFamiliaPage('familia');
+      }
+    }, 1000);
   } catch(e) {
     console.error('Erro ao criar tarefa:', e);
     result.textContent='❌ Erro ao criar.'; result.style.color='#f87171';
@@ -11050,11 +11147,35 @@ async function submitParentalTask() {
 
 async function completeParentalTask(taskId, xpReward, taskTitle, parentId) {
   try {
-    await sb.from('parental_tasks')
-      .update({ completed: true, completed_at: new Date().toISOString() })
-      .eq('id', taskId);
+    // Tenta marcar como concluída no Supabase (pode falhar por RLS — não bloqueia)
+    if (sb && !taskId.startsWith('local_')) {
+      try {
+        await sb.from('parental_tasks')
+          .update({ completed: true, completed_at: new Date().toISOString() })
+          .eq('id', taskId);
+      } catch(e) {
+        console.warn('[completeParentalTask] RLS pode ter bloqueado update — continuando localmente:', e);
+      }
+    }
 
     const gained = xpReward || 50;
+    const today  = todayStr();
+
+    // ── Marca como concluído no cache local do filho ─────────────────────
+    if (!state.completedParentalTaskIds) state.completedParentalTaskIds = [];
+    if (!state.completedParentalTaskIds.includes(taskId)) {
+      state.completedParentalTaskIds.push(taskId);
+    }
+    // Remove do cache receivedParentalTasks
+    if (state.receivedParentalTasks) {
+      const cached = state.receivedParentalTasks.find(t => t.id === taskId);
+      if (cached) cached.completed = true;
+    }
+
+    // ── Registra no calendário (aparece como ponto de tarefa) ──
+    if (!state.completedParentalTaskDates) state.completedParentalTaskDates = {};
+    if (!state.completedParentalTaskDates[today]) state.completedParentalTaskDates[today] = [];
+    state.completedParentalTaskDates[today].push({ id: taskId, title: taskTitle, xp: gained });
 
     // Usa addXp() que cuida de: nível, dailyXp, xpHistory, updateDashboard, checkMissionGoals
     addXp(gained);
@@ -11070,7 +11191,7 @@ async function completeParentalTask(taskId, xpReward, taskTitle, parentId) {
     showXpPopup(gained, false);
     playSound('complete');
 
-    // Atualiza a seção na aba Tarefas sem recarregar a página toda
+    // Atualiza a seção na aba Tarefas
     loadParentalTasksSection().catch(() => {});
 
     // Notifica o pai
@@ -11132,174 +11253,207 @@ async function updateFamiliaBadge() {
   } catch(e) {}
 }
 
+/* ── Cache local de tarefas recebidas pelo filho ─────────── */
+// Insere ou atualiza uma tarefa em state.receivedParentalTasks
+function _upsertReceivedTask(task) {
+  if (!task || !task.id) return;
+  if (!state.receivedParentalTasks) state.receivedParentalTasks = [];
+  const idx = state.receivedParentalTasks.findIndex(t => t.id === task.id);
+  const clean = {
+    id:          task.id,
+    parent_id:   task.parent_id,
+    student_id:  task.student_id,
+    title:       task.title       || '(sem título)',
+    description: task.description || '',
+    difficulty:  task.difficulty  || 'easy',
+    xp_reward:   task.xp_reward   || 10,
+    due_date:    task.due_date     || null,
+    completed:   task.completed    || false,
+    created_at:  task.created_at  || new Date().toISOString(),
+  };
+  if (idx >= 0) state.receivedParentalTasks[idx] = clean;
+  else          state.receivedParentalTasks.push(clean);
+}
+
 /* ── Seção de tarefas parentais na aba Tarefas ───────────── */
 async function loadParentalTasksSection() {
+  // ── PASSO 1: Renderiza imediatamente do cache local (não espera Supabase) ──
+  _renderParentalSections();
+
+  // ── PASSO 2: Busca updates do Supabase/notificações em background ──────────
   if (!sb) return;
   const myId = _myFamiliaId();
+  if (!myId) return;
+  const completedPtaskIds = new Set(state.completedParentalTaskIds || []);
+
   try {
-    let tasksForMe = [];
-    let tasksFromMe = [];
+    // Tenta Supabase direto (funciona se RLS estiver configurada)
+    const r1 = await sb.from('parental_tasks')
+      .select('*').eq('student_id', myId).eq('completed', false);
+    const sbTasks = (r1.data || []).filter(t => !completedPtaskIds.has(t.id));
+    let changed = false;
+    sbTasks.forEach(t => { _upsertReceivedTask(t); changed = true; });
 
-    // Se for um usuário autenticado, carrega do Supabase
-    if (authUserId) {
-      try {
-        // Tarefas criadas PARA mim por pais (student_id = myId)
-        const r1 = await sb.from('parental_tasks')
-          .select('*').eq('student_id', myId).eq('completed', false)
-          .order('due_date', { ascending: true });
-        tasksForMe = r1.data || [];
-
-        // Tarefas que criei PARA meus filhos (parent_id = myId)
-        const r2 = await sb.from('parental_tasks')
-          .select('*').eq('parent_id', myId).eq('completed', false)
-          .order('due_date', { ascending: true });
-        tasksFromMe = r2.data || [];
-      } catch(e) {
-        console.warn('[ParentalTasks] Erro ao carregar do Supabase:', e);
-      }
-    }
-
-    // Carrega tarefas locais para crianças sem conta
-    const localTasks = (state.childrenTasksLocal || []).filter(t => !t.completed);
-
-    // Combina as tarefas (remover duplicatas, manter diferentes)
-    const tasksMap = new Map();
-    (tasksForMe || []).forEach(t => tasksMap.set(t.id, { ...t, isForMe: true }));
-    (tasksFromMe || []).forEach(t => {
-      if (!tasksMap.has(t.id)) {
-        tasksMap.set(t.id, { ...t, isFromMe: true });
-      }
-    });
-    // Adiciona tarefas locais (para crianças sem conta)
-    (localTasks || []).forEach(t => {
-      tasksMap.set(t.id, { ...t, isFromMe: true, isLocal: true });
-    });
-
-    const ptasks = Array.from(tasksMap.values());
-    if (!ptasks || !ptasks.length) {
-      const section = document.getElementById('parental-tasks-section');
-      const list = document.getElementById('parental-tasks-list');
-      if (section) section.style.display = 'none';
-      return;
-    }
-
-    // Busca nomes dos pais/filhos envolvidos
-    const ids = [...new Set([
-      ...ptasks.filter(t => !t.isLocal).map(t => t.parent_id),
-      ...ptasks.filter(t => !t.isLocal).map(t => t.student_id)
-    ])];
-    let names = {};
-    if (ids.length > 0 && authUserId) {
-      try {
-        const { data: rows } = await sb.from('users').select('id,name').in('id', ids);
-        if (rows) rows.forEach(r => { names[r.id] = r.name || '?'; });
-      } catch(e) { console.warn('[ParentalTasks] Erro ao buscar nomes:', e); }
-    }
-
-    // Adiciona nomes das crianças sem conta
-    const childrenWithoutAccounts = state.childrenWithoutAccounts || [];
-    childrenWithoutAccounts.forEach(child => {
-      names[child.id] = child.name;
-    });
-
-    // SEPARA EM DUAS CATEGORIAS
-    const tasksForMeFiltered = ptasks.filter(t => t.isForMe);
-    const tasksFromMeFiltered = ptasks.filter(t => t.isFromMe);
-
-    // Helper para armazenar dados das tarefas e acessar sem onclick inline
-    window._parentalTasksCache = {};
-    ptasks.forEach(t => { window._parentalTasksCache[t.id] = t; });
-
-    const sortByDue = (a, b) => {
-      const aD = a.due_date ? new Date(a.due_date) : new Date('2999-12-31');
-      const bD = b.due_date ? new Date(b.due_date) : new Date('2999-12-31');
-      return aD - bD;
-    };
-
-    const dueTag = (t) => {
-      if (!t.due_date) return '';
-      const days = _daysUntil(t.due_date);
-      const color = days < 0 ? '#f87171' : days === 0 ? '#f59e0b' : 'var(--text-muted)';
-      return `<span style="color:${color};font-size:.75rem"> ${_formatDueDate(t.due_date)}</span>`;
-    };
-
-    // ── Seção: tarefas criadas PARA mim pelos responsáveis ──
-    const sectionResponsaveis = document.getElementById('parental-tasks-section');
-    const listResponsaveis = document.getElementById('parental-tasks-list');
-    if (sectionResponsaveis && listResponsaveis) {
-      if (!tasksForMeFiltered.length) {
-        sectionResponsaveis.style.display = 'none';
-      } else {
-        sectionResponsaveis.style.display = '';
-        listResponsaveis.innerHTML = [...tasksForMeFiltered].sort(sortByDue).map(t => {
-          const parentName = names[t.parent_id] || '?';
-          return `<div class="parental-task-card" style="margin-bottom:.4rem" data-ptask-id="${t.id}">
-            <div class="ptask-icon">📋</div>
-            <div class="ptask-info" style="flex:1">
-              <div class="ptask-title">${escHtml(t.title)}</div>
-              <div class="ptask-meta">De: <b>${escHtml(parentName)}</b> · ⚡${t.xp_reward} XP${dueTag(t)}</div>
-              ${t.description ? `<div class="ptask-desc">${escHtml(t.description)}</div>` : ''}
-            </div>
-            <button class="btn-sm btn-primary" style="flex-shrink:0;min-width:2.2rem"
-              data-action="complete-ptask" data-id="${t.id}"
-              title="Marcar como concluída">✅</button>
-          </div>`;
-        }).join('');
-
-        // Listener único via delegação — evita problemas com aspas no onclick inline
-        listResponsaveis.onclick = (e) => {
-          const btn = e.target.closest('[data-action="complete-ptask"]');
-          if (!btn) return;
-          const id = btn.dataset.id;
-          const task = window._parentalTasksCache[id];
-          if (task) completeParentalTask(id, task.xp_reward, task.title, task.parent_id);
-        };
-      }
-    }
-
-    // ── Seção: tarefas que criei PARA meus filhos ──
-    const sectionFilhos = document.getElementById('children-tasks-section');
-    const listFilhos = document.getElementById('children-tasks-list');
-    if (sectionFilhos && listFilhos) {
-      if (!tasksFromMeFiltered.length) {
-        sectionFilhos.style.display = 'none';
-      } else {
-        sectionFilhos.style.display = '';
-        listFilhos.innerHTML = [...tasksFromMeFiltered].sort(sortByDue).map(t => {
-          const studentName = t.isLocal ? names[t.childId] : (names[t.student_id] || '?');
-          const completedBadge = t.completed
-            ? '<span style="color:#34d399;font-size:.75rem;margin-left:.3rem">✅ Concluída</span>' : '';
-          return `<div class="parental-task-card" style="margin-bottom:.4rem;opacity:${t.completed ? 0.6 : 1}" data-ptask-id="${t.id}">
-            <div class="ptask-icon">${t.isLocal ? '👶' : '🎒'}</div>
-            <div class="ptask-info" style="flex:1">
-              <div class="ptask-title" style="${t.completed ? 'text-decoration:line-through' : ''}">${escHtml(t.title)}</div>
-              <div class="ptask-meta">Para: <b>${escHtml(studentName)}</b> · ⚡${t.xp_reward} XP${dueTag(t)}${completedBadge}</div>
-            </div>
-            ${!t.completed ? `<button class="btn-sm btn-ghost" style="color:#f87171;flex-shrink:0;min-width:2.2rem"
-              data-action="delete-ptask" data-id="${t.id}" title="Excluir tarefa">🗑️</button>` : ''}
-          </div>`;
-        }).join('');
-
-        listFilhos.onclick = async (e) => {
-          const btn = e.target.closest('[data-action="delete-ptask"]');
-          if (!btn) return;
-          const id = btn.dataset.id;
-          if (!confirm('Excluir esta tarefa?')) return;
-          try {
-            await sb.from('parental_tasks').delete().eq('id', id);
-            showNotification('Tarefa excluída.', 'info');
-            loadParentalTasksSection().catch(() => {});
-          } catch(err) {
-            showNotification('Erro ao excluir.', 'error');
+    // Fallback via notificações (quando RLS bloqueia parental_tasks)
+    if (!sbTasks.length) {
+      const rn = await sb.from('parental_notifications')
+        .select('*').eq('receiver_id', myId).eq('type', 'new_task');
+      (rn.data || []).forEach(n => {
+        try {
+          const p = JSON.parse(n.message || 'null');
+          if (!p) return;
+          if (p._pt === 1 && p._i && !completedPtaskIds.has(p._i)) {
+            _upsertReceivedTask({ id:p._i, parent_id:p._p, student_id:myId,
+              title:p._t||'(sem título)', xp_reward:p._x||10,
+              due_date:p._d||null, completed:false,
+              created_at:n.created_at||new Date().toISOString() });
+            changed = true;
+          } else if (p.__ptask && p.id && !completedPtaskIds.has(p.id)) {
+            _upsertReceivedTask(p); changed = true;
           }
-        };
-      }
+        } catch(e) {}
+      });
     }
+
+    if (changed) { saveState(); _renderParentalSections(); }
   } catch(e) {
-    console.warn('[Família] loadParentalTasksSection:', e);
-    // Log detalhado para debug
-    console.error('[DEBUG] Erro completo:', e.message, e.stack);
+    console.warn('[ParentalTasks]', e);
   }
+}
+
+// Renderiza as seções de tarefas parentais a partir do estado local
+function _renderParentalSections() {
+  try {
+  const myId = _myFamiliaId();
+  const completedPtaskIds = new Set(state.completedParentalTaskIds || []);
+
+  // ── Tarefas recebidas pelo filho (de responsáveis) ──
+  const tasksForMeFiltered = (state.receivedParentalTasks || [])
+    .filter(t => !completedPtaskIds.has(t.id) && !t.completed);
+
+  // ── Tarefas criadas pelo pai para CRIANÇAS SEM CONTA (isLocal via childrenTasksLocal) ──
+  const tasksFromMeFiltered = (state.childrenTasksLocal || []).filter(t => !t.completed);
+
+  const sortByDue = (a, b) => {
+    const aD = a.due_date ? new Date(a.due_date) : new Date('2999-12-31');
+    const bD = b.due_date ? new Date(b.due_date) : new Date('2999-12-31');
+    return aD - bD;
+  };
+
+  const dueTag = (t) => {
+    if (!t.due_date) return '';
+    const days = _daysUntil(t.due_date);
+    const color = days < 0 ? '#f87171' : days === 0 ? '#f59e0b' : 'var(--text-muted)';
+    return `<span style="color:${color};font-size:.75rem"> ${_formatDueDate(t.due_date)}</span>`;
+  };
+
+  // Nomes de pais (cache simples: usa parent_id como chave)
+  const parentNames = {};
+  tasksForMeFiltered.forEach(t => {
+    if (t.parent_id && !parentNames[t.parent_id]) parentNames[t.parent_id] = '?';
+  });
+
+  // Busca nomes async (não bloqueia render)
+  const parentIds = Object.keys(parentNames).filter(Boolean);
+  if (parentIds.length && sb && authUserId) {
+    sb.from('users').select('id,name').in('id', parentIds).then(({ data }) => {
+      if (!data) return;
+      let nameChanged = false;
+      data.forEach(r => {
+        if (parentNames[r.id] !== r.name) { parentNames[r.id] = r.name || '?'; nameChanged = true; }
+      });
+      if (nameChanged) _rerenderForMeSection(tasksForMeFiltered, parentNames, sortByDue, dueTag);
+    }).catch(() => {});
+  }
+
+  // Popula cache para o onclick
+  window._parentalTasksCache = {};
+  tasksForMeFiltered.forEach(t => { window._parentalTasksCache[t.id] = t; });
+  tasksFromMeFiltered.forEach(t => { window._parentalTasksCache[t.id] = t; });
+
+  // ── Seção: tarefas recebidas pelo filho ──────────────────────────────
+  const sectionResponsaveis = document.getElementById('parental-tasks-section');
+  const listResponsaveis    = document.getElementById('parental-tasks-list');
+  if (sectionResponsaveis && listResponsaveis) {
+    if (!tasksForMeFiltered.length) {
+      sectionResponsaveis.style.display = 'none';
+    } else {
+      sectionResponsaveis.style.display = '';
+      _rerenderForMeSection(tasksForMeFiltered, parentNames, sortByDue, dueTag);
+      listResponsaveis.onclick = (e) => {
+        const btn = e.target.closest('[data-action="complete-ptask"]');
+        if (!btn) return;
+        const task = window._parentalTasksCache[btn.dataset.id];
+        if (task) completeParentalTask(task.id, task.xp_reward, task.title, task.parent_id);
+      };
+    }
+  }
+
+  // ── Seção: tarefas criadas pelo pai para crianças SEM CONTA ──────────
+  const sectionFilhos = document.getElementById('children-tasks-section');
+  const listFilhos    = document.getElementById('children-tasks-list');
+  if (sectionFilhos && listFilhos) {
+    if (!tasksFromMeFiltered.length) {
+      sectionFilhos.style.display = 'none';
+    } else {
+      sectionFilhos.style.display = '';
+      const names2 = {};
+      (state.childrenWithoutAccounts || []).forEach(c => { names2[c.id] = c.name; });
+      listFilhos.innerHTML = [...tasksFromMeFiltered].sort(sortByDue).map(t => {
+        const nm = names2[t.childId] || '?';
+        return `<div class="parental-task-card" style="margin-bottom:.4rem" data-ptask-id="${t.id}">
+          <div class="ptask-icon">👶</div>
+          <div class="ptask-info" style="flex:1">
+            <div class="ptask-title">${escHtml(t.title)}</div>
+            <div class="ptask-meta">Para: <b>${escHtml(nm)}</b> · ⚡${t.xp_reward} XP${dueTag(t)}</div>
+          </div>
+          <div style="display:flex;gap:.3rem;flex-shrink:0">
+            ${!t.completed ? `<button class="btn-sm btn-primary" style="min-width:2.2rem"
+              data-action="complete-local-ptask" data-id="${t.id}">✅</button>` : ''}
+            <button class="btn-sm btn-ghost" style="color:#f87171;min-width:2.2rem"
+              data-action="delete-local-ptask" data-id="${t.id}">🗑️</button>
+          </div>
+        </div>`;
+      }).join('');
+
+      listFilhos.onclick = (e) => {
+        const completeBtn = e.target.closest('[data-action="complete-local-ptask"]');
+        if (completeBtn) {
+          const id = completeBtn.dataset.id;
+          const task = state.childrenTasksLocal?.find(t => t.id === id);
+          if (task) { task.completed = true; saveState(); showNotification('✅ Concluída!', 'success'); _renderParentalSections(); }
+          return;
+        }
+        const deleteBtn = e.target.closest('[data-action="delete-local-ptask"]');
+        if (deleteBtn) {
+          const id = deleteBtn.dataset.id;
+          if (!confirm('Excluir esta tarefa?')) return;
+          state.childrenTasksLocal = (state.childrenTasksLocal || []).filter(t => t.id !== id);
+          saveState(); showNotification('Excluída.', 'info'); _renderParentalSections();
+        }
+      };
+    }
+  }
+  } catch(e) { console.warn('[_renderParentalSections]', e); }
+}
+
+// Re-renderiza só a lista "Para mim" (chamado quando nomes chegam async)
+function _rerenderForMeSection(tasks, names, sortByDue, dueTag) {
+  const list = document.getElementById('parental-tasks-list');
+  if (!list) return;
+  list.innerHTML = [...tasks].sort(sortByDue).map(t => {
+    const nm = names[t.parent_id] || '?';
+    return `<div class="parental-task-card" style="margin-bottom:.4rem" data-ptask-id="${t.id}">
+      <div class="ptask-icon">📋</div>
+      <div class="ptask-info" style="flex:1">
+        <div class="ptask-title">${escHtml(t.title)}</div>
+        <div class="ptask-meta">De: <b>${escHtml(nm)}</b> · ⚡${t.xp_reward} XP${dueTag(t)}</div>
+        ${t.description ? `<div class="ptask-desc">${escHtml(t.description)}</div>` : ''}
+      </div>
+      <button class="btn-sm btn-primary" style="flex-shrink:0;min-width:2.2rem"
+        data-action="complete-ptask" data-id="${t.id}" title="Concluir">✅</button>
+    </div>`;
+  }).join('');
 }
 
 /* ── Crianças sem conta ──────────────────────────────────── */
