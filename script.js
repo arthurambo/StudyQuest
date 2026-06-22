@@ -368,6 +368,8 @@ let state = {
   tasks: [],
   taskHistory: [],       // NEW: tarefas concluídas arquivadas
   exams: [],
+  examTypes: [],    // [{id, name, emoji, weight}]
+  examSubTypes: [], // [{id, name}]
   achievements: [],
   boosts: [],
   dailyMissions: {},
@@ -1027,9 +1029,14 @@ function initNavigation() {
   });
   document.getElementById('add-exam-btn').addEventListener('click', () => {
     populateSubjectSelect('exam-subject-select');
+    populateExamTypeSelect('exam-type-select');
+    populateExamSubTypeSelect('exam-subtype-select');
     document.getElementById('exam-date-input').value = todayStr();
     openModal('modal-exam');
   });
+  document.getElementById('exam-types-btn').addEventListener('click', openExamTypesModal);
+  document.getElementById('save-exam-type-btn').addEventListener('click', saveExamType);
+  document.getElementById('save-exam-subtype-btn').addEventListener('click', saveExamSubType);
   document.getElementById('set-goal-btn').addEventListener('click', () => openModal('modal-goal'));
 
   // Focus mode
@@ -1201,6 +1208,31 @@ function initModals() {
     const val = parseFloat(slider.value);
     gradeDisplay.textContent = val.toFixed(1);
     updateGradeClassificationDisplay(val);
+  });
+
+  // Click on grade number to type manually
+  const gradeInputEl = document.getElementById('grade-input');
+  gradeDisplay.addEventListener('click', () => {
+    gradeDisplay.style.display = 'none';
+    gradeInputEl.style.display = 'inline-block';
+    gradeInputEl.value = parseFloat(slider.value).toFixed(1);
+    gradeInputEl.focus();
+    gradeInputEl.select();
+  });
+  function _applyGradeInput() {
+    let val = parseFloat(gradeInputEl.value);
+    if (isNaN(val)) val = parseFloat(slider.value);
+    val = Math.max(0, Math.min(10, Math.round(val * 10) / 10));
+    slider.value = val;
+    gradeDisplay.textContent = val.toFixed(1);
+    gradeDisplay.style.display = '';
+    gradeInputEl.style.display = 'none';
+    updateGradeClassificationDisplay(val);
+  }
+  gradeInputEl.addEventListener('blur', _applyGradeInput);
+  gradeInputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); _applyGradeInput(); }
+    if (e.key === 'Escape') { gradeDisplay.style.display = ''; gradeInputEl.style.display = 'none'; }
   });
 
   // Salvar matéria
@@ -1764,7 +1796,9 @@ function deleteTask(id) {
 function saveExam() {
   const name = document.getElementById('exam-name-input').value.trim();
   const subjectId = document.getElementById('exam-subject-select').value;
-  const examDate = document.getElementById('exam-date-input').value || todayStr();
+  const typeId    = document.getElementById('exam-type-select').value;
+  const subTypeId = document.getElementById('exam-subtype-select').value;
+  const examDate  = document.getElementById('exam-date-input').value || todayStr();
 
   if (!name) return showNotification('Digite o nome da prova!', 'warning');
 
@@ -1772,6 +1806,8 @@ function saveExam() {
     id: Date.now().toString(),
     name,
     subjectId,
+    typeId,
+    subTypeId,
     examDate,
     grade: null,
     status: 'pending',   // 'pending' | 'done'
@@ -1800,6 +1836,20 @@ function openExamGrade(examId) {
   const exam = state.exams.find(e => e.id === pendingExamId);
   if (!exam) return;
   document.getElementById('exam-grade-title').textContent = '"' + exam.name + '" — ' + (exam.examDate || exam.date);
+  const typeInfoEl = document.getElementById('exam-grade-type-info');
+  if (typeInfoEl) {
+    const et = (state.examTypes || []).find(t => t.id === exam.typeId);
+    if (et) {
+      typeInfoEl.innerHTML =
+        '<span class="exam-type-tag">' + (et.emoji ? et.emoji + ' ' : '📂 ') + escHtml(et.name) + '</span>' +
+        '<span class="exam-weight-badge exam-weight-badge-lg">⚡ ' + et.weight + 'x XP</span>';
+      typeInfoEl.style.display = 'flex';
+      typeInfoEl.style.alignItems = 'center';
+      typeInfoEl.style.gap = '0.5rem';
+    } else {
+      typeInfoEl.style.display = 'none';
+    }
+  }
   const slider = document.getElementById('grade-slider');
   slider.value = 7;
   document.getElementById('grade-display').textContent = '7.0';
@@ -1829,12 +1879,12 @@ function updateGradeClassificationDisplay(val) {
 // Confirma a nota e calcula recompensas
 function confirmExamGrade() {
   if (!pendingExamId) return;
-  const grade = parseFloat(document.getElementById('grade-slider').value);
+  const grade = parseFloat(document.getElementById('grade-display').textContent);
   const exam = state.exams.find(e => e.id === pendingExamId);
   if (!exam) return;
 
   const examBoost = hasBoost('exam_boost');
-  let xpGain, coinGain, gradeClass, gradeLabel;
+  let xpGain, coinGain, gradeClass, gradeLabel, notifMsg, notifType;
 
   const avg = getSchoolAverage();
   if (grade >= Math.min(9, avg + 2)) {
@@ -1842,30 +1892,42 @@ function confirmExamGrade() {
     coinGain = examBoost ? 50 : 25;
     gradeClass = grade === 10 ? 'grade-10' : 'grade-high';
     gradeLabel = 'Excelente';
-    showNotification('🌟 Nota ' + grade + '! Desempenho excelente! +' + xpGain + ' XP', 'success');
+    notifMsg = '🌟 Nota ' + grade + '! Desempenho excelente!';
+    notifType = 'success';
   } else if (grade >= avg) {
     xpGain = examBoost ? 80 : 40;
     coinGain = examBoost ? 30 : 15;
     gradeClass = 'grade-high';
     gradeLabel = 'Aprovado';
-    showNotification('✅ Nota ' + grade + '! Aprovado na média ' + avg + '! +' + xpGain + ' XP', 'success');
+    notifMsg = '✅ Nota ' + grade + '! Aprovado na média ' + avg + '!';
+    notifType = 'success';
   } else if (grade >= avg - 2) {
     xpGain = examBoost ? 30 : 15;
     coinGain = examBoost ? 15 : 7;
     gradeClass = 'grade-mid';
     gradeLabel = 'Recuperação';
-    showNotification('⚠️ Nota ' + grade + ' — Recuperação (média: ' + avg + '). Revise ' + (exam.subjectId ? 'a matéria' : 'o conteúdo') + '!', 'warning');
+    notifMsg = '⚠️ Nota ' + grade + ' — Recuperação (média: ' + avg + ').';
+    notifType = 'warning';
     triggerRevisionMission(exam);
   } else {
     xpGain = examBoost ? 15 : 8;
     coinGain = 3;
     gradeClass = 'grade-low';
     gradeLabel = 'Resultado Crítico';
-    showNotification('❌ Nota ' + grade + ' — Muito abaixo da média ' + avg + '. Não desista!', 'error');
+    notifMsg = '❌ Nota ' + grade + ' — Muito abaixo da média ' + avg + '.';
+    notifType = 'error';
     triggerRevisionMission(exam);
   }
 
   if (examBoost) consumeBoost('exam_boost');
+
+  // Aplica multiplicador da categoria
+  const _et = (state.examTypes || []).find(t => t.id === exam.typeId);
+  const _wm = _et ? (_et.weight || 1) : 1;
+  xpGain   = Math.round(xpGain   * _wm);
+  coinGain = Math.round(coinGain * _wm);
+  const multSuffix = _wm !== 1 ? ' (' + _wm + 'x)' : '';
+  showNotification(notifMsg + ' +' + xpGain + ' XP' + multSuffix, notifType);
 
   exam.grade = grade;
   exam.status = 'done';
@@ -1943,10 +2005,13 @@ function renderExams() {
   }
 
   container.innerHTML = html;
+  _syncSubTypeStatsSection();
 }
 
 function renderExamItem(e) {
-  const subj = state.subjects.find(s => s.id === e.subjectId);
+  const subj     = state.subjects.find(s => s.id === e.subjectId);
+  const examType = (state.examTypes    || []).find(t => t.id === e.typeId);
+  const examSub  = (state.examSubTypes || []).find(t => t.id === e.subTypeId);
   const isPending = e.status === 'pending';
   const today = todayStr();
   const isPast = e.examDate && e.examDate < today;
@@ -1962,7 +2027,10 @@ function renderExamItem(e) {
       '<div class="exam-grade-circle grade-mid" style="font-size:1.1rem">?</div>' +
       '<div class="exam-info">' +
       '<div class="exam-name">' + e.name + ' ' + dateTag + '</div>' +
-      '<div class="exam-meta">' + (subj ? subj.emoji + ' ' + subj.name + ' · ' : '') + 'Aguardando nota</div>' +
+      '<div class="exam-meta">' + (subj ? subj.emoji + ' ' + subj.name + ' · ' : '') + 'Aguardando nota' +
+        (examType ? ' · <span class="exam-type-tag">' + (examType.emoji || '📂') + ' ' + escHtml(examType.name) + ' <span class="exam-weight-badge">' + examType.weight + 'x</span></span>' : '') +
+        (examSub  ? ' · <span class="exam-subtype-tag">📊 ' + escHtml(examSub.name) + '</span>' : '') +
+      '</div>' +
       '</div>' +
       '<span class="exam-status-badge status-pending">Pendente</span>' +
       '<div class="item-actions">' +
@@ -1980,7 +2048,10 @@ function renderExamItem(e) {
     '<div class="exam-grade-circle ' + e.gradeClass + '">' + e.grade + '</div>' +
     '<div class="exam-info">' +
     '<div class="exam-name">' + e.name + ' ' + dateTag + '</div>' +
-    '<div class="exam-meta">' + (subj ? subj.emoji + ' ' + subj.name + ' · ' : '') + (e.date || '') + '</div>' +
+    '<div class="exam-meta">' + (subj ? subj.emoji + ' ' + subj.name + ' · ' : '') + (e.date || '') +
+      (examType ? ' · <span class="exam-type-tag">' + (examType.emoji || '📂') + ' ' + escHtml(examType.name) + ' <span class="exam-weight-badge">' + examType.weight + 'x</span></span>' : '') +
+      (examSub  ? ' · <span class="exam-subtype-tag">📊 ' + escHtml(examSub.name) + '</span>' : '') +
+    '</div>' +
     '</div>' +
     '<span class="exam-status-badge ' + badgeClass + '">' + (e.gradeLabel || '') + '</span>' +
     '<span class="exam-xp">+' + e.xpGain + ' XP</span>' +
@@ -2914,6 +2985,7 @@ function renderStats() {
   renderGradeChart();
   renderFreqChart();
   renderSubjectPerformance();
+  _syncSubTypeStatsSection();
 }
 
 function renderXpChart() {
@@ -3645,6 +3717,34 @@ function initEditDelete() {
     document.getElementById('edit-grade-slider').disabled = !this.checked;
   });
 
+  // Click on edit-grade-display to type manually
+  const editGradeDisplay = document.getElementById('edit-grade-display');
+  const editGradeInputEl = document.getElementById('edit-grade-input');
+  editGradeDisplay.addEventListener('click', () => {
+    const hasGradeCb = document.getElementById('edit-has-grade');
+    if (!hasGradeCb.checked) { hasGradeCb.checked = true; hasGradeCb.dispatchEvent(new Event('change')); }
+    editGradeDisplay.style.display = 'none';
+    const cur = parseFloat(editGradeDisplay.textContent);
+    editGradeInputEl.style.display = 'inline-block';
+    editGradeInputEl.value = isNaN(cur) ? '' : cur.toFixed(1);
+    editGradeInputEl.focus();
+    editGradeInputEl.select();
+  });
+  function _applyEditGradeInput() {
+    let val = parseFloat(editGradeInputEl.value);
+    if (isNaN(val)) val = 7;
+    val = Math.max(0, Math.min(10, Math.round(val * 10) / 10));
+    document.getElementById('edit-grade-slider').value = val;
+    editGradeDisplay.textContent = val.toFixed(1);
+    editGradeDisplay.style.display = '';
+    editGradeInputEl.style.display = 'none';
+  }
+  editGradeInputEl.addEventListener('blur', _applyEditGradeInput);
+  editGradeInputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); _applyEditGradeInput(); }
+    if (e.key === 'Escape') { editGradeDisplay.style.display = ''; editGradeInputEl.style.display = 'none'; }
+  });
+
   document.getElementById('save-edit-task-btn').addEventListener('click', saveEditTask);
   document.getElementById('save-edit-exam-btn').addEventListener('click', saveEditExam);
 
@@ -3755,6 +3855,10 @@ function openEditExam(id) {
 
   populateSubjectSelect('edit-exam-subject');
   document.getElementById('edit-exam-subject').value = exam.subjectId || '';
+  populateExamTypeSelect('edit-exam-type-select');
+  document.getElementById('edit-exam-type-select').value = exam.typeId || '';
+  populateExamSubTypeSelect('edit-exam-subtype-select');
+  document.getElementById('edit-exam-subtype-select').value = exam.subTypeId || '';
 
   const hasGrade = exam.status === 'done' && exam.grade !== null;
   document.getElementById('edit-has-grade').checked = hasGrade;
@@ -3776,7 +3880,7 @@ function saveEditExam() {
   const subject = document.getElementById('edit-exam-subject').value;
   const date    = document.getElementById('edit-exam-date').value || null;
   const hasGrade = document.getElementById('edit-has-grade').checked;
-  const grade   = hasGrade ? parseFloat(document.getElementById('edit-grade-slider').value) : null;
+  const grade   = hasGrade ? parseFloat(document.getElementById('edit-grade-display').textContent) : null;
 
   if (!name) return showNotification('Digite o nome da prova!', 'warning');
 
@@ -3791,6 +3895,8 @@ function saveEditExam() {
 
   exam.name      = name;
   exam.subjectId = subject;
+  exam.typeId    = document.getElementById('edit-exam-type-select').value;
+  exam.subTypeId = document.getElementById('edit-exam-subtype-select').value;
   exam.examDate  = date;
   exam.date      = date || exam.date;
 
@@ -3830,6 +3936,201 @@ function gradeToInfo(grade) {
   if (grade >= avg)                  return { xpGain: 40,  coinGain: 15, gradeClass: 'grade-high', gradeLabel: 'Aprovado' };
   if (grade >= avg - 2)              return { xpGain: 15,  coinGain: 7,  gradeClass: 'grade-mid',  gradeLabel: 'Recuperação' };
   return                                    { xpGain: 8,   coinGain: 3,  gradeClass: 'grade-low',  gradeLabel: 'Resultado Crítico' };
+}
+
+// ============================================================
+// CATEGORIAS DE PROVA (exam types com peso de XP)
+// ============================================================
+
+function _examTypeWeight(exam) {
+  if (!exam || !exam.typeId) return 1;
+  const t = (state.examTypes || []).find(t => t.id === exam.typeId);
+  return t ? (t.weight || 1) : 1;
+}
+
+function populateExamTypeSelect(selId) {
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">📂 Sem categoria</option>' +
+    (state.examTypes || []).map(t =>
+      '<option value="' + t.id + '">' + (t.emoji ? t.emoji + ' ' : '') + escHtml(t.name) + ' (' + t.weight + 'x)</option>'
+    ).join('');
+  sel.value = cur;
+}
+
+function openExamTypesModal() {
+  renderExamTypesList();
+  renderExamSubTypesList();
+  openModal('modal-exam-types');
+}
+
+function renderExamTypesList() {
+  const cont = document.getElementById('exam-types-list');
+  if (!cont) return;
+  const types = state.examTypes || [];
+  if (!types.length) {
+    cont.innerHTML = '<p class="exam-types-empty">Nenhuma categoria criada ainda.</p>';
+    return;
+  }
+  cont.innerHTML = types.map(t =>
+    '<div class="exam-type-list-row">' +
+    '<span class="exam-type-list-emoji">' + (t.emoji || '📝') + '</span>' +
+    '<span class="exam-type-list-name">' + escHtml(t.name) + '</span>' +
+    '<span class="exam-weight-badge">' + t.weight + 'x</span>' +
+    '<button class="btn-icon-delete" data-action="del-exam-type" data-id="' + t.id + '" title="Excluir">🗑️</button>' +
+    '</div>'
+  ).join('');
+  cont.querySelectorAll('[data-action="del-exam-type"]').forEach(btn => {
+    btn.addEventListener('click', () => deleteExamType(btn.dataset.id));
+  });
+}
+
+function saveExamType() {
+  const name = (document.getElementById('new-exam-type-name').value || '').trim();
+  if (!name) return showNotification('Digite o nome da categoria!', 'warning');
+  const emoji  = (document.getElementById('new-exam-type-emoji').value || '').trim();
+  const weight = Math.max(0.1, Math.round((parseFloat(document.getElementById('new-exam-type-weight').value) || 1) * 10) / 10);
+  if (!state.examTypes) state.examTypes = [];
+  state.examTypes.push({ id: 'et_' + Date.now(), name, emoji, weight });
+  saveState();
+  document.getElementById('new-exam-type-name').value  = '';
+  document.getElementById('new-exam-type-emoji').value = '';
+  document.getElementById('new-exam-type-weight').value = '1.0';
+  renderExamTypesList();
+  showNotification('✅ Categoria "' + name + '" criada!', 'success');
+}
+
+function deleteExamType(id) {
+  state.examTypes = (state.examTypes || []).filter(t => t.id !== id);
+  state.exams.forEach(e => { if (e.typeId === id) e.typeId = ''; });
+  saveState();
+  renderExamTypesList();
+  showNotification('🗑️ Categoria removida.', 'info');
+}
+
+// --- Subcategorias ---
+
+function populateExamSubTypeSelect(selId) {
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">📊 Sem subcategoria</option>' +
+    (state.examSubTypes || []).map(t =>
+      '<option value="' + t.id + '">' + escHtml(t.name) + '</option>'
+    ).join('');
+  sel.value = cur;
+}
+
+function renderExamSubTypesList() {
+  const cont = document.getElementById('exam-subtypes-list');
+  if (!cont) return;
+  const types = state.examSubTypes || [];
+  if (!types.length) {
+    cont.innerHTML = '<p class="exam-types-empty">Nenhuma subcategoria criada ainda.</p>';
+    return;
+  }
+  cont.innerHTML = '<div class="exam-subtypes-chips">' +
+    types.map(t =>
+      '<span class="exam-subtype-chip">' + escHtml(t.name) +
+      '<button class="exam-subtype-chip-del" data-action="del-exam-subtype" data-id="' + t.id + '">×</button></span>'
+    ).join('') + '</div>';
+  cont.querySelectorAll('[data-action="del-exam-subtype"]').forEach(btn => {
+    btn.addEventListener('click', () => deleteExamSubType(btn.dataset.id));
+  });
+}
+
+function saveExamSubType() {
+  const name = (document.getElementById('new-exam-subtype-name').value || '').trim();
+  if (!name) return showNotification('Digite o nome da subcategoria!', 'warning');
+  if (!state.examSubTypes) state.examSubTypes = [];
+  if (state.examSubTypes.find(t => t.name.toLowerCase() === name.toLowerCase()))
+    return showNotification('Já existe uma subcategoria com esse nome!', 'warning');
+  state.examSubTypes.push({ id: 'est_' + Date.now(), name });
+  saveState();
+  document.getElementById('new-exam-subtype-name').value = '';
+  renderExamSubTypesList();
+  _syncSubTypeStatsSection();
+  showNotification('✅ Subcategoria "' + name + '" criada!', 'success');
+}
+
+function deleteExamSubType(id) {
+  state.examSubTypes = (state.examSubTypes || []).filter(t => t.id !== id);
+  state.exams.forEach(e => { if (e.subTypeId === id) e.subTypeId = ''; });
+  saveState();
+  renderExamSubTypesList();
+  _syncSubTypeStatsSection();
+  showNotification('🗑️ Subcategoria removida.', 'info');
+}
+
+function _syncSubTypeStatsSection() {
+  const section = document.getElementById('exam-subtype-stats-section');
+  if (!section) return;
+  const types = state.examSubTypes || [];
+  section.style.display = types.length ? '' : 'none';
+  const sel = document.getElementById('subtype-stats-select');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— Selecionar —</option>' +
+    types.map(t => '<option value="' + t.id + '">' + escHtml(t.name) + '</option>').join('');
+  if (cur) sel.value = cur;
+}
+
+function renderSubTypeStats(subTypeId) {
+  const cont = document.getElementById('exam-subtype-stats-content');
+  if (!cont) return;
+  if (!subTypeId) {
+    cont.innerHTML = '<p class="exam-types-empty" style="text-align:center;padding:2rem 0">Selecione uma subcategoria para ver os dados.</p>';
+    return;
+  }
+  const exams   = state.exams.filter(e => e.subTypeId === subTypeId);
+  const done    = exams.filter(e => e.status === 'done' && e.grade !== null);
+  const grades  = done.map(e => e.grade);
+  const avg     = getSchoolAverage();
+  const best    = grades.length ? Math.max(...grades) : null;
+  const worst   = grades.length ? Math.min(...grades) : null;
+  const mean    = grades.length ? Math.round(grades.reduce((a,b)=>a+b,0)/grades.length*10)/10 : null;
+  const passRate = grades.length ? Math.round(grades.filter(g=>g>=avg).length/grades.length*100) : null;
+  const totalXp = done.reduce((a,e)=>a+(e.xpGain||0),0);
+
+  function sCard(icon, lbl, val, good) {
+    const cls = good === true ? ' ssc-good' : good === false ? ' ssc-bad' : '';
+    return '<div class="subtype-stat-card' + cls + '">' +
+      '<span class="ssc-icon">' + icon + '</span>' +
+      '<span class="ssc-value">' + (val !== null && val !== undefined ? val : '—') + '</span>' +
+      '<span class="ssc-label">' + lbl + '</span></div>';
+  }
+
+  if (!exams.length) {
+    cont.innerHTML = '<p class="exam-types-empty" style="text-align:center;padding:2rem 0">Nenhuma prova nesta subcategoria ainda.</p>';
+    return;
+  }
+
+  const badgeMap = { 'grade-10':'status-excellent','grade-high':'status-approved','grade-mid':'status-recovery','grade-low':'status-fail' };
+  const examRows = exams.map(e => {
+    const subj  = state.subjects.find(s => s.id === e.subjectId);
+    const isDone = e.status === 'done' && e.grade !== null;
+    const bgCls  = isDone ? (e.gradeClass||'grade-mid') : 'grade-mid';
+    const bdgCls = isDone ? (badgeMap[e.gradeClass]||'status-approved') : 'status-pending';
+    return '<div class="subtype-exam-row">' +
+      '<span class="exam-grade-circle ' + bgCls + '" style="width:36px;height:36px;min-width:36px;font-size:0.85rem">' + (isDone ? e.grade : '?') + '</span>' +
+      '<span class="subtype-exam-name">' + escHtml(e.name) +
+        (subj ? ' <span style="color:var(--text-muted);font-size:0.8rem">' + subj.emoji + ' ' + escHtml(subj.name) + '</span>' : '') +
+      '</span>' +
+      '<span class="exam-status-badge ' + bdgCls + '">' + (isDone ? (e.gradeLabel||'—') : 'Pendente') + '</span>' +
+      '</div>';
+  }).join('');
+
+  cont.innerHTML =
+    '<div class="subtype-stats-grid">' +
+      sCard('📝', 'Total',       exams.length) +
+      sCard('🏆', 'Melhor',      best  !== null ? best  : null, best  !== null ? best  >= avg : null) +
+      sCard('📉', 'Pior',        worst !== null ? worst : null, worst !== null ? worst >= avg : false) +
+      sCard('📊', 'Média',       mean  !== null ? mean.toFixed(1) : null, mean !== null ? mean >= avg : null) +
+      sCard('✅', 'Aprovação',   passRate !== null ? passRate + '%' : null, passRate !== null ? passRate >= 50 : null) +
+      sCard('⭐', 'XP Total',    totalXp ? '+' + totalXp : '0') +
+    '</div>' +
+    '<div class="subtype-exams-list">' + examRows + '</div>';
 }
 
 // ============================================================
@@ -5258,6 +5559,13 @@ async function launchApp() {
       updateNotifBell();
       runSmartPushChecks().catch(() => {}); // streak risk + cronograma
     }, 2000);
+
+    // Patch notes — mostra uma vez por versão
+    const _PATCH_KEY = 'sq_patch_prova_update_v1';
+    if (!localStorage.getItem(_PATCH_KEY)) {
+      setTimeout(() => { openModal('modal-patch-notes'); }, 1200);
+      localStorage.setItem(_PATCH_KEY, '1');
+    }
   } else {
     // Primeiro acesso → criação de herói
     console.log('[App] Novo usuário → tela de criação de herói.');

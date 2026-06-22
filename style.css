@@ -1683,6 +1683,92 @@ input[type="range"] {
 }
 
 /* === MODAL ESPECIAIS === */
+/* === PATCH NOTES MODAL === */
+.patch-notes-modal {
+  padding: 0;
+  overflow: hidden;
+  max-width: 480px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+.patch-notes-header {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 60%, #a855f7 100%);
+  padding: 1.75rem 1.5rem 1.5rem;
+  text-align: center;
+  position: relative;
+}
+.patch-notes-badge {
+  display: inline-block;
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  padding: 3px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.3);
+  margin-bottom: 0.6rem;
+}
+.patch-notes-title {
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: #fff;
+  margin: 0 0 0.3rem;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+.patch-notes-date {
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.75);
+  font-weight: 600;
+  margin: 0;
+}
+.patch-notes-body {
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  overflow-y: auto;
+  flex: 1;
+}
+.patch-note-item {
+  display: flex;
+  gap: 0.9rem;
+  align-items: flex-start;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+  transition: var(--transition);
+}
+.patch-note-item:hover { border-color: rgba(139,92,246,0.4); }
+.pni-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.pni-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.pni-text strong {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: var(--text);
+}
+.pni-text span {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+.patch-notes-close {
+  margin: 0 1.5rem 1.5rem;
+  width: calc(100% - 3rem);
+  font-size: 1rem;
+  padding: 0.85rem;
+}
+
 .modal-celebration {
   text-align: center;
   background: linear-gradient(135deg, #1a0533, #0d1f3c);
@@ -2281,6 +2367,130 @@ html, body {
 .gc-approved { background: rgba(52,211,153,0.12); color: #34d399; border: 1px solid rgba(52,211,153,0.2); }
 .gc-recovery { background: rgba(245,158,11,0.15); color: var(--warning); border: 1px solid rgba(245,158,11,0.3); }
 .gc-fail { background: rgba(239,68,68,0.15); color: var(--danger); border: 1px solid rgba(239,68,68,0.3); }
+
+.grade-display-clickable {
+  cursor: pointer;
+  border-bottom: 2px dashed var(--accent);
+  padding: 0 6px 1px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.grade-display-clickable:hover { background: rgba(139,92,246,0.15); }
+.grade-input-edit {
+  width: 80px;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--card-bg);
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  text-align: center;
+  padding: 2px 8px;
+  outline: none;
+  vertical-align: middle;
+}
+.grade-input-edit::-webkit-inner-spin-button,
+.grade-input-edit::-webkit-outer-spin-button { opacity: 0.4; }
+
+/* === EXAM TYPES === */
+.exam-type-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: rgba(139,92,246,0.12);
+  border: 1px solid rgba(139,92,246,0.25);
+  border-radius: 20px;
+  padding: 1px 8px;
+  vertical-align: middle;
+}
+.exam-weight-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 10px;
+  padding: 1px 6px;
+  vertical-align: middle;
+}
+.exam-weight-badge-lg {
+  font-size: 0.85rem;
+  padding: 3px 10px;
+}
+.exam-type-list-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--card-bg);
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.4rem;
+}
+.exam-type-list-emoji { font-size: 1.2rem; }
+.exam-type-list-name  { flex: 1; font-weight: 700; font-size: 0.9rem; }
+.exam-types-empty     { color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 1rem 0; }
+.exam-type-form { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.exam-type-add-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin-top: 0.6rem;
+}
+.exam-type-add-row input { margin-bottom: 0; }
+
+/* Sub-categoria chips no modal */
+.exam-subtypes-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.5rem; }
+.exam-subtype-chip {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3);
+  color: #818cf8; font-size: 0.82rem; font-weight: 700;
+  padding: 3px 10px 3px 12px; border-radius: 20px;
+}
+.exam-subtype-chip-del {
+  background: none; border: none; cursor: pointer;
+  color: #818cf8; font-size: 1rem; line-height: 1; padding: 0 2px;
+  opacity: 0.7; transition: opacity 0.15s;
+}
+.exam-subtype-chip-del:hover { opacity: 1; }
+
+/* Badge na lista de provas */
+.exam-subtype-tag {
+  display: inline-flex; align-items: center; gap: 0.2rem;
+  font-size: 0.73rem; font-weight: 700; color: #818cf8;
+  background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.22);
+  border-radius: 20px; padding: 1px 8px; vertical-align: middle;
+}
+
+/* Stats grid */
+.subtype-stats-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.5rem;
+}
+@media (max-width: 480px) { .subtype-stats-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.subtype-stat-card {
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 1rem 0.75rem; display: flex; flex-direction: column;
+  align-items: center; gap: 0.25rem; text-align: center; transition: var(--transition);
+}
+.subtype-stat-card.ssc-good { border-color: rgba(16,185,129,0.4); background: rgba(16,185,129,0.07); }
+.subtype-stat-card.ssc-bad  { border-color: rgba(239,68,68,0.35);  background: rgba(239,68,68,0.07); }
+.ssc-icon  { font-size: 1.3rem; }
+.ssc-value { font-size: 1.5rem; font-weight: 800; color: var(--text); }
+.ssc-label { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); }
+.ssc-good .ssc-value { color: var(--success); }
+.ssc-bad  .ssc-value { color: var(--danger); }
+
+/* Lista de provas da subcategoria */
+.subtype-exams-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.subtype-exam-row {
+  display: flex; align-items: center; gap: 0.75rem;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 0.6rem 0.75rem;
+}
+.subtype-exam-name { flex: 1; font-weight: 700; font-size: 0.9rem; }
 
 /* === DATE PICKER === */
 .date-picker-field { margin-bottom: 1rem; }

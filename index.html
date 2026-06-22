@@ -507,6 +507,7 @@
               <option value="status">⏳ Pendentes primeiro</option>
             </select>
           </div>
+          <button class="btn-secondary" id="exam-types-btn">📂 Categorias</button>
           <button class="btn-primary" id="add-exam-btn">+ Registrar Prova</button>
         </div>
       </div>
@@ -580,6 +581,16 @@
         </div>
       </div>
       <div class="subject-performance" id="subject-performance"></div>
+
+      <div id="exam-subtype-stats-section" style="display:none;margin-top:2rem">
+        <div class="page-header" style="margin-bottom:1rem">
+          <h2 style="font-size:1.1rem;font-weight:800">📊 Dados da Subcategoria</h2>
+          <select id="subtype-stats-select" onchange="renderSubTypeStats(this.value)">
+            <option value="">— Selecionar —</option>
+          </select>
+        </div>
+        <div id="exam-subtype-stats-content"></div>
+      </div>
     </div>
 
     <!-- ===== NOTAS & MÉDIAS ===== -->
@@ -1450,6 +1461,12 @@
     <select id="exam-subject-select">
       <option value="">Selecionar matéria...</option>
     </select>
+    <select id="exam-type-select">
+      <option value="">📂 Sem categoria</option>
+    </select>
+    <select id="exam-subtype-select">
+      <option value="">📊 Sem subcategoria</option>
+    </select>
     <div class="date-picker-field">
       <p>📅 Data da prova:</p>
       <input type="date" id="exam-date-input">
@@ -1465,9 +1482,10 @@
 <div class="modal-overlay" id="modal-exam-grade">
   <div class="modal">
     <h2>🎯 Lançar Nota</h2>
-    <p id="exam-grade-title" style="font-weight:700;margin-bottom:1rem;color:var(--text-muted)"></p>
+    <p id="exam-grade-title" style="font-weight:700;margin-bottom:0.5rem;color:var(--text-muted)"></p>
+    <div id="exam-grade-type-info" style="display:none;margin-bottom:1rem"></div>
     <div class="grade-picker">
-      <p>Nota (média = 7): <strong id="grade-display">7.0</strong></p>
+      <p>Nota (média = 7): <strong id="grade-display" class="grade-display-clickable" title="Clique para editar a nota">7.0</strong><input type="number" id="grade-input" class="grade-input-edit" min="0" max="10" step="0.1" style="display:none"></p>
       <input type="range" id="grade-slider" min="0" max="10" step="0.5" value="7">
     </div>
     <div id="grade-classification" class="grade-classification"></div>
@@ -1475,6 +1493,55 @@
       <button class="btn-secondary" data-close="modal-exam-grade">Cancelar</button>
       <button class="btn-primary" id="confirm-exam-grade-btn">✅ Confirmar Nota</button>
     </div>
+  </div>
+</div>
+
+<!-- Modal: Patch Notes -->
+<div class="modal-overlay" id="modal-patch-notes">
+  <div class="modal patch-notes-modal">
+    <div class="patch-notes-header">
+      <div class="patch-notes-badge">✨ NOVO UPDATE</div>
+      <h2 class="patch-notes-title">📝 Prova Update</h2>
+      <p class="patch-notes-date">22 de junho de 2026</p>
+    </div>
+    <div class="patch-notes-body">
+      <div class="patch-note-item">
+        <span class="pni-icon">⌨️</span>
+        <div class="pni-text">
+          <strong>Digitar nota manualmente</strong>
+          <span>Clique no número da nota para editar direto pelo teclado — qualquer valor entre 0 e 10.</span>
+        </div>
+      </div>
+      <div class="patch-note-item">
+        <span class="pni-icon">📂</span>
+        <div class="pni-text">
+          <strong>Categorias de Prova</strong>
+          <span>Crie categorias com nome e emoji para organizar suas provas (ex: Prova, Trabalho, Simulado).</span>
+        </div>
+      </div>
+      <div class="patch-note-item">
+        <span class="pni-icon">⚡</span>
+        <div class="pni-text">
+          <strong>Peso de XP por Categoria</strong>
+          <span>Defina um multiplicador de recompensa por categoria — provas mais importantes valem mais XP e moedas.</span>
+        </div>
+      </div>
+      <div class="patch-note-item">
+        <span class="pni-icon">📊</span>
+        <div class="pni-text">
+          <strong>Subcategorias de Prova</strong>
+          <span>Agrupe provas em subcategorias para estatísticas (ex: P1, P2, Trimestral).</span>
+        </div>
+      </div>
+      <div class="patch-note-item">
+        <span class="pni-icon">📈</span>
+        <div class="pni-text">
+          <strong>Dados da Subcategoria (Estatísticas)</strong>
+          <span>Nova tela em Estatísticas com melhor nota, pior nota, média, taxa de aprovação e XP total por subcategoria.</span>
+        </div>
+      </div>
+    </div>
+    <button class="btn-primary patch-notes-close" data-close="modal-patch-notes">🎉 Entendido!</button>
   </div>
 </div>
 
@@ -1548,13 +1615,19 @@
     <input type="hidden" id="edit-exam-id">
     <input type="text" id="edit-exam-name" placeholder="Nome da prova...">
     <select id="edit-exam-subject"></select>
+    <select id="edit-exam-type-select">
+      <option value="">📂 Sem categoria</option>
+    </select>
+    <select id="edit-exam-subtype-select">
+      <option value="">📊 Sem subcategoria</option>
+    </select>
     <div class="date-picker-field">
       <p>📅 Data da prova:</p>
       <input type="date" id="edit-exam-date">
     </div>
     <div id="edit-exam-grade-section">
       <div class="grade-picker" id="edit-grade-picker">
-        <p>Nota (apenas se já tiver sido lançada): <strong id="edit-grade-display">—</strong></p>
+        <p>Nota (apenas se já tiver sido lançada): <strong id="edit-grade-display" class="grade-display-clickable" title="Clique para editar a nota">—</strong><input type="number" id="edit-grade-input" class="grade-input-edit" min="0" max="10" step="0.1" style="display:none"></p>
         <input type="range" id="edit-grade-slider" min="0" max="10" step="0.5" value="7">
         <label style="display:flex;align-items:center;gap:.5rem;margin-top:.5rem;font-size:.85rem;font-weight:700;color:var(--text-muted)">
           <input type="checkbox" id="edit-has-grade"> Prova já tem nota lançada
@@ -1564,6 +1637,33 @@
     <div class="modal-btns">
       <button class="btn-secondary" data-close="modal-edit-exam">Cancelar</button>
       <button class="btn-primary" id="save-edit-exam-btn">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Categorias de Prova -->
+<div class="modal-overlay" id="modal-exam-types">
+  <div class="modal">
+    <h2>📂 Categorias de Prova</h2>
+    <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:0.75rem">O peso multiplica o XP ao lançar nota.</p>
+    <div id="exam-types-list"></div>
+    <div class="exam-type-add-row">
+      <input type="text" id="new-exam-type-name" placeholder="Nova categoria..." style="flex:1;margin-bottom:0">
+      <input type="text" id="new-exam-type-emoji" placeholder="📝" maxlength="4" title="Emoji (opcional)" style="width:52px;text-align:center;margin-bottom:0">
+      <input type="number" id="new-exam-type-weight" min="0.5" max="10" step="0.1" value="1.0" title="⚖️ Peso XP" style="width:68px;margin-bottom:0">
+      <button class="btn-primary" id="save-exam-type-btn" style="white-space:nowrap">+ Add</button>
+    </div>
+    <div style="border-top:1px solid var(--border);margin-top:1.25rem;padding-top:1rem">
+      <h3 style="font-size:0.95rem;font-weight:800;margin-bottom:0.4rem">📊 Subcategorias</h3>
+      <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem">Para estatísticas (ex: P1, P2, Trimestral...).</p>
+      <div id="exam-subtypes-list"></div>
+      <div class="exam-type-add-row">
+        <input type="text" id="new-exam-subtype-name" placeholder="Nova subcategoria..." style="flex:1;margin-bottom:0">
+        <button class="btn-primary" id="save-exam-subtype-btn" style="white-space:nowrap">+ Add</button>
+      </div>
+    </div>
+    <div class="modal-btns" style="margin-top:1.25rem">
+      <button class="btn-secondary" data-close="modal-exam-types">Fechar</button>
     </div>
   </div>
 </div>
