@@ -3906,6 +3906,7 @@ function saveEditExam() {
     exam.status     = 'done';
     exam.gradeClass = gradeInfo.gradeClass;
     exam.gradeLabel = gradeInfo.gradeLabel;
+    if (!exam.completedAt) exam.completedAt = Date.now();
     if (!exam.xpGain) { exam.xpGain = gradeInfo.xpGain; exam.coinGain = gradeInfo.coinGain; }
     // Update subject
     if (subject) {
@@ -11054,7 +11055,10 @@ async function viewChildDashboard(childId, childName) {
     const gradeEntries = cd.gradeEntries || {};
     const examsAll    = [...(cd.exams || [])].reverse();
     const exams       = examsAll.slice(0, 8);
-    const gradedExams = examsAll.filter(e => e.grade !== null && e.grade !== undefined && e.grade !== '').slice(0, 8);
+    const gradedExams = examsAll
+      .filter(e => e.grade !== null && e.grade !== undefined && e.grade !== '')
+      .sort((a, b) => (b.completedAt || b.timestamp || 0) - (a.completedAt || a.timestamp || 0))
+      .slice(0, 8);
     const allTasks    = cd.tasks || [];
     const doneTasks   = allTasks.filter(t => t.done).slice(-6).reverse();
     const pendTasks   = allTasks.filter(t => !t.done).slice(0, 6);
@@ -11114,7 +11118,7 @@ async function viewChildDashboard(childId, childName) {
     const examsHtml = gradedExams.length ? gradedExams.map(e => {
       const subj = subjects.find(s => s.id === e.subjectId);
       return `<div class="child-list-row">
-        <span>${subj?.icon || '📝'} ${escHtml(e.name || subj?.name || 'Prova')}</span>
+        <span>${subj?.icon || subj?.emoji || '📝'} ${escHtml(e.name || 'Prova')}${subj ? ` <span style="color:var(--text-muted);font-size:.78rem">· ${escHtml(subj.name)}</span>` : ''}</span>
         <div style="display:flex;align-items:center;gap:.5rem">
           <span style="font-size:.78rem;color:var(--text-muted)">${_fmtDate(e.examDate)}</span>
           ${gradeTag(e.grade)}
