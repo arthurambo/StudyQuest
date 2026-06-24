@@ -3959,10 +3959,27 @@ function populateExamTypeSelect(selId) {
   sel.value = cur;
 }
 
+let _editingExamTypeId = null;
+let _editingExamSubTypeId = null;
+
 function openExamTypesModal() {
+  _cancelEditExamType();
+  _cancelEditExamSubType();
   renderExamTypesList();
   renderExamSubTypesList();
   openModal('modal-exam-types');
+}
+
+function _cancelEditExamType() {
+  _editingExamTypeId = null;
+  const btn = document.getElementById('save-exam-type-btn');
+  if (btn) btn.textContent = '+ Add';
+  const nameEl = document.getElementById('new-exam-type-name');
+  if (nameEl) nameEl.value = '';
+  const emojiEl = document.getElementById('new-exam-type-emoji');
+  if (emojiEl) emojiEl.value = '';
+  const weightEl = document.getElementById('new-exam-type-weight');
+  if (weightEl) weightEl.value = '1.0';
 }
 
 function renderExamTypesList() {
@@ -3978,12 +3995,27 @@ function renderExamTypesList() {
     '<span class="exam-type-list-emoji">' + (t.emoji || '📝') + '</span>' +
     '<span class="exam-type-list-name">' + escHtml(t.name) + '</span>' +
     '<span class="exam-weight-badge">' + t.weight + 'x</span>' +
+    '<button class="btn-icon-edit" data-action="edit-exam-type" data-id="' + t.id + '" title="Editar">✏️</button>' +
     '<button class="btn-icon-delete" data-action="del-exam-type" data-id="' + t.id + '" title="Excluir">🗑️</button>' +
     '</div>'
   ).join('');
+  cont.querySelectorAll('[data-action="edit-exam-type"]').forEach(btn => {
+    btn.addEventListener('click', () => editExamType(btn.dataset.id));
+  });
   cont.querySelectorAll('[data-action="del-exam-type"]').forEach(btn => {
     btn.addEventListener('click', () => deleteExamType(btn.dataset.id));
   });
+}
+
+function editExamType(id) {
+  const t = (state.examTypes || []).find(t => t.id === id);
+  if (!t) return;
+  _editingExamTypeId = id;
+  document.getElementById('new-exam-type-name').value   = t.name;
+  document.getElementById('new-exam-type-emoji').value  = t.emoji || '';
+  document.getElementById('new-exam-type-weight').value = t.weight;
+  document.getElementById('save-exam-type-btn').textContent = '💾 Salvar';
+  document.getElementById('new-exam-type-name').focus();
 }
 
 function saveExamType() {
@@ -3991,20 +4023,26 @@ function saveExamType() {
   if (!name) return showNotification('Digite o nome da categoria!', 'warning');
   const emoji  = (document.getElementById('new-exam-type-emoji').value || '').trim();
   const weight = Math.max(0.1, Math.round((parseFloat(document.getElementById('new-exam-type-weight').value) || 1) * 10) / 10);
-  if (!state.examTypes) state.examTypes = [];
-  state.examTypes.push({ id: 'et_' + Date.now(), name, emoji, weight });
+
+  if (_editingExamTypeId) {
+    const t = (state.examTypes || []).find(t => t.id === _editingExamTypeId);
+    if (t) { t.name = name; t.emoji = emoji; t.weight = weight; }
+    showNotification('✅ Categoria atualizada!', 'success');
+  } else {
+    if (!state.examTypes) state.examTypes = [];
+    state.examTypes.push({ id: 'et_' + Date.now(), name, emoji, weight });
+    showNotification('✅ Categoria "' + name + '" criada!', 'success');
+  }
   saveState();
-  document.getElementById('new-exam-type-name').value  = '';
-  document.getElementById('new-exam-type-emoji').value = '';
-  document.getElementById('new-exam-type-weight').value = '1.0';
+  _cancelEditExamType();
   renderExamTypesList();
-  showNotification('✅ Categoria "' + name + '" criada!', 'success');
 }
 
 function deleteExamType(id) {
   state.examTypes = (state.examTypes || []).filter(t => t.id !== id);
   state.exams.forEach(e => { if (e.typeId === id) e.typeId = ''; });
   saveState();
+  if (_editingExamTypeId === id) _cancelEditExamType();
   renderExamTypesList();
   showNotification('🗑️ Categoria removida.', 'info');
 }
@@ -4033,31 +4071,62 @@ function renderExamSubTypesList() {
   cont.innerHTML = '<div class="exam-subtypes-chips">' +
     types.map(t =>
       '<span class="exam-subtype-chip">' + escHtml(t.name) +
-      '<button class="exam-subtype-chip-del" data-action="del-exam-subtype" data-id="' + t.id + '">×</button></span>'
+      '<button class="exam-subtype-chip-edit" data-action="edit-exam-subtype" data-id="' + t.id + '" title="Editar">✏️</button>' +
+      '<button class="exam-subtype-chip-del" data-action="del-exam-subtype" data-id="' + t.id + '" title="Excluir">×</button></span>'
     ).join('') + '</div>';
+  cont.querySelectorAll('[data-action="edit-exam-subtype"]').forEach(btn => {
+    btn.addEventListener('click', () => editExamSubType(btn.dataset.id));
+  });
   cont.querySelectorAll('[data-action="del-exam-subtype"]').forEach(btn => {
     btn.addEventListener('click', () => deleteExamSubType(btn.dataset.id));
   });
+}
+
+function _cancelEditExamSubType() {
+  _editingExamSubTypeId = null;
+  const btn = document.getElementById('save-exam-subtype-btn');
+  if (btn) btn.textContent = '+ Add';
+  const nameEl = document.getElementById('new-exam-subtype-name');
+  if (nameEl) nameEl.value = '';
+}
+
+function editExamSubType(id) {
+  const t = (state.examSubTypes || []).find(t => t.id === id);
+  if (!t) return;
+  _editingExamSubTypeId = id;
+  document.getElementById('new-exam-subtype-name').value = t.name;
+  document.getElementById('save-exam-subtype-btn').textContent = '💾 Salvar';
+  document.getElementById('new-exam-subtype-name').focus();
 }
 
 function saveExamSubType() {
   const name = (document.getElementById('new-exam-subtype-name').value || '').trim();
   if (!name) return showNotification('Digite o nome da subcategoria!', 'warning');
   if (!state.examSubTypes) state.examSubTypes = [];
-  if (state.examSubTypes.find(t => t.name.toLowerCase() === name.toLowerCase()))
-    return showNotification('Já existe uma subcategoria com esse nome!', 'warning');
-  state.examSubTypes.push({ id: 'est_' + Date.now(), name });
+
+  if (_editingExamSubTypeId) {
+    if (state.examSubTypes.find(t => t.id !== _editingExamSubTypeId && t.name.toLowerCase() === name.toLowerCase()))
+      return showNotification('Já existe uma subcategoria com esse nome!', 'warning');
+    const t = state.examSubTypes.find(t => t.id === _editingExamSubTypeId);
+    if (t) t.name = name;
+    showNotification('✅ Subcategoria atualizada!', 'success');
+  } else {
+    if (state.examSubTypes.find(t => t.name.toLowerCase() === name.toLowerCase()))
+      return showNotification('Já existe uma subcategoria com esse nome!', 'warning');
+    state.examSubTypes.push({ id: 'est_' + Date.now(), name });
+    showNotification('✅ Subcategoria "' + name + '" criada!', 'success');
+  }
   saveState();
-  document.getElementById('new-exam-subtype-name').value = '';
+  _cancelEditExamSubType();
   renderExamSubTypesList();
   _syncSubTypeStatsSection();
-  showNotification('✅ Subcategoria "' + name + '" criada!', 'success');
 }
 
 function deleteExamSubType(id) {
   state.examSubTypes = (state.examSubTypes || []).filter(t => t.id !== id);
   state.exams.forEach(e => { if (e.subTypeId === id) e.subTypeId = ''; });
   saveState();
+  if (_editingExamSubTypeId === id) _cancelEditExamSubType();
   renderExamSubTypesList();
   _syncSubTypeStatsSection();
   showNotification('🗑️ Subcategoria removida.', 'info');
@@ -10983,7 +11052,9 @@ async function viewChildDashboard(childId, childName) {
     const approvalAvg = Number(cd.settings?.schoolAverage) || 7;
     const subjects    = cd.subjects || [];
     const gradeEntries = cd.gradeEntries || {};
-    const exams       = [...(cd.exams || [])].reverse().slice(0, 8);
+    const examsAll    = [...(cd.exams || [])].reverse();
+    const exams       = examsAll.slice(0, 8);
+    const gradedExams = examsAll.filter(e => e.grade !== null && e.grade !== undefined && e.grade !== '').slice(0, 8);
     const allTasks    = cd.tasks || [];
     const doneTasks   = allTasks.filter(t => t.done).slice(-6).reverse();
     const pendTasks   = allTasks.filter(t => !t.done).slice(0, 6);
@@ -11039,18 +11110,17 @@ async function viewChildDashboard(childId, childName) {
       </div>`;
     }).join('') : `<div style="color:var(--text-muted);font-size:.85rem;padding:.5rem 0">Sem matérias cadastradas.</div>`;
 
-    // Provas
-    const examsHtml = exams.length ? exams.map(e => {
+    // Notas (apenas provas já com nota lançada)
+    const examsHtml = gradedExams.length ? gradedExams.map(e => {
       const subj = subjects.find(s => s.id === e.subjectId);
-      const g    = (e.grade !== null && e.grade !== undefined) ? e.grade : null;
       return `<div class="child-list-row">
         <span>${subj?.icon || '📝'} ${escHtml(e.name || subj?.name || 'Prova')}</span>
         <div style="display:flex;align-items:center;gap:.5rem">
           <span style="font-size:.78rem;color:var(--text-muted)">${_fmtDate(e.examDate)}</span>
-          ${gradeTag(g)}
+          ${gradeTag(e.grade)}
         </div>
       </div>`;
-    }).join('') : `<div style="color:var(--text-muted);font-size:.85rem;padding:.5rem 0">Sem provas registradas.</div>`;
+    }).join('') : `<div style="color:var(--text-muted);font-size:.85rem;padding:.5rem 0">Nenhuma nota lançada ainda.</div>`;
 
     // Tarefas pendentes
     const pendHtml = pendTasks.length ? pendTasks.map(t => {
@@ -11112,9 +11182,9 @@ async function viewChildDashboard(childId, childName) {
           <div class="child-section-body">${subjectsHtml}</div>
         </div>
 
-        <!-- Provas -->
+        <!-- Notas -->
         <div class="child-section">
-          <div class="child-section-title">📝 Provas</div>
+          <div class="child-section-title">📝 Notas</div>
           <div class="child-section-body">${examsHtml}</div>
         </div>
 
