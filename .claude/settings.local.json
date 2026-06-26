@@ -30,7 +30,17 @@
       "Bash(python -m http.server 8000)",
       "Bash(node -c script.js)",
       "Bash(node --check \"C:\\\\Users\\\\Pichau\\\\Documents\\\\StudyQuest\\\\script.js\")",
-      "PowerShell(node --check \"C:\\\\Users\\\\Pichau\\\\Documents\\\\StudyQuest\\\\script.js\")"
+      "PowerShell(node --check \"C:\\\\Users\\\\Pichau\\\\Documents\\\\StudyQuest\\\\script.js\")",
+      "WebFetch(domain:studyquestxp.com.br)",
+      "Bash(ls -la *.json *.sh *.bat *.ps1)",
+      "Bash(cat package.json)",
+      "Bash(curl -sI https://studyquestxp.com.br/)",
+      "Bash(nslookup studyquestxp.com.br)",
+      "Bash(host studyquestxp.com.br)",
+      "Bash(git fetch *)",
+      "Bash(curl -s \"https://studyquestxp.com.br/script.js?nocache=$\\(date +%s\\)\" -o /tmp/sq_script.js)",
+      "Read(//tmp/**)",
+      "Bash(curl -sI \"https://studyquestxp.com.br/script.js\")"
     ]
   }
 }

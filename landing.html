@@ -568,6 +568,14 @@
       font-size: .85rem; margin-bottom: .75rem; display: none;
     }
     .auth-error.visible { display: block; }
+    .auth-otp-input {
+      font-size: 1.6rem; font-weight: 800; letter-spacing: .55rem;
+      text-align: center; padding: .7rem .5rem;
+    }
+    .auth-verify-hint { font-size: .88rem; color: var(--text2); margin-bottom: 1.1rem; line-height: 1.5; }
+    .auth-resend-row { text-align: center; margin-top: .9rem; font-size: .85rem; color: var(--text2); }
+    .auth-resend-row a { color: #a78bfa; text-decoration: none; font-weight: 600; cursor: pointer; }
+    .auth-resend-row a.disabled { color: var(--text3); cursor: default; text-decoration: none; pointer-events: none; }
     .auth-tabs {
       display: flex; gap: 0; margin-bottom: 1.5rem;
       background: rgba(255,255,255,.05); border-radius: 10px; padding: 3px;
@@ -1081,7 +1089,11 @@ function showToast(msg) {
 }
 
 /* ── Auth Modal ──────────────────────────────────────────── */
-let authMode = 'login'; // 'login' | 'register'
+let authMode = 'login'; // 'login' | 'register' | 'verify'
+let _pendingVerifyEmail  = '';
+let _resendCooldownTimer = null;
+let _verifyInProgress    = false;
+let _resendInProgress    = false;
 
 function openAuthModal(mode = 'login') {
   authMode = mode;
@@ -1097,7 +1109,15 @@ function closeAuthModal() {
   document.getElementById('auth-overlay').classList.remove('open');
 }
 
+function openVerifyStep(email) {
+  _pendingVerifyEmail = email;
+  authMode = 'verify';
+  renderAuthModal();
+  _startResendCooldown(30);
+}
+
 function renderAuthModal() {
+  if (authMode === 'verify') { renderVerifyModal(); return; }
   const isLogin = authMode === 'login';
   const content = document.getElementById('auth-modal-content');
   content.innerHTML = `
@@ -1153,6 +1173,115 @@ function showAuthError(msg) {
   el.classList.add('visible');
 }
 
+/* ── Verificação de e-mail (código de 6 dígitos) ───────────── */
+function renderVerifyModal() {
+  const content = document.getElementById('auth-modal-content');
+  content.innerHTML = `
+    <h2 class="auth-modal-title">📧 Verifique seu e-mail</h2>
+    <p class="auth-verify-hint">Enviamos um código de 6 dígitos para <strong>${_pendingVerifyEmail}</strong></p>
+
+    <div class="auth-error" id="auth-error"></div>
+
+    <input class="auth-input auth-otp-input" type="text" id="auth-otp" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" autocomplete="one-time-code" />
+
+    <button class="btn btn-primary" style="width:100%;margin-top:.5rem" id="auth-verify-btn">✅ Confirmar Código</button>
+
+    <div class="auth-resend-row">
+      Não recebeu? <a id="auth-resend-link">Reenviar código</a>
+    </div>
+    <div class="auth-switch">
+      <a href="#" id="auth-back-link">← Voltar para o login</a>
+    </div>
+  `;
+
+  document.getElementById('auth-verify-btn').addEventListener('click', handleVerifyCode);
+  document.getElementById('auth-resend-link').addEventListener('click', handleResendCode);
+  document.getElementById('auth-back-link').addEventListener('click', e => {
+    e.preventDefault();
+    authMode = 'login';
+    renderAuthModal();
+  });
+  const otpInput = document.getElementById('auth-otp');
+  otpInput.addEventListener('input', () => { otpInput.value = otpInput.value.replace(/\D/g, '').slice(0, 6); });
+  otpInput.addEventListener('keydown', e => { if (e.key === 'Enter') handleVerifyCode(); });
+  setTimeout(() => otpInput.focus(), 100);
+}
+
+function _startResendCooldown(seconds) {
+  const link = document.getElementById('auth-resend-link');
+  if (!link) return;
+  if (_resendCooldownTimer) clearInterval(_resendCooldownTimer);
+  let remaining = seconds;
+  link.classList.add('disabled');
+  link.textContent = `Reenviar em ${remaining}s`;
+  _resendCooldownTimer = setInterval(() => {
+    remaining--;
+    if (remaining <= 0) {
+      clearInterval(_resendCooldownTimer);
+      _resendCooldownTimer = null;
+      link.classList.remove('disabled');
+      link.textContent = 'Reenviar código';
+    } else {
+      link.textContent = `Reenviar em ${remaining}s`;
+    }
+  }, 1000);
+}
+
+async function handleResendCode(e) {
+  if (e) e.preventDefault();
+  if (_resendInProgress || !_pendingVerifyEmail || !sb) return;
+  _resendInProgress = true;
+  try {
+    const { error } = await sb.auth.resend({ type: 'signup', email: _pendingVerifyEmail });
+    if (error) {
+      showAuthError(error.message);
+    } else {
+      showToast('📧 Novo código enviado!');
+      _startResendCooldown(30);
+    }
+  } catch (err) {
+    showAuthError('Não foi possível reenviar. Verifique sua conexão.');
+  } finally {
+    _resendInProgress = false;
+  }
+}
+
+async function handleVerifyCode() {
+  if (_verifyInProgress) return;
+  const code = (document.getElementById('auth-otp').value || '').trim();
+  const el = document.getElementById('auth-error');
+  if (el) el.classList.remove('visible');
+  if (!code || code.length !== 6) return showAuthError('Digite o código de 6 dígitos.');
+  if (!sb || !_pendingVerifyEmail) return showAuthError('Sessão expirou. Volte e tente novamente.');
+
+  _verifyInProgress = true;
+  const btn = document.getElementById('auth-verify-btn');
+  btn.disabled = true;
+  btn.textContent = 'Verificando...';
+
+  try {
+    const { data, error } = await sb.auth.verifyOtp({ email: _pendingVerifyEmail, token: code, type: 'signup' });
+    if (error) {
+      const msg = error.message.toLowerCase();
+      if (msg.includes('expired') || msg.includes('invalid')) {
+        showAuthError('Código inválido ou expirado. Tente reenviar.');
+      } else {
+        showAuthError(error.message);
+      }
+      return;
+    }
+    if (data.session) {
+      window.location.replace('./index.html');
+    }
+  } catch (err) {
+    showAuthError('Não foi possível verificar. Verifique sua conexão.');
+  } finally {
+    _verifyInProgress = false;
+    btn.disabled = false;
+    btn.textContent = '✅ Confirmar Código';
+  }
+}
+
 /* ── Google OAuth ────────────────────────────────────────── */
 async function handleGoogleAuth() {
   if (!sb) { showToast('⚠️ Serviço indisponível.'); return; }
@@ -1200,8 +1329,8 @@ async function handleEmailAuth() {
       if (!error) {
         // Check if email confirmation is needed
         if (res.data?.user && !res.data.session) {
-          closeAuthModal();
-          showToast('📧 Confirme seu e-mail para continuar!');
+          showToast('📧 Enviamos um código de 6 dígitos para seu e-mail!');
+          openVerifyStep(email);
           return;
         }
         if (res.data?.session) {
@@ -1213,6 +1342,12 @@ async function handleEmailAuth() {
     if (error) throw error;
   } catch (e) {
     let msg = e.message || 'Erro desconhecido.';
+    if (msg.includes('Email not confirmed')) {
+      showToast('📧 Confirme seu e-mail. Enviamos um novo código.');
+      sb.auth.resend({ type: 'signup', email }).catch(() => {});
+      openVerifyStep(email);
+      return;
+    }
     if (msg.includes('Invalid login')) msg = 'E-mail ou senha incorretos.';
     if (msg.includes('already registered')) msg = 'Este e-mail já está cadastrado.';
     if (msg.includes('weak')) msg = 'Senha muito fraca. Use ao menos 6 caracteres.';
