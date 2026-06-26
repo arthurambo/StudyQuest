@@ -163,6 +163,41 @@
     </div>
   </div>
 
+  <!-- PAINEL VERIFICAR E-MAIL -->
+  <div id="auth-verify" class="auth-panel">
+    <div class="auth-container">
+
+      <div class="auth-logo">
+        <span class="logo-icon">📧</span>
+        <h1>StudyQuest</h1>
+        <p>Confirme seu e-mail para continuar</p>
+      </div>
+
+      <div class="auth-card">
+        <h2 class="auth-title">Verificar Código</h2>
+        <p class="auth-verify-hint">Enviamos um código de 6 dígitos para <strong id="verify-email-display">—</strong></p>
+
+        <div class="auth-field">
+          <label class="auth-label">🔢 Código de Verificação</label>
+          <input type="text" id="verify-code-input" class="auth-otp-input" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" autocomplete="one-time-code">
+        </div>
+
+        <div id="verify-error" class="auth-error" style="display:none"></div>
+
+        <button class="btn-primary btn-huge" id="verify-code-btn">✅ Confirmar Código</button>
+
+        <div class="auth-demo-hint" style="margin-top:.75rem">
+          <span>Não recebeu?</span>
+          <button class="auth-link" id="resend-code-btn">Reenviar código →</button>
+        </div>
+        <div class="auth-demo-hint" style="margin-top:.25rem">
+          <button class="auth-link" id="back-to-login-from-verify">← Voltar para o login</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
 </div>
 
 <!-- ===== TELA DE SETUP (primeiro acesso) ===== -->
@@ -1015,7 +1050,7 @@
       <!-- INFORMAÇÕES DO APP -->
       <div class="settings-app-info">
         <span>⚔️ StudyQuest</span>
-        <span class="settings-version">Versão 2.0 · Todos os dados salvos localmente</span>
+        <span class="settings-version">Versão 1.0 · Todos os dados salvos na nuvem</span>
       </div>
     </div>
 

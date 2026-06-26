@@ -5295,14 +5295,110 @@ function showAuthScreen() {
 function showAuthPanel(panel) {
   document.getElementById('auth-login').classList.toggle('active', panel === 'login');
   document.getElementById('auth-register').classList.toggle('active', panel === 'register');
+  document.getElementById('auth-verify').classList.toggle('active', panel === 'verify');
   clearAuthErrors();
 }
 
 function clearAuthErrors() {
-  ['login-error','reg-error'].forEach(id => {
+  ['login-error','reg-error','verify-error'].forEach(id => {
     const el = document.getElementById(id);
     if (el) { el.style.display = 'none'; el.textContent = ''; }
   });
+}
+
+// ── Verificação de e-mail por código (OTP) ────────────────
+let _pendingVerifyEmail   = '';
+let _resendCooldownTimer  = null;
+let _verifyInProgress     = false;
+let _resendInProgress     = false;
+
+function openVerifyPanel(email) {
+  _pendingVerifyEmail = email;
+  const disp = document.getElementById('verify-email-display');
+  if (disp) disp.textContent = email;
+  const codeInput = document.getElementById('verify-code-input');
+  if (codeInput) codeInput.value = '';
+  showAuthPanel('verify');
+  _startResendCooldown(30);
+  setTimeout(() => codeInput && codeInput.focus(), 100);
+}
+
+function _startResendCooldown(seconds) {
+  const btn = document.getElementById('resend-code-btn');
+  if (!btn) return;
+  if (_resendCooldownTimer) clearInterval(_resendCooldownTimer);
+  let remaining = seconds;
+  btn.disabled = true;
+  btn.textContent = 'Reenviar em ' + remaining + 's';
+  _resendCooldownTimer = setInterval(() => {
+    remaining--;
+    if (remaining <= 0) {
+      clearInterval(_resendCooldownTimer);
+      _resendCooldownTimer = null;
+      btn.disabled = false;
+      btn.textContent = 'Reenviar código →';
+    } else {
+      btn.textContent = 'Reenviar em ' + remaining + 's';
+    }
+  }, 1000);
+}
+
+async function handleResendCode() {
+  if (_resendInProgress || !_pendingVerifyEmail || !sb) return;
+  _resendInProgress = true;
+  clearAuthErrors();
+  try {
+    const { error } = await sb.auth.resend({ type: 'signup', email: _pendingVerifyEmail });
+    if (error) {
+      showAuthError('verify-error', '❌ ' + error.message);
+    } else {
+      showNotification('📧 Novo código enviado!', 'success');
+      _startResendCooldown(30);
+    }
+  } catch (err) {
+    showAuthError('verify-error', '⚠️ Não foi possível reenviar. Verifique sua conexão.');
+  } finally {
+    _resendInProgress = false;
+  }
+}
+
+async function handleVerifyCode() {
+  if (_verifyInProgress) return;
+  const code = (document.getElementById('verify-code-input').value || '').trim();
+  clearAuthErrors();
+  if (!code || code.length !== 6) return showAuthError('verify-error', '⚠️ Digite o código de 6 dígitos.');
+  if (!sb || !_pendingVerifyEmail) return showAuthError('verify-error', '⚠️ Sessão expirou. Volte e tente novamente.');
+
+  _verifyInProgress = true;
+  const btn = document.getElementById('verify-code-btn');
+  btn.disabled = true;
+  btn.textContent = 'Verificando...';
+
+  try {
+    const { data, error } = await sb.auth.verifyOtp({ email: _pendingVerifyEmail, token: code, type: 'signup' });
+    if (error) {
+      console.warn('[Verify] Erro:', error.message);
+      if (error.message.toLowerCase().includes('expired') || error.message.toLowerCase().includes('invalid')) {
+        showAuthError('verify-error', '❌ Código inválido ou expirado. Tente reenviar.');
+      } else {
+        showAuthError('verify-error', '❌ ' + error.message);
+      }
+      return;
+    }
+    const user = data.user;
+    authUserId = user.id;
+    setAuthUser({ email: user.email, id: user.id, createdAt: Date.now(), provider: 'email' });
+    setAuthMode('online');
+    showNotification('✅ E-mail confirmado! Bem-vindo(a)!', 'success');
+    await launchApp();
+  } catch (err) {
+    console.error('[Verify] Exceção:', err.message);
+    showAuthError('verify-error', '⚠️ Não foi possível verificar. Verifique sua conexão.');
+  } finally {
+    _verifyInProgress = false;
+    btn.disabled = false;
+    btn.textContent = '✅ Confirmar Código';
+  }
 }
 
 function showAuthError(id, msg) {
@@ -5374,7 +5470,9 @@ async function handleLogin() {
       if (error.message.includes('Invalid login credentials')) {
         showAuthError('login-error', '❌ E-mail ou senha incorretos.');
       } else if (error.message.includes('Email not confirmed')) {
-        showAuthError('login-error', '⚠️ Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada.');
+        showAuthError('login-error', '⚠️ Confirme seu e-mail antes de entrar. Enviamos um novo código.');
+        sb.auth.resend({ type: 'signup', email }).catch(() => {});
+        openVerifyPanel(email);
       } else {
         showAuthError('login-error', '❌ ' + error.message);
       }
@@ -5458,23 +5556,10 @@ async function handleRegister() {
       showNotification('✅ Conta criada com sucesso! Bem-vindo(a)!', 'success');
       await launchApp();
     } else {
-      // Confirmação de e-mail ativada → tenta login direto mesmo assim
-      // (funciona se o Supabase não exigir confirmação para este projeto)
-      console.log('[Register] Sem sessão automática — tentando login direto...');
-      const { data: loginData, error: loginError } = await sb.auth.signInWithPassword({ email, password });
-      if (!loginError && loginData?.session) {
-        authUserId = loginData.user.id;
-        setAuthUser({ email: loginData.user.email, id: loginData.user.id, createdAt: Date.now(), provider: 'email' });
-        setAuthMode('online');
-        showNotification('✅ Conta criada com sucesso! Bem-vindo(a)!', 'success');
-        await launchApp();
-      } else {
-        // Confirmação de e-mail realmente necessária
-        showNotification('✅ Conta criada! Confirme seu e-mail para entrar.', 'success');
-        const loginEmail = document.getElementById('login-email');
-        if (loginEmail) loginEmail.value = email;
-        showAuthPanel('login');
-      }
+      // Confirmação de e-mail ativada → mostra tela de código de 6 dígitos
+      console.log('[Register] Sem sessão automática — confirmação de e-mail necessária.');
+      showNotification('📧 Enviamos um código de 6 dígitos para seu e-mail!', 'info');
+      openVerifyPanel(email);
     }
 
   } catch (err) {
@@ -5952,6 +6037,16 @@ function initAuth() {
   document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
   document.getElementById('login-email').addEventListener('keydown',    e => { if (e.key === 'Enter') handleLogin(); });
   document.getElementById('reg-confirm').addEventListener('keydown',    e => { if (e.key === 'Enter') handleRegister(); });
+
+  // Verificação de e-mail (código de 6 dígitos)
+  document.getElementById('verify-code-btn').addEventListener('click', handleVerifyCode);
+  document.getElementById('resend-code-btn').addEventListener('click', handleResendCode);
+  document.getElementById('back-to-login-from-verify').addEventListener('click', () => showAuthPanel('login'));
+  const verifyInput = document.getElementById('verify-code-input');
+  if (verifyInput) {
+    verifyInput.addEventListener('input', () => { verifyInput.value = verifyInput.value.replace(/\D/g,'').slice(0,6); });
+    verifyInput.addEventListener('keydown', e => { if (e.key === 'Enter') handleVerifyCode(); });
+  }
 
   // Password strength on register
   document.getElementById('reg-password').addEventListener('input', e => updateStrengthBar(e.target.value));
