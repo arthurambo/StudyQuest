@@ -5470,9 +5470,7 @@ async function handleLogin() {
       if (error.message.includes('Invalid login credentials')) {
         showAuthError('login-error', '❌ E-mail ou senha incorretos.');
       } else if (error.message.includes('Email not confirmed')) {
-        showAuthError('login-error', '⚠️ Confirme seu e-mail antes de entrar. Enviamos um novo código.');
-        sb.auth.resend({ type: 'signup', email }).catch(() => {});
-        openVerifyPanel(email);
+        showAuthError('login-error', '⚠️ E-mail não confirmado. Verifique sua caixa de entrada e clique no link de confirmação.');
       } else {
         showAuthError('login-error', '❌ ' + error.message);
       }
@@ -5556,10 +5554,9 @@ async function handleRegister() {
       showNotification('✅ Conta criada com sucesso! Bem-vindo(a)!', 'success');
       await launchApp();
     } else {
-      // Confirmação de e-mail ativada → mostra tela de código de 6 dígitos
       console.log('[Register] Sem sessão automática — confirmação de e-mail necessária.');
-      showNotification('📧 Enviamos um código de 6 dígitos para seu e-mail!', 'info');
-      openVerifyPanel(email);
+      showNotification('📧 Conta criada! Verifique seu e-mail para confirmar antes de entrar.', 'info');
+      showAuthPanel('login');
     }
 
   } catch (err) {
@@ -5966,27 +5963,22 @@ async function handleGoogleLogin() {
  */
 async function startApp() {
   console.log('[startApp] Iniciando...');
+  let session = null;
   try {
     const { data, error } = await sb.auth.getSession();
-
-    if (error) {
-      console.warn('[startApp] getSession erro:', error.message);
-    }
-
-    const session = data?.session;
-
-    if (session && session.user) {
-      console.log('[startApp] Sessão encontrada:', session.user.email, '| provider:', session.user.app_metadata?.provider);
-      await handleSupabaseSession(session);
-      return;
-    }
-
-    console.log('[startApp] Sem sessão Supabase.');
+    if (error) console.warn('[startApp] getSession erro:', error.message);
+    session = data?.session;
   } catch (e) {
     console.warn('[startApp] Exceção em getSession:', e.message);
   }
 
-  // Sem sessão → modo offline/demo ou tela de login
+  if (session?.user) {
+    console.log('[startApp] Sessão encontrada:', session.user.email, '| provider:', session.user.app_metadata?.provider);
+    await handleSupabaseSession(session);
+    return;
+  }
+
+  console.log('[startApp] Sem sessão Supabase.');
   if (isOfflineMode()) {
     await launchApp();
   } else {
@@ -6017,7 +6009,13 @@ async function handleSupabaseSession(session) {
   setAuthUser({ email: user.email, id: user.id, createdAt: Date.now(), provider });
   setAuthMode('online');
 
-  await launchApp();
+  try {
+    await launchApp();
+  } catch (e) {
+    console.error('[Auth] Falha ao iniciar app:', e);
+    _showAppLoading(false);
+    showNotification('Erro ao carregar. Recarregue a página.', 'error');
+  }
 }
 
 // ── Init auth UI ──────────────────────────────────────────

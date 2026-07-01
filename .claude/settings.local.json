@@ -40,7 +40,17 @@
       "Bash(git fetch *)",
       "Bash(curl -s \"https://studyquestxp.com.br/script.js?nocache=$\\(date +%s\\)\" -o /tmp/sq_script.js)",
       "Read(//tmp/**)",
-      "Bash(curl -sI \"https://studyquestxp.com.br/script.js\")"
+      "Bash(curl -sI \"https://studyquestxp.com.br/script.js\")",
+      "mcp__visualize__read_me",
+      "mcp__visualize__show_widget",
+      "Bash(nslookup -type=TXT studyquestxp.com.br)",
+      "Bash(nslookup -type=TXT _dmarc.studyquestxp.com.br)",
+      "Bash(nslookup -type=TXT resend._domainkey.studyquestxp.com.br)",
+      "Bash(nslookup -type=MX studyquestxp.com.br)",
+      "Bash(nslookup -type=TXT studyquestxp.com.br 8.8.8.8)",
+      "Bash(nslookup -type=TXT _dmarc.studyquestxp.com.br 8.8.8.8)",
+      "Bash(nslookup -type=TXT resend._domainkey.studyquestxp.com.br 8.8.8.8)",
+      "Bash(nslookup -type=MX send.studyquestxp.com.br 8.8.8.8)"
     ]
   }
 }

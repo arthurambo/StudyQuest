@@ -1327,25 +1327,22 @@ async function handleEmailAuth() {
       const res = await sb.auth.signUp({ email, password });
       error = res.error;
       if (!error) {
-        // Check if email confirmation is needed
-        if (res.data?.user && !res.data.session) {
-          showToast('📧 Enviamos um código de 6 dígitos para seu e-mail!');
-          openVerifyStep(email);
-          return;
-        }
         if (res.data?.session) {
           window.location.replace('./index.html');
           return;
         }
+        // Sem sessão imediata: confirmação de e-mail pendente
+        showToast('📧 Conta criada! Verifique seu e-mail para confirmar antes de entrar.');
+        authMode = 'login';
+        renderAuthModal();
+        return;
       }
     }
     if (error) throw error;
   } catch (e) {
     let msg = e.message || 'Erro desconhecido.';
     if (msg.includes('Email not confirmed')) {
-      showToast('📧 Confirme seu e-mail. Enviamos um novo código.');
-      sb.auth.resend({ type: 'signup', email }).catch(() => {});
-      openVerifyStep(email);
+      showToast('⚠️ E-mail não confirmado. Verifique sua caixa de entrada.');
       return;
     }
     if (msg.includes('Invalid login')) msg = 'E-mail ou senha incorretos.';
