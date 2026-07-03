@@ -1531,6 +1531,26 @@
   </div>
 </div>
 
+<!-- Modal: Ad Player -->
+<div class="modal-overlay" id="modal-ad-player">
+  <div class="modal modal-ad-player">
+    <div class="ad-player-header">
+      <span class="ad-player-label">📺 Anúncio</span>
+      <span id="ad-player-title" class="ad-player-title-text"></span>
+    </div>
+    <div id="ad-player-media" class="ad-player-media"></div>
+    <div class="ad-player-footer">
+      <span id="ad-player-skip-info" class="ad-skip-info">⏳ Assista 70% para fechar</span>
+      <div style="display:flex;gap:.5rem;align-items:center">
+        <a id="ad-cta-btn" class="btn-secondary ad-cta-btn" href="#" target="_blank" rel="noopener noreferrer" style="display:none">Saiba mais →</a>
+        <button id="ad-player-close-btn" class="btn-primary ad-close-btn" onclick="closeAdPlayer()" disabled>
+          ✕ Fechar Anúncio
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Patch Notes -->
 <div class="modal-overlay" id="modal-patch-notes">
   <div class="modal patch-notes-modal">

@@ -407,6 +407,7 @@ let state = {
   dailyTasks:      [],   // tarefas geradas hoje [{id,type,icon,label,subject,title,description,done,doneAt,createdDate}]
   dailyTasksDate:  '',   // 'YYYY-MM-DD' — data da última geração
   username:        '',   // @username do usuário
+  watchedAdsToday: {},  // { 'YYYY-MM-DD': number } — contador de anúncios assistidos por dia
   settings: {
     schoolAverage:       7,       // média escolar padrão
     notificationsEnabled: true,   // notificações visuais
@@ -2678,25 +2679,29 @@ function renderShop(tab = null) {
 
   if (tab === 'items') {
     itemsEl.innerHTML = SHOP_ITEMS.map(item => {
-      const canBuy = state.coins >= item.cost;
       return `<div class="shop-item">
         <span class="shop-icon">${item.icon}</span>
         <div class="shop-name">${item.name}</div>
         <div class="shop-desc">${item.desc}</div>
-        <button class="shop-buy-btn" onclick="buyItem('${item.id}')" ${!canBuy ? 'disabled' : ''}>
+        <button class="shop-buy-btn" onclick="buyItem('${item.id}')">
           💰 ${item.cost} moedas
         </button>
       </div>`;
     }).join('');
   } else if (tab === 'cosmetics') {
     renderCosmeticsShop();
+  } else if (tab === 'redeem') {
+    renderShopRedeem();
   }
-  // aba redeem não precisa renderizar — HTML é estático
 }
 
 function buyItem(itemId) {
   const item = SHOP_ITEMS.find(i => i.id === itemId);
-  if (!item || state.coins < item.cost) return showNotification('Moedas insuficientes!', 'error');
+  if (!item || state.coins < item.cost) {
+    showNotification('Moedas insuficientes! Assista anúncios para ganhar mais. 📺', 'warning');
+    setTimeout(() => renderShop('redeem'), 400);
+    return;
+  }
 
   state.coins -= item.cost;
   state.totalPurchases++;
@@ -6524,7 +6529,11 @@ function buyCosmetic(type, id) {
 
   const owned = type === 'frame' ? state.cosmetics.ownedFrames : state.cosmetics.ownedBanners;
   if (owned.includes(id)) return showNotification('Você já possui este item!', 'info');
-  if (state.coins < item.cost) return showNotification('Moedas insuficientes! 🪙', 'warning');
+  if (state.coins < item.cost) {
+    showNotification('Moedas insuficientes! Assista anúncios para ganhar mais. 📺', 'warning');
+    setTimeout(() => renderShop('redeem'), 400);
+    return;
+  }
 
   state.coins -= item.cost;
   owned.push(id);
@@ -6567,7 +6576,7 @@ function renderCosmeticsShop() {
           ? `<button class="shop-buy-btn ${isEquipped ? 'btn-equipped' : ''}" onclick="equipCosmetic('${type}','${item.id}')">
               ${isEquipped ? '✅ Equipado' : '🎨 Equipar'}
              </button>`
-          : `<button class="shop-buy-btn" onclick="buyCosmetic('${type}','${item.id}')" ${state.coins < item.cost ? 'disabled' : ''}>
+          : `<button class="shop-buy-btn" onclick="buyCosmetic('${type}','${item.id}')">
               💰 ${item.cost} moedas
              </button>`}
       </div>`;
@@ -6956,6 +6965,9 @@ function checkPerformanceNotifs() {
   if (state.streak === 3)  addLocalNotif('🔥', '3 dias de streak! Continue firme!');
   if (state.streak === 7)  addLocalNotif('💪', '1 semana de streak! Incrível!');
   if (state.streak === 30) addLocalNotif('🏆', '30 dias de streak! Você é uma lenda!');
+
+  // Dica de anúncios — aparece 1x por dia
+  addLocalNotif('📺', 'Sabia que você pode ganhar moedas assistindo anúncios? Acesse Loja → Resgatar!');
 
   state.lastCheckedGrades = next;
   saveState();
@@ -10013,6 +10025,8 @@ async function handleAdminDeleteUser(userId, userName) {
 }
 
 let _adminTab = 'usuarios';
+let _adminAdsCache = [];
+let _editingAdId   = null;
 
 function _adminStatCard(icon, label, val, sub) {
   sub = sub || '';
@@ -10043,6 +10057,7 @@ async function renderAdminPage(tab) {
       <button class="admin-tab-btn ${_adminTab==='codigos' ?'active':''}" onclick="renderAdminPage('codigos')">🎟️ Códigos</button>
       <button class="admin-tab-btn ${_adminTab==='stats'   ?'active':''}" onclick="renderAdminPage('stats')">📊 Estatísticas</button>
       <button class="admin-tab-btn ${_adminTab==='ia'      ?'active':''}" onclick="renderAdminPage('ia')">🤖 IA</button>
+      <button class="admin-tab-btn ${_adminTab==='anuncios'?'active':''}" onclick="renderAdminPage('anuncios')">📺 Anúncios</button>
       <button class="admin-tab-btn ${_adminTab==='teste'   ?'active':''}" onclick="renderAdminPage('teste')">🧪 Teste</button>
     </div>
     <div id="admin-tab-content"><div class="social-loading">Carregando...</div></div>`;
@@ -10334,6 +10349,56 @@ async function renderAdminPage(tab) {
           <button class="btn-sm btn-ghost" style="color:#f87171" onclick="handleAdminClearKB()">🗑️ Limpar</button>
         </div>
       </div>`;
+
+  } else if (_adminTab === 'anuncios') {
+    _adminAdsCache = await loadAds();
+    const adsHtml = _adminAdsCache.length ? _adminAdsCache.map(a => {
+      const urlShort = a.video_url.length > 55 ? a.video_url.slice(0, 52) + '…' : a.video_url;
+      return `
+      <div class="admin-ad-card">
+        <div class="admin-ad-info">
+          <div class="admin-ad-title">${escHtml(a.title)}</div>
+          <div class="admin-ad-url" title="${escHtml(a.video_url)}">${escHtml(urlShort)}</div>
+          <div class="admin-ad-date">${new Date(a.created_at).toLocaleDateString('pt-BR')}</div>
+        </div>
+        <div class="admin-actions" style="flex-wrap:wrap;gap:.4rem">
+          <button id="ad-toggle-${a.id}" class="btn-sm btn-ghost"
+            style="color:${a.public_enabled ? '#34d399' : 'var(--text-muted)'};border-color:${a.public_enabled ? 'rgba(52,211,153,.35)' : ''}"
+            onclick="handleAdminToggleAdPublic('${a.id}')">${a.public_enabled ? '🟢 Público' : '⚪ Privado'}</button>
+          <button class="btn-primary btn-sm" onclick="handleAdminTestAd('${a.id}')">▶ Testar</button>
+          <button class="btn-admin-reset" onclick="handleAdminStartEditAd('${a.id}')">✏️ Editar</button>
+          <button class="btn-sm btn-ghost" style="color:#f87171;border-color:rgba(248,113,113,.3)" onclick="handleAdminDeleteAd('${a.id}')">🗑️</button>
+        </div>
+      </div>`;
+    }).join('') : '<div class="social-empty">Nenhum anúncio cadastrado ainda.</div>';
+
+    content.innerHTML = `
+      <div class="admin-section-title">➕ Adicionar / Editar Anúncio</div>
+      <div class="admin-create-code-form">
+        <div class="admin-form-row">
+          <input id="adm-ad-title" placeholder="Título do anúncio" style="flex:1">
+        </div>
+        <label class="adm-upload-label" for="adm-ad-file">
+          <span id="adm-ad-file-name">📁 Selecionar vídeo do PC</span>
+          <input id="adm-ad-file" type="file" accept="video/*" style="display:none" onchange="handleAdFileChange(this)">
+        </label>
+        <div class="admin-form-row" style="margin-top:.5rem;gap:.5rem">
+          <input id="adm-ad-cta-url"   placeholder="🔗 Link do botão ao final (opcional)" style="flex:2;font-size:.82rem">
+          <input id="adm-ad-cta-label" placeholder="Texto do botão" value="Saiba mais" style="flex:1;font-size:.82rem">
+        </div>
+        <div id="adm-ad-progress-wrap" style="display:none;margin-top:.5rem">
+          <div class="adm-upload-bar-bg"><div id="adm-ad-progress-bar" class="adm-upload-bar-fill" style="width:0%"></div></div>
+          <div id="adm-ad-progress-pct" style="font-size:.78rem;color:var(--text-muted);margin-top:.25rem;text-align:right">0%</div>
+        </div>
+        <div style="display:flex;gap:.5rem;margin-top:.75rem;flex-wrap:wrap">
+          <button id="adm-ad-save-btn" class="btn-primary" style="flex:1" onclick="handleAdminSaveAd()">➕ Adicionar Anúncio</button>
+          <button class="btn-secondary btn-sm" onclick="handleAdminCancelEditAd()" id="adm-ad-cancel-btn" style="display:none">✕ Cancelar</button>
+        </div>
+        <div id="adm-ad-result" style="margin-top:.5rem;font-size:.85rem;font-weight:700"></div>
+      </div>
+
+      <div class="admin-section-title" style="margin-top:1.5rem">📋 Anúncios Cadastrados (${_adminAdsCache.length})</div>
+      <div class="admin-ads-list">${adsHtml}</div>`;
 
   } else if (_adminTab === 'teste') {
     // ── Renderiza imediatamente (sem esperar o banco) ──────────────────
@@ -11995,4 +12060,482 @@ function openChildWithoutAccountProfile(childId, childName) {
     </button>`;
 
   openModal('modal-familia-profile');
+}
+
+// ============================================================
+// ADS — Gerenciamento de Anúncios
+// ============================================================
+
+async function loadAds() {
+  if (!sb) return [];
+  try {
+    const { data, error } = await sb.from('ads').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  } catch (e) {
+    console.warn('[Ads] Erro ao carregar:', e.message);
+    return [];
+  }
+}
+
+function handleAdFileChange(input) {
+  const file   = input.files?.[0];
+  const nameEl = document.getElementById('adm-ad-file-name');
+  if (!file) { if (nameEl) nameEl.textContent = '📁 Selecionar vídeo do PC'; return; }
+  const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+  if (nameEl) nameEl.textContent = `🎬 ${file.name} (${sizeMB} MB)`;
+}
+
+function _setAdUploadProgress(pct) {
+  const wrap = document.getElementById('adm-ad-progress-wrap');
+  const bar  = document.getElementById('adm-ad-progress-bar');
+  const pctEl = document.getElementById('adm-ad-progress-pct');
+  if (!wrap) return;
+  if (pct === null) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  if (bar)   bar.style.width  = pct + '%';
+  if (pctEl) pctEl.textContent = pct + '%';
+}
+
+async function _uploadAdVideo(file) {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const filePath = `${Date.now()}_${safeName}`;
+  _setAdUploadProgress(10);
+
+  // Supabase storage upload (usa fetch + FormData para ter progresso aproximado)
+  const { data, error } = await sb.storage
+    .from('ad-videos')
+    .upload(filePath, file, { contentType: file.type, upsert: false });
+
+  if (error) throw error;
+  _setAdUploadProgress(100);
+
+  const { data: urlData } = sb.storage.from('ad-videos').getPublicUrl(filePath);
+  return { filePath, publicUrl: urlData.publicUrl };
+}
+
+async function handleAdminSaveAd() {
+  const title  = (document.getElementById('adm-ad-title')?.value || '').trim();
+  const file   = document.getElementById('adm-ad-file')?.files?.[0];
+  const result = document.getElementById('adm-ad-result');
+  if (!title) { if (result) result.textContent = '⚠️ Digite um título.'; return; }
+  if (!file)  { if (result) result.textContent = '⚠️ Selecione um vídeo.'; return; }
+
+  const saveBtn = document.getElementById('adm-ad-save-btn');
+  if (saveBtn) saveBtn.disabled = true;
+  if (result)  result.textContent = '⬆️ Fazendo upload…';
+  _setAdUploadProgress(5);
+
+  try {
+    const { filePath, publicUrl } = await _uploadAdVideo(file);
+    const ctaUrl   = (document.getElementById('adm-ad-cta-url')?.value   || '').trim();
+    const ctaLabel = (document.getElementById('adm-ad-cta-label')?.value || 'Saiba mais').trim();
+    const { error } = await sb.from('ads').insert({
+      title, video_url: publicUrl, file_path: filePath, created_by: authUserId,
+      cta_url: ctaUrl || null, cta_label: ctaLabel || 'Saiba mais',
+    });
+    if (error) {
+      await sb.storage.from('ad-videos').remove([filePath]).catch(() => {});
+      throw error;
+    }
+    _setAdUploadProgress(null);
+    if (result) result.textContent = '✅ Anúncio adicionado!';
+    document.getElementById('adm-ad-title').value     = '';
+    document.getElementById('adm-ad-file').value      = '';
+    document.getElementById('adm-ad-cta-url').value   = '';
+    document.getElementById('adm-ad-cta-label').value = 'Saiba mais';
+    document.getElementById('adm-ad-file-name').textContent = '📁 Selecionar vídeo do PC';
+    _publicAdsCache = [];
+    setTimeout(() => renderAdminPage('anuncios'), 700);
+  } catch (e) {
+    _setAdUploadProgress(null);
+    if (result) result.textContent = '❌ ' + e.message;
+    if (saveBtn) saveBtn.disabled = false;
+  }
+}
+
+async function handleAdminUpdateAd() {
+  const title  = (document.getElementById('adm-ad-title')?.value || '').trim();
+  const file   = document.getElementById('adm-ad-file')?.files?.[0];
+  const result = document.getElementById('adm-ad-result');
+  if (!title || !_editingAdId) { if (result) result.textContent = '⚠️ Digite um título.'; return; }
+
+  const saveBtn = document.getElementById('adm-ad-save-btn');
+  if (saveBtn) saveBtn.disabled = true;
+  if (result)  result.textContent = file ? '⬆️ Fazendo upload…' : 'Salvando…';
+
+  const oldAd = _adminAdsCache.find(a => a.id === _editingAdId);
+
+  try {
+    const ctaUrl   = (document.getElementById('adm-ad-cta-url')?.value   || '').trim();
+    const ctaLabel = (document.getElementById('adm-ad-cta-label')?.value || 'Saiba mais').trim();
+    const updateData = { title, cta_url: ctaUrl || null, cta_label: ctaLabel || 'Saiba mais' };
+
+    if (file) {
+      _setAdUploadProgress(5);
+      const { filePath, publicUrl } = await _uploadAdVideo(file);
+      updateData.video_url = publicUrl;
+      updateData.file_path = filePath;
+      if (oldAd?.file_path) await sb.storage.from('ad-videos').remove([oldAd.file_path]).catch(() => {});
+      _setAdUploadProgress(null);
+    }
+
+    const { error } = await sb.from('ads').update(updateData).eq('id', _editingAdId);
+    if (error) throw error;
+    _editingAdId = null;
+    if (result) result.textContent = '✅ Anúncio atualizado!';
+    _publicAdsCache = [];
+    setTimeout(() => renderAdminPage('anuncios'), 700);
+  } catch (e) {
+    _setAdUploadProgress(null);
+    if (result) result.textContent = '❌ ' + e.message;
+    if (saveBtn) saveBtn.disabled = false;
+  }
+}
+
+async function handleAdminToggleAdPublic(id) {
+  const ad = _adminAdsCache.find(a => a.id === id);
+  if (!ad || !sb) return;
+  const newVal = !ad.public_enabled;
+  const { error } = await sb.from('ads').update({ public_enabled: newVal }).eq('id', id);
+  if (error) { showNotification('Erro ao atualizar anúncio.', 'error'); return; }
+  ad.public_enabled = newVal;
+  // Atualiza só o botão do card sem re-renderizar tudo
+  const btn = document.getElementById(`ad-toggle-${id}`);
+  if (btn) {
+    btn.textContent  = newVal ? '🟢 Público' : '⚪ Privado';
+    btn.style.color  = newVal ? '#34d399' : 'var(--text-muted)';
+    btn.style.borderColor = newVal ? 'rgba(52,211,153,.35)' : '';
+  }
+}
+
+async function handleAdminDeleteAd(id) {
+  if (!confirm('Excluir este anúncio?')) return;
+  const ad = _adminAdsCache.find(a => a.id === id);
+  try {
+    if (ad?.file_path) await sb.storage.from('ad-videos').remove([ad.file_path]).catch(() => {});
+    const { error } = await sb.from('ads').delete().eq('id', id);
+    if (error) throw error;
+    _publicAdsCache = [];
+    showNotification('🗑 Anúncio excluído.', 'info');
+    renderAdminPage('anuncios');
+  } catch (e) {
+    showNotification('❌ ' + e.message, 'error');
+  }
+}
+
+function handleAdminStartEditAd(id) {
+  const ad = _adminAdsCache.find(a => a.id === id);
+  if (!ad) return;
+  _editingAdId = ad.id;
+  const titleEl  = document.getElementById('adm-ad-title');
+  const nameEl   = document.getElementById('adm-ad-file-name');
+  const btn      = document.getElementById('adm-ad-save-btn');
+  const cancelEl = document.getElementById('adm-ad-cancel-btn');
+  if (titleEl) titleEl.value = ad.title;
+  const ctaUrlEl   = document.getElementById('adm-ad-cta-url');
+  const ctaLabelEl = document.getElementById('adm-ad-cta-label');
+  if (ctaUrlEl)   ctaUrlEl.value   = ad.cta_url   || '';
+  if (ctaLabelEl) ctaLabelEl.value = ad.cta_label || 'Saiba mais';
+  if (nameEl)  nameEl.textContent  = '📁 Selecionar novo vídeo (ou manter atual)';
+  if (btn)     { btn.textContent   = '💾 Salvar Edição'; btn.disabled = false; btn.onclick = handleAdminUpdateAd; }
+  if (cancelEl) cancelEl.style.display = '';
+  titleEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  titleEl?.focus();
+}
+
+function handleAdminCancelEditAd() {
+  _editingAdId = null;
+  const titleEl  = document.getElementById('adm-ad-title');
+  const fileEl   = document.getElementById('adm-ad-file');
+  const nameEl   = document.getElementById('adm-ad-file-name');
+  const btn      = document.getElementById('adm-ad-save-btn');
+  const cancelEl = document.getElementById('adm-ad-cancel-btn');
+  const result   = document.getElementById('adm-ad-result');
+  if (titleEl)  titleEl.value         = '';
+  if (fileEl)   fileEl.value          = '';
+  if (nameEl)   nameEl.textContent    = '📁 Selecionar vídeo do PC';
+  const _cu = document.getElementById('adm-ad-cta-url');
+  const _cl = document.getElementById('adm-ad-cta-label');
+  if (_cu) _cu.value = '';
+  if (_cl) _cl.value = 'Saiba mais';
+  if (btn)      { btn.textContent     = '➕ Adicionar Anúncio'; btn.disabled = false; btn.onclick = handleAdminSaveAd; }
+  if (cancelEl) cancelEl.style.display = 'none';
+  if (result)   result.textContent    = '';
+  _setAdUploadProgress(null);
+}
+
+function handleAdminTestAd(id) {
+  const ad = _adminAdsCache.find(a => a.id === id);
+  if (ad) openAdPlayer(ad);
+}
+
+// ============================================================
+// AD PLAYER — Player de vídeo com skip em 70%
+// ============================================================
+
+function _isYouTubeUrl(url) {
+  return /youtube\.com|youtu\.be/.test(url);
+}
+
+function _ytEmbedUrl(url) {
+  const m = url.match(/(?:[?&]v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  return m ? `https://www.youtube.com/embed/${m[1]}?enablejsapi=1&autoplay=1&rel=0` : null;
+}
+
+let _ytProgressInterval = null;
+let _adRewardCoins  = 0;   // 0 = modo teste (admin), >0 = modo recompensa
+let _adWatched70    = false;
+let _adRewardAdId   = null;
+
+function openAdPlayer(ad, rewardCoins = 0) {
+  _adRewardCoins = rewardCoins;
+  _adWatched70   = false;
+  _adRewardAdId  = ad.id;
+  const modal    = document.getElementById('modal-ad-player');
+  const mediaEl  = document.getElementById('ad-player-media');
+  const closeBtn = document.getElementById('ad-player-close-btn');
+  const skipInfo = document.getElementById('ad-player-skip-info');
+  const titleEl  = document.getElementById('ad-player-title');
+  if (!modal || !mediaEl) return;
+
+  if (titleEl)  titleEl.textContent = ad.title || '';
+  if (closeBtn) { closeBtn.disabled = true; closeBtn.style.opacity = '0.45'; }
+  if (skipInfo) skipInfo.textContent = '⏳ Assista 70% para fechar';
+  clearInterval(_ytProgressInterval);
+  mediaEl.innerHTML = '';
+
+  if (_isYouTubeUrl(ad.video_url)) {
+    const embed = _ytEmbedUrl(ad.video_url);
+    if (!embed) {
+      mediaEl.innerHTML = '<div style="color:#f87171;padding:2rem;text-align:center">URL do YouTube inválida.<br>Use o formato youtube.com/watch?v=ID</div>';
+      openModal('modal-ad-player');
+      return;
+    }
+    mediaEl.innerHTML = `<iframe id="ad-yt-frame" src="${embed}" frameborder="0" allow="autoplay;encrypted-media" allowfullscreen style="width:100%;height:100%;border-radius:10px;display:block"></iframe>`;
+    if (!window.YT?.Player) {
+      window._ytApiReadyCbs = window._ytApiReadyCbs || [];
+      window._ytApiReadyCbs.push(() => _initYTPlayer(closeBtn, skipInfo, ad));
+      if (!document.getElementById('yt-iframe-api-script')) {
+        const s = document.createElement('script');
+        s.id  = 'yt-iframe-api-script';
+        s.src = 'https://www.youtube.com/iframe_api';
+        document.head.appendChild(s);
+        window.onYouTubeIframeAPIReady = () => {
+          (window._ytApiReadyCbs || []).forEach(cb => cb());
+          window._ytApiReadyCbs = [];
+        };
+      }
+    } else {
+      _initYTPlayer(closeBtn, skipInfo, ad);
+    }
+  } else {
+    mediaEl.innerHTML = `
+      <video id="ad-video-el" src="${escHtml(ad.video_url)}" autoplay playsinline
+        style="width:100%;height:100%;border-radius:10px;background:#000;display:block;cursor:pointer"
+        title="Clique para pausar/continuar"></video>
+      <div id="ad-pause-overlay" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;pointer-events:none">
+        <div style="background:rgba(0,0,0,.55);border-radius:50%;width:64px;height:64px;display:flex;align-items:center;justify-content:center;font-size:2rem">⏸</div>
+      </div>
+      <div id="ad-video-progress-wrap" style="position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,.15);border-radius:0 0 10px 10px">
+        <div id="ad-video-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#7c3aed,#a855f7);border-radius:inherit;transition:width .5s linear"></div>
+      </div>`;
+    mediaEl.style.position = 'relative';
+    const video = document.getElementById('ad-video-el');
+
+    // Clique para pausar/continuar — sem controls nativos (impede seek)
+    video.addEventListener('click', () => {
+      if (video.paused) { video.play(); document.getElementById('ad-pause-overlay').style.display = 'none'; }
+      else              { video.pause(); document.getElementById('ad-pause-overlay').style.display = 'flex'; }
+    });
+
+    video.addEventListener('timeupdate', () => {
+      if (!video.duration) return;
+      const pct = video.currentTime / video.duration;
+      const bar = document.getElementById('ad-video-progress-bar');
+      if (bar) bar.style.width = (pct * 100).toFixed(1) + '%';
+      if (pct >= 0.7) {
+        _adWatched70 = true;
+        if (closeBtn) { closeBtn.disabled = false; closeBtn.style.opacity = '1'; }
+        if (skipInfo) skipInfo.textContent = '✅ Pode fechar';
+      } else {
+        const rem = Math.ceil(video.duration * 0.7 - video.currentTime);
+        if (skipInfo) skipInfo.textContent = `⏳ Fechar em ${rem}s`;
+      }
+    });
+    video.addEventListener('ended', () => {
+      _adWatched70 = true;
+      if (closeBtn) { closeBtn.disabled = false; closeBtn.style.opacity = '1'; }
+      if (skipInfo) skipInfo.textContent = '✅ Pode fechar';
+      _showAdCta(ad);
+    });
+  }
+
+  openModal('modal-ad-player');
+}
+
+function _initYTPlayer(closeBtn, skipInfo, ad) {
+  const frame = document.getElementById('ad-yt-frame');
+  if (!frame || !window.YT?.Player) return;
+  new window.YT.Player('ad-yt-frame', {
+    events: {
+      onStateChange: e => {
+        if (e.data === window.YT.PlayerState.PLAYING) {
+          _startYTProgress(e.target, closeBtn, skipInfo);
+        }
+        if (e.data === window.YT.PlayerState.ENDED) {
+          clearInterval(_ytProgressInterval);
+          _adWatched70 = true;
+          if (closeBtn) { closeBtn.disabled = false; closeBtn.style.opacity = '1'; }
+          if (skipInfo) skipInfo.textContent = '✅ Pode fechar';
+          _showAdCta(ad);
+        }
+      },
+    },
+  });
+}
+
+function _startYTProgress(player, closeBtn, skipInfo) {
+  clearInterval(_ytProgressInterval);
+  _ytProgressInterval = setInterval(() => {
+    try {
+      const dur = player.getDuration?.();
+      const cur = player.getCurrentTime?.();
+      if (!dur) return;
+      const pct = cur / dur;
+      if (pct >= 0.7) {
+        clearInterval(_ytProgressInterval);
+        _adWatched70 = true;
+        if (closeBtn) { closeBtn.disabled = false; closeBtn.style.opacity = '1'; }
+        if (skipInfo) skipInfo.textContent = '✅ Pode fechar';
+      } else {
+        const rem = Math.ceil(dur * 0.7 - cur);
+        if (skipInfo) skipInfo.textContent = `⏳ Fechar em ${rem}s`;
+      }
+    } catch (_) {}
+  }, 1000);
+}
+
+function _showAdCta(ad) {
+  if (!ad?.cta_url) return;
+
+  // Botão no rodapé
+  const footerBtn = document.getElementById('ad-cta-btn');
+  if (footerBtn) {
+    footerBtn.href        = ad.cta_url;
+    footerBtn.textContent = (ad.cta_label || 'Saiba mais') + ' →';
+    footerBtn.style.display = '';
+  }
+
+  // Overlay centralizado sobre o vídeo (estilo Play Store)
+  const mediaEl = document.getElementById('ad-player-media');
+  if (!mediaEl) return;
+  document.getElementById('ad-cta-overlay')?.remove();
+
+  const overlay = document.createElement('a');
+  overlay.id        = 'ad-cta-overlay';
+  overlay.href      = ad.cta_url;
+  overlay.target    = '_blank';
+  overlay.rel       = 'noopener noreferrer';
+  overlay.className = 'ad-cta-overlay-btn';
+  overlay.innerHTML = `<span>${ad.cta_label || 'Saiba mais'}</span><span class="ad-cta-arrow">→</span>`;
+  mediaEl.appendChild(overlay);
+}
+
+// ── Aba Resgatar: anúncios com recompensa ─────────────────────────────────────
+const AD_DAILY_LIMIT = 5;
+
+async function renderShopRedeem() {
+  const wrap = document.getElementById('shop-redeem');
+  if (!wrap) return;
+
+  let adsSection = document.getElementById('shop-redeem-ads');
+  if (!adsSection) {
+    adsSection = document.createElement('div');
+    adsSection.id = 'shop-redeem-ads';
+    wrap.appendChild(adsSection);
+  }
+
+  adsSection.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:.85rem;padding:1rem">Carregando…</div>';
+
+  if (!_publicAdsCache.length) _publicAdsCache = (await loadAds()).filter(a => a.public_enabled);
+
+  if (!_publicAdsCache.length) {
+    adsSection.innerHTML = '';
+    return;
+  }
+
+  const today   = todayStr();
+  // Garante número mesmo se o state vier em formato antigo (array)
+  const rawWatched = state.watchedAdsToday?.[today];
+  const watched    = typeof rawWatched === 'number' ? rawWatched : 0;
+  const exhausted  = watched >= AD_DAILY_LIMIT;
+
+  adsSection.innerHTML = `
+    <div style="margin-top:1.25rem">
+      <div style="font-weight:700;font-size:.95rem;margin-bottom:.5rem">📺 Ganhe moedas assistindo anúncios</div>
+      <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:1rem">
+        Cada anúncio vale <strong style="color:#f9a825">+30 🪙</strong>
+        &nbsp;·&nbsp; Hoje: <strong>${watched}/${AD_DAILY_LIMIT}</strong>
+      </div>
+      <div class="redeem-ad-card">
+        <div style="font-size:2.2rem">📺</div>
+        <div class="redeem-ad-info">
+          <div class="redeem-ad-title">Anúncio</div>
+          <div class="redeem-ad-reward">+30 🪙 por anúncio (máx. ${AD_DAILY_LIMIT}/dia)</div>
+        </div>
+        ${exhausted
+          ? `<button class="btn-secondary btn-sm" disabled style="opacity:.5;min-width:90px">✅ Limite atingido</button>`
+          : `<button class="btn-primary btn-sm" onclick="handleWatchAdForReward()" style="min-width:90px">▶ Assistir</button>`}
+      </div>
+    </div>`;
+}
+
+let _publicAdsCache = [];
+
+async function handleWatchAdForReward() {
+  if (!_publicAdsCache.length) _publicAdsCache = (await loadAds()).filter(a => a.public_enabled);
+  if (!_publicAdsCache.length) { showNotification('Nenhum anúncio disponível no momento.', 'warning'); return; }
+
+  const today      = todayStr();
+  const rawW       = state.watchedAdsToday?.[today];
+  const watched    = typeof rawW === 'number' ? rawW : 0;
+  if (watched >= AD_DAILY_LIMIT) { showNotification(`Você já assistiu ${AD_DAILY_LIMIT} anúncios hoje!`, 'warning'); return; }
+
+  // Sorteia um anúncio aleatório
+  const ad = _publicAdsCache[Math.floor(Math.random() * _publicAdsCache.length)];
+  openAdPlayer(ad, 30);
+}
+
+function closeAdPlayer() {
+  clearInterval(_ytProgressInterval);
+  const video = document.getElementById('ad-video-el');
+  if (video) { video.pause(); video.src = ''; }
+  const mediaEl = document.getElementById('ad-player-media');
+  if (mediaEl) { mediaEl.innerHTML = ''; mediaEl.style.position = ''; }
+  const ctaBtn = document.getElementById('ad-cta-btn');
+  if (ctaBtn) { ctaBtn.style.display = 'none'; ctaBtn.href = '#'; }
+  document.getElementById('ad-cta-overlay')?.remove();
+
+  // Recompensa por assistir anúncio (apenas modo usuário, não teste admin)
+  if (_adRewardCoins > 0 && _adWatched70) {
+    const today = todayStr();
+    if (!state.watchedAdsToday) state.watchedAdsToday = {};
+    const rawW2  = state.watchedAdsToday[today];
+    const watched = typeof rawW2 === 'number' ? rawW2 : 0;
+    if (watched < AD_DAILY_LIMIT) {
+      state.watchedAdsToday[today] = watched + 1;
+      addCoins(_adRewardCoins);
+      saveData();
+      const remaining = AD_DAILY_LIMIT - (watched + 1);
+      showNotification(`🪙 +${_adRewardCoins} moedas! ${remaining > 0 ? `Você ainda pode assistir ${remaining} anúncio(s) hoje.` : 'Limite diário atingido!'}`, 'success');
+      const redeemEl = document.getElementById('shop-redeem');
+      if (redeemEl && redeemEl.style.display !== 'none') renderShopRedeem();
+    }
+  }
+  _adRewardCoins = 0;
+  _adWatched70   = false;
+  _adRewardAdId  = null;
+
+  closeModal('modal-ad-player');
 }
