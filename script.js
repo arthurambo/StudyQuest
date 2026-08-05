@@ -6957,6 +6957,27 @@ function checkPerformanceNotifs() {
   // Dica de anúncios — aparece 1x por dia
   addLocalNotif('📺', 'Sabia que você pode ganhar moedas assistindo anúncios? Acesse Loja → Resgatar!');
 
+  // Notificação motivacional diária — 1x por dia via localStorage
+  const _todayKey = 'sq_daily_motiv_' + todayStr();
+  if (!localStorage.getItem(_todayKey)) {
+    localStorage.setItem(_todayKey, '1');
+    const streak   = state.streak || 0;
+    const pending  = (state.tasks || []).filter(t => !t.completed && !t.archived).length;
+    const weekday  = new Date().getDay();
+    const schedule = (state.schedule || {})[weekday] || [];
+
+    if (streak >= 2) {
+      addLocalNotif('🔥', `Você está em uma sequência de ${streak} dia(s)! Estude hoje para não perder!`);
+    } else if (schedule.length) {
+      const subs = schedule.slice(0, 2).join(', ') + (schedule.length > 2 ? '...' : '');
+      addLocalNotif('📅', `Cronograma de hoje: ${subs}. Bora estudar!`);
+    } else if (pending > 0) {
+      addLocalNotif('📝', `Você tem ${pending} tarefa${pending > 1 ? 's' : ''} pendente${pending > 1 ? 's' : ''}. Que tal completar hoje?`);
+    } else {
+      addLocalNotif('⭐', 'Novo dia, nova chance de subir de nível! O que vai estudar hoje?');
+    }
+  }
+
   state.lastCheckedGrades = next;
   saveState();
 }
@@ -12455,16 +12476,10 @@ function openShareModal() {
 
 function handleShareWhatsApp() {
   const url = _getInstallUrl();
-  const text = '⚔️ Já imaginou transformar seus estudos em um RPG de verdade?\n\n'
-    + 'Eu tô usando o StudyQuest pra organizar minhas matérias, subir de nível e personalizar meu herói cumprindo tarefas e tirando notas boas! 🎮📚\n\n'
+  const text = 'Ja imaginou transformar seus estudos em um RPG de verdade?\n\n'
+    + 'Eu to usando o StudyQuest pra organizar minhas materias, subir de nivel e personalizar meu heroi cumprindo tarefas e tirando notas boas!\n\n'
     + 'Vem montar seu personagem e entrar pro meu grupo de estudos: ' + url;
-  const encoded = encodeURIComponent(text);
-  // whatsapp:// vai direto para o app sem passar pelo servidor wa.me, preservando emoji
-  if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-    window.location.href = 'whatsapp://send?text=' + encoded;
-  } else {
-    window.open('https://wa.me/?text=' + encoded, '_blank');
-  }
+  window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
 }
 
 async function handleCopyLink() {

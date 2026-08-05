@@ -42,6 +42,13 @@
 </head>
 <body>
 
+<!-- ===== SPLASH / LOADING SCREEN ===== -->
+<div id="app-loading-overlay">
+  <img src="icone.png" alt="StudyQuest" class="splash-logo">
+  <div class="splash-sword">⚔️</div>
+  <p class="splash-text">Carregando<span class="splash-dots"></span></p>
+</div>
+
 <!-- ===== TELA DE LOGIN ===== -->
 <div id="auth-screen" class="screen active">
 
@@ -324,6 +331,15 @@
     </div>
     <div class="sidebar-bottom">
       <button class="theme-toggle" id="theme-toggle">🌙 Modo Claro</button>
+      <div class="sidebar-bottom-row">
+        <button class="sidebar-help-btn sidebar-help-btn--wide" onclick="openHelpModal()" title="Ajuda">? Ajuda</button>
+        <button class="sidebar-help-btn sidebar-help-btn--wide" onclick="openShareModal()" title="Compartilhar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+          </svg>
+          Compartilhar
+        </button>
+      </div>
     </div>
   </nav>
 
@@ -334,6 +350,12 @@
     <div class="topbar-right">
       <button class="topbar-notif-btn" onclick="openNotifPanel()" title="Notificações">
         🔔<span class="notif-bell-badge" style="display:none"></span>
+      </button>
+      <button class="topbar-help-btn" onclick="openHelpModal()" title="Ajuda">?</button>
+      <button class="topbar-help-btn" onclick="openShareModal()" title="Compartilhar">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+        </svg>
       </button>
       <div class="topbar-stats">
         <span>🔥 <span id="top-streak">0</span></span>
@@ -1127,9 +1149,123 @@
     </button>
   </nav>
 
+
 </div>
 
 <!-- ===== MODAIS ===== -->
+
+<!-- Modal: Central de Ajuda -->
+<div class="modal-overlay" id="modal-help">
+  <div class="modal modal-help">
+    <div class="modal-header">
+      <h2 style="margin:0">❓ Central de Ajuda</h2>
+      <button class="modal-close-x" data-close="modal-help">✕</button>
+    </div>
+    <p style="color:var(--text-muted);font-size:.88rem;margin:.25rem 0 1.25rem">Como podemos te ajudar?</p>
+    <div class="help-categories">
+      <button class="help-cat-card" onclick="openHelpForm('bug')">
+        <span class="help-cat-icon">🐛</span>
+        <div>
+          <div class="help-cat-title">Relatar Bug</div>
+          <div class="help-cat-desc">Encontrou algo com problema ou erro? Nos conte!</div>
+        </div>
+      </button>
+      <button class="help-cat-card" onclick="openHelpForm('feature')">
+        <span class="help-cat-icon">💡</span>
+        <div>
+          <div class="help-cat-title">Recomendação de Recurso</div>
+          <div class="help-cat-desc">Tem uma ideia que tornaria o StudyQuest ainda melhor?</div>
+        </div>
+      </button>
+      <button class="help-cat-card" onclick="openHelpForm('question')">
+        <span class="help-cat-icon">🙋</span>
+        <div>
+          <div class="help-cat-title">Dúvidas</div>
+          <div class="help-cat-desc">Ficou com alguma dúvida sobre como usar o app?</div>
+        </div>
+      </button>
+      <button class="help-cat-card" onclick="openMyReports()">
+        <span class="help-cat-icon">📋</span>
+        <div>
+          <div class="help-cat-title">Seus Relatos</div>
+          <div class="help-cat-desc">Veja seus envios anteriores e respostas da equipe.</div>
+        </div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Formulário de Relato -->
+<div class="modal-overlay" id="modal-help-form">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <h2 id="help-form-title" style="margin:0">Relatar Bug</h2>
+      <button class="modal-close-x" data-close="modal-help-form">✕</button>
+    </div>
+    <p id="help-form-desc" style="color:var(--text-muted);font-size:.85rem;margin:.25rem 0 1rem"></p>
+    <div class="admin-form-row" style="flex-direction:column;gap:.5rem">
+      <input id="help-report-title" placeholder="Título (resumo em poucas palavras)" style="width:100%;box-sizing:border-box">
+      <textarea id="help-report-desc" placeholder="Descreva com detalhes…" rows="5"
+        style="width:100%;box-sizing:border-box;resize:vertical;background:var(--bg-card);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:.7rem .9rem;color:var(--text-primary);font-family:inherit;font-size:.9rem"></textarea>
+    </div>
+    <div id="help-form-result" style="margin-top:.5rem;font-size:.85rem;font-weight:700"></div>
+    <div class="modal-btns" style="margin-top:1rem">
+      <button class="btn-secondary" data-close="modal-help-form">Cancelar</button>
+      <button class="btn-primary" onclick="submitHelpReport()">📨 Enviar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Seus Relatos -->
+<div class="modal-overlay" id="modal-my-reports">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h2 style="margin:0">📋 Seus Relatos</h2>
+      <button class="modal-close-x" data-close="modal-my-reports">✕</button>
+    </div>
+    <div id="my-reports-list" style="margin-top:1rem;display:flex;flex-direction:column;gap:.75rem;max-height:60vh;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- Modal: Compartilhar -->
+<div class="modal-overlay" id="modal-share">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <h2 style="margin:0">Compartilhar StudyQuest</h2>
+      <button class="modal-close-x" data-close="modal-share">✕</button>
+    </div>
+    <p style="color:var(--text-muted);font-size:.85rem;margin:.25rem 0 1.25rem">Chame seus amigos para a aventura!</p>
+    <div style="display:flex;flex-direction:column;gap:.6rem">
+      <button class="share-option-btn" onclick="handleShareWhatsApp()">
+        <span class="share-option-icon" style="background:#25d366">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M11.997 2C6.477 2 2 6.477 2 11.997c0 1.77.467 3.434 1.28 4.878L2 22l5.28-1.26A9.945 9.945 0 0011.997 22C17.517 22 22 17.523 22 11.997 22 6.477 17.517 2 11.997 2z" fill-rule="evenodd"/></svg>
+        </span>
+        <div>
+          <div class="share-option-title">WhatsApp</div>
+          <div class="share-option-desc">Enviar mensagem de convite</div>
+        </div>
+      </button>
+      <button class="share-option-btn" onclick="handleCopyLink()">
+        <span class="share-option-icon" style="background:rgba(124,58,237,.3)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        </span>
+        <div>
+          <div class="share-option-title">Copiar link</div>
+          <div class="share-option-desc" id="share-copy-feedback">Link da página de instalação</div>
+        </div>
+      </button>
+      <button class="share-option-btn" id="share-native-btn" onclick="handleShareNative()" style="display:none">
+        <span class="share-option-icon" style="background:rgba(255,255,255,.08)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+        </span>
+        <div>
+          <div class="share-option-title">Compartilhar com...</div>
+          <div class="share-option-desc">Usar o compartilhamento do celular</div>
+        </div>
+      </button>
+    </div>
+  </div>
+</div>
 
 <!-- Modal: Confirmar Reset -->
 <div class="modal-overlay" id="modal-reset-confirm">

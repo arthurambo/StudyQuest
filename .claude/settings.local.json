@@ -50,7 +50,9 @@
       "Bash(nslookup -type=TXT studyquestxp.com.br 8.8.8.8)",
       "Bash(nslookup -type=TXT _dmarc.studyquestxp.com.br 8.8.8.8)",
       "Bash(nslookup -type=TXT resend._domainkey.studyquestxp.com.br 8.8.8.8)",
-      "Bash(nslookup -type=MX send.studyquestxp.com.br 8.8.8.8)"
+      "Bash(nslookup -type=MX send.studyquestxp.com.br 8.8.8.8)",
+      "Bash(git remote *)",
+      "Bash(grep -n \"beforeinstallprompt\\\\|deferredPrompt\\\\|handleLanding\\\\|<\\\\/script>\" \"C:\\\\Users\\\\Pichau\\\\Documents\\\\StudyQuest\\\\landing.html\")"
     ]
   }
 }
