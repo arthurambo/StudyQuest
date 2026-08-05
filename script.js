@@ -12455,14 +12455,16 @@ function openShareModal() {
 
 function handleShareWhatsApp() {
   const url = _getInstallUrl();
-  // decodeURIComponent de bytes UTF-8 puros — imune a qualquer encoding do arquivo fonte
-  const sword   = decodeURIComponent('%E2%9A%94%EF%B8%8F'); // ⚔️
-  const gamepad = decodeURIComponent('%F0%9F%8E%AE');        // 🎮
-  const books   = decodeURIComponent('%F0%9F%93%9A');        // 📚
-  const text = sword + ' Já imaginou transformar seus estudos em um RPG de verdade?\n\n'
-    + 'Eu tô usando o StudyQuest pra organizar minhas matérias, subir de nível e personalizar meu herói cumprindo tarefas e tirando notas boas! ' + gamepad + books + '\n\n'
+  const text = '⚔️ Já imaginou transformar seus estudos em um RPG de verdade?\n\n'
+    + 'Eu tô usando o StudyQuest pra organizar minhas matérias, subir de nível e personalizar meu herói cumprindo tarefas e tirando notas boas! 🎮📚\n\n'
     + 'Vem montar seu personagem e entrar pro meu grupo de estudos: ' + url;
-  window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+  const encoded = encodeURIComponent(text);
+  // whatsapp:// vai direto para o app sem passar pelo servidor wa.me, preservando emoji
+  if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    window.location.href = 'whatsapp://send?text=' + encoded;
+  } else {
+    window.open('https://wa.me/?text=' + encoded, '_blank');
+  }
 }
 
 async function handleCopyLink() {
