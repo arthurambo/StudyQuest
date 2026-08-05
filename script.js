@@ -5734,26 +5734,14 @@ async function launchApp() {
 
 // Exibe/oculta indicador de carregamento durante chamadas de API
 function _showAppLoading(show) {
-  let el = document.getElementById('app-loading-overlay');
+  const el = document.getElementById('app-loading-overlay');
+  if (!el) return;
   if (show) {
-    if (!el) {
-      el = document.createElement('div');
-      el.id = 'app-loading-overlay';
-      el.style.cssText = [
-        'position:fixed', 'inset:0', 'z-index:9999',
-        'background:var(--bg, #0f0f1a)',
-        'display:flex', 'align-items:center', 'justify-content:center',
-        'flex-direction:column', 'gap:16px',
-        'font-family:var(--font-main, sans-serif)',
-        'color:var(--text-primary, #fff)',
-      ].join(';');
-      el.innerHTML = '<div style="font-size:2.5rem">⚡</div>'
-                   + '<div style="font-size:1rem;opacity:.7">Carregando StudyQuest...</div>';
-      document.body.appendChild(el);
-    }
+    el.classList.remove('hiding');
     el.style.display = 'flex';
-  } else if (el) {
-    el.style.display = 'none';
+  } else {
+    el.classList.add('hiding');
+    setTimeout(() => { el.style.display = 'none'; }, 420);
   }
 }
 
@@ -10058,6 +10046,7 @@ async function renderAdminPage(tab) {
       <button class="admin-tab-btn ${_adminTab==='stats'   ?'active':''}" onclick="renderAdminPage('stats')">📊 Estatísticas</button>
       <button class="admin-tab-btn ${_adminTab==='ia'      ?'active':''}" onclick="renderAdminPage('ia')">🤖 IA</button>
       <button class="admin-tab-btn ${_adminTab==='anuncios'?'active':''}" onclick="renderAdminPage('anuncios')">📺 Anúncios</button>
+      <button class="admin-tab-btn ${_adminTab==='ajuda'   ?'active':''}" onclick="renderAdminPage('ajuda')">❓ Ajuda</button>
       <button class="admin-tab-btn ${_adminTab==='teste'   ?'active':''}" onclick="renderAdminPage('teste')">🧪 Teste</button>
     </div>
     <div id="admin-tab-content"><div class="social-loading">Carregando...</div></div>`;
@@ -10399,6 +10388,10 @@ async function renderAdminPage(tab) {
 
       <div class="admin-section-title" style="margin-top:1.5rem">📋 Anúncios Cadastrados (${_adminAdsCache.length})</div>
       <div class="admin-ads-list">${adsHtml}</div>`;
+
+  } else if (_adminTab === 'ajuda') {
+    content.innerHTML = '<div class="social-loading">Carregando relatos…</div>';
+    await renderAdminHelp(content);
 
   } else if (_adminTab === 'teste') {
     // ── Renderiza imediatamente (sem esperar o banco) ──────────────────
@@ -12440,6 +12433,227 @@ function _showAdCta(ad) {
   overlay.className = 'ad-cta-overlay-btn';
   overlay.innerHTML = `<span>${ad.cta_label || 'Saiba mais'}</span><span class="ad-cta-arrow">→</span>`;
   mediaEl.appendChild(overlay);
+}
+
+// ============================================================
+// COMPARTILHAR
+// ============================================================
+
+const _PRODUCTION_URL = 'https://studyquestxp.com.br';
+
+function _getInstallUrl() {
+  return _PRODUCTION_URL + '/install.html';
+}
+
+function openShareModal() {
+  const nativeBtn = document.getElementById('share-native-btn');
+  if (nativeBtn) nativeBtn.style.display = navigator.share ? '' : 'none';
+  const fb = document.getElementById('share-copy-feedback');
+  if (fb) fb.textContent = 'Link da página de instalação';
+  openModal('modal-share');
+}
+
+function handleShareWhatsApp() {
+  const url = _getInstallUrl();
+  // decodeURIComponent de bytes UTF-8 puros — imune a qualquer encoding do arquivo fonte
+  const sword   = decodeURIComponent('%E2%9A%94%EF%B8%8F'); // ⚔️
+  const gamepad = decodeURIComponent('%F0%9F%8E%AE');        // 🎮
+  const books   = decodeURIComponent('%F0%9F%93%9A');        // 📚
+  const text = sword + ' Já imaginou transformar seus estudos em um RPG de verdade?\n\n'
+    + 'Eu tô usando o StudyQuest pra organizar minhas matérias, subir de nível e personalizar meu herói cumprindo tarefas e tirando notas boas! ' + gamepad + books + '\n\n'
+    + 'Vem montar seu personagem e entrar pro meu grupo de estudos: ' + url;
+  window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+}
+
+async function handleCopyLink() {
+  const url = _getInstallUrl();
+  const fb  = document.getElementById('share-copy-feedback');
+  try {
+    await navigator.clipboard.writeText(url);
+    if (fb) { fb.textContent = '✅ Link copiado!'; setTimeout(() => { if (fb) fb.textContent = 'Link da página de instalação'; }, 2500); }
+  } catch {
+    if (fb) fb.textContent = url;
+  }
+}
+
+async function handleShareNative() {
+  const url = _getInstallUrl();
+  try {
+    await navigator.share({
+      title: 'StudyQuest',
+      text: 'Transforme seus estudos em aventura! ⚔️📚',
+      url,
+    });
+  } catch (e) {
+    if (e.name !== 'AbortError') showNotification('Não foi possível compartilhar.', 'warning');
+  }
+}
+
+// ============================================================
+// CENTRAL DE AJUDA
+// ============================================================
+
+const HELP_TYPES = {
+  bug:      { icon: '🐛', label: 'Relatar Bug',                desc: 'Descreva o bug com o máximo de detalhes possível.' },
+  feature:  { icon: '💡', label: 'Recomendação de Recurso',    desc: 'Que funcionalidade você gostaria de ver no StudyQuest?' },
+  question: { icon: '🙋', label: 'Dúvida',                     desc: 'Descreva sua dúvida e entraremos em contato em breve.' },
+};
+
+let _helpFormType = null;
+
+function openHelpModal() {
+  openModal('modal-help');
+}
+
+function openHelpForm(type) {
+  _helpFormType = type;
+  const meta = HELP_TYPES[type];
+  const titleEl  = document.getElementById('help-form-title');
+  const descEl   = document.getElementById('help-form-desc');
+  const resultEl = document.getElementById('help-form-result');
+  const titleIn  = document.getElementById('help-report-title');
+  const descIn   = document.getElementById('help-report-desc');
+  if (titleEl)  titleEl.textContent = `${meta.icon} ${meta.label}`;
+  if (descEl)   descEl.textContent  = meta.desc;
+  if (resultEl) resultEl.textContent = '';
+  if (titleIn)  titleIn.value = '';
+  if (descIn)   descIn.value  = '';
+  closeModal('modal-help');
+  openModal('modal-help-form');
+}
+
+async function submitHelpReport() {
+  const title = (document.getElementById('help-report-title')?.value || '').trim();
+  const desc  = (document.getElementById('help-report-desc')?.value  || '').trim();
+  const resultEl = document.getElementById('help-form-result');
+
+  if (!title) { if (resultEl) resultEl.textContent = '⚠️ Escreva um título.'; return; }
+  if (!desc)  { if (resultEl) resultEl.textContent = '⚠️ Descreva o problema ou sugestão.'; return; }
+  if (!sb || !authUserId) { if (resultEl) resultEl.textContent = '⚠️ Faça login para enviar.'; return; }
+
+  if (resultEl) resultEl.textContent = 'Enviando…';
+
+  const { error } = await sb.from('help_reports').insert({
+    user_id:     authUserId,
+    user_name:   state.name || state.username || 'Usuário',
+    type:        _helpFormType,
+    title,
+    description: desc,
+  });
+
+  if (error) {
+    if (resultEl) resultEl.textContent = '❌ Erro ao enviar: ' + error.message;
+    return;
+  }
+
+  if (resultEl) resultEl.textContent = '✅ Enviado com sucesso!';
+  showNotification('📨 Relato enviado! Obrigado pelo feedback.', 'success');
+  setTimeout(() => closeModal('modal-help-form'), 1200);
+}
+
+async function openMyReports() {
+  closeModal('modal-help');
+  openModal('modal-my-reports');
+  const listEl = document.getElementById('my-reports-list');
+  if (!listEl) return;
+  listEl.innerHTML = '<div class="social-loading">Carregando…</div>';
+
+  if (!sb || !authUserId) {
+    listEl.innerHTML = '<div class="social-empty">Faça login para ver seus relatos.</div>';
+    return;
+  }
+
+  const { data, error } = await sb.from('help_reports')
+    .select('*')
+    .eq('user_id', authUserId)
+    .order('created_at', { ascending: false });
+
+  if (error || !data?.length) {
+    listEl.innerHTML = '<div class="social-empty">Nenhum relato enviado ainda.</div>';
+    return;
+  }
+
+  listEl.innerHTML = data.map(r => {
+    const meta = HELP_TYPES[r.type] || { icon: '❓', label: r.type };
+    const date = new Date(r.created_at).toLocaleDateString('pt-BR');
+    const replyHtml = r.admin_reply
+      ? `<div class="help-report-reply"><span class="help-reply-badge">💬 Resposta da equipe</span><p>${escHtml(r.admin_reply)}</p></div>`
+      : `<div class="help-report-reply" style="color:var(--text-muted);font-size:.8rem;font-style:italic">Aguardando resposta…</div>`;
+    return `
+    <div class="help-report-card">
+      <div class="help-report-header">
+        <span class="help-type-badge">${meta.icon} ${meta.label}</span>
+        <span style="font-size:.75rem;color:var(--text-muted)">${date}</span>
+      </div>
+      <div class="help-report-title">${escHtml(r.title)}</div>
+      <div class="help-report-desc">${escHtml(r.description)}</div>
+      ${replyHtml}
+    </div>`;
+  }).join('');
+}
+
+// ── Admin: aba Ajuda ───────────────────────────────────────
+
+async function renderAdminHelp(container) {
+  if (!sb) { container.innerHTML = '<div class="social-empty">Supabase indisponível.</div>'; return; }
+
+  const { data, error } = await sb.from('help_reports')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) { container.innerHTML = `<div class="social-empty">Erro: ${error.message}</div>`; return; }
+  if (!data?.length) { container.innerHTML = '<div class="social-empty">Nenhum relato recebido ainda.</div>'; return; }
+
+  const pending  = data.filter(r => !r.admin_reply);
+  const answered = data.filter(r =>  r.admin_reply);
+
+  const renderCard = (r) => {
+    const meta = HELP_TYPES[r.type] || { icon: '❓', label: r.type };
+    const date = new Date(r.created_at).toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' });
+    const replied = r.admin_reply
+      ? `<div class="help-admin-replied">✅ Respondido: <em>${escHtml(r.admin_reply)}</em></div>`
+      : '';
+    return `
+    <div class="help-admin-card" id="help-card-${r.id}">
+      <div class="help-report-header">
+        <span class="help-type-badge">${meta.icon} ${meta.label}</span>
+        <span style="font-size:.75rem;color:var(--text-muted)">${escHtml(r.user_name || '?')} · ${date}</span>
+      </div>
+      <div class="help-report-title">${escHtml(r.title)}</div>
+      <div class="help-report-desc">${escHtml(r.description)}</div>
+      ${replied}
+      <div class="help-admin-reply-row" id="help-reply-row-${r.id}" style="${r.admin_reply ? 'display:none' : ''}">
+        <input id="help-reply-input-${r.id}" placeholder="Escreva sua resposta…" style="flex:1">
+        <button class="btn-primary btn-sm" onclick="handleAdminReplyHelp('${r.id}')">📨 Responder</button>
+      </div>
+      ${r.admin_reply ? `<button class="btn-sm btn-ghost" style="margin-top:.35rem;font-size:.75rem" onclick="document.getElementById('help-reply-row-${r.id}').style.display='flex'">✏️ Editar resposta</button>` : ''}
+    </div>`;
+  };
+
+  container.innerHTML = `
+    <div class="admin-section-title">⏳ Aguardando resposta (${pending.length})</div>
+    ${pending.length ? `<div class="help-admin-list">${pending.map(renderCard).join('')}</div>`
+                     : '<div class="social-empty" style="margin-bottom:1rem">Nenhum pendente.</div>'}
+    <div class="admin-section-title" style="margin-top:1.25rem">✅ Respondidos (${answered.length})</div>
+    ${answered.length ? `<div class="help-admin-list">${answered.map(renderCard).join('')}</div>`
+                      : '<div class="social-empty">Nenhum ainda.</div>'}`;
+}
+
+async function handleAdminReplyHelp(id) {
+  const input = document.getElementById(`help-reply-input-${id}`);
+  const reply = (input?.value || '').trim();
+  if (!reply) { showNotification('Escreva uma resposta antes de enviar.', 'warning'); return; }
+
+  const { error } = await sb.from('help_reports').update({
+    admin_reply: reply,
+    replied_at:  new Date().toISOString(),
+    replied_by:  state.name || 'Admin',
+  }).eq('id', id);
+
+  if (error) { showNotification('❌ Erro: ' + error.message, 'error'); return; }
+
+  showNotification('✅ Resposta enviada!', 'success');
+  renderAdminPage('ajuda');
 }
 
 // ── Aba Resgatar: anúncios com recompensa ─────────────────────────────────────

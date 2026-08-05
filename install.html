@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Instalar StudyQuest</title>
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#7c3aed">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100dvh;
+      background: #0d0f1a;
+      color: #f0f0ff;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1.25rem;
+      overflow-x: hidden;
+    }
+
+    /* Background glow */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 50% 0%, rgba(124,58,237,.22) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 30% at 80% 80%, rgba(168,85,247,.12) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .card {
+      position: relative;
+      z-index: 1;
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(124,58,237,.3);
+      border-radius: 28px;
+      padding: 2.5rem 2rem;
+      max-width: 420px;
+      width: 100%;
+      text-align: center;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 0 60px rgba(124,58,237,.15);
+    }
+
+    .logo {
+      width: 100px;
+      height: 100px;
+      border-radius: 22px;
+      object-fit: contain;
+      margin-bottom: 1.25rem;
+      filter: drop-shadow(0 0 24px rgba(124,58,237,.6));
+      animation: pulse 3s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { filter: drop-shadow(0 0 18px rgba(124,58,237,.5)); }
+      50%       { filter: drop-shadow(0 0 36px rgba(168,85,247,.85)); }
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 900;
+      background: linear-gradient(135deg, #c4b5fd, #a78bfa, #7c3aed);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: .4rem;
+    }
+
+    .tagline {
+      font-size: .95rem;
+      color: rgba(255,255,255,.55);
+      margin-bottom: 2rem;
+      line-height: 1.5;
+    }
+
+    .features {
+      display: flex;
+      flex-direction: column;
+      gap: .6rem;
+      margin-bottom: 2rem;
+      text-align: left;
+    }
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      background: rgba(124,58,237,.1);
+      border: 1px solid rgba(124,58,237,.2);
+      border-radius: 12px;
+      padding: .7rem 1rem;
+      font-size: .88rem;
+      color: rgba(255,255,255,.8);
+    }
+    .feature-item span:first-child { font-size: 1.3rem; flex-shrink: 0; }
+
+    .btn-install {
+      width: 100%;
+      padding: .95rem;
+      background: linear-gradient(135deg, #7c3aed, #a855f7);
+      border: none;
+      border-radius: 14px;
+      color: #fff;
+      font-size: 1.05rem;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(124,58,237,.5);
+      transition: transform .15s, box-shadow .15s;
+      margin-bottom: .75rem;
+    }
+    .btn-install:hover  { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(124,58,237,.65); }
+    .btn-install:active { transform: scale(.97); }
+
+    .btn-open {
+      width: 100%;
+      padding: .75rem;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 14px;
+      color: rgba(255,255,255,.6);
+      font-size: .9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    .btn-open:hover { background: rgba(255,255,255,.1); color: rgba(255,255,255,.9); }
+    .btn-row { display: flex; gap: .5rem; margin-top: 0; }
+    .btn-row .btn-open { margin-top: 0; }
+
+    /* iOS instructions */
+    #ios-hint {
+      display: none;
+      margin-top: 1rem;
+      background: rgba(124,58,237,.12);
+      border: 1px solid rgba(124,58,237,.25);
+      border-radius: 12px;
+      padding: .9rem 1rem;
+      font-size: .82rem;
+      color: rgba(255,255,255,.65);
+      line-height: 1.6;
+      text-align: left;
+    }
+
+    /* Already installed */
+    #already-msg {
+      display: none;
+      margin-top: .75rem;
+      font-size: .82rem;
+      color: #34d399;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <img src="icone.png" alt="StudyQuest" class="logo" onerror="this.textContent='⚔️';this.style.fontSize='5rem'">
+    <h1>StudyQuest</h1>
+    <p class="tagline">Transforme seus estudos em uma aventura RPG. Suba de nível estudando de verdade.</p>
+
+    <div class="features">
+      <div class="feature-item"><span>⚔️</span><span>Monte seu herói e suba de nível com notas boas</span></div>
+      <div class="feature-item"><span>📚</span><span>Organize tarefas, provas e matérias num só lugar</span></div>
+      <div class="feature-item"><span>🏰</span><span>Entre em grupos de estudo com amigos</span></div>
+      <div class="feature-item"><span>🏆</span><span>Conquistas, missões e recompensas diárias</span></div>
+    </div>
+
+    <button class="btn-install" id="btn-install" onclick="handleInstall()">📲 Instalar o StudyQuest</button>
+
+    <div class="btn-row">
+      <button class="btn-open" onclick="window.open('./landing.html','_blank')">🌐 Conhecer mais</button>
+      <button class="btn-open" onclick="window.location.href='./'">▶ Abrir o app</button>
+    </div>
+
+    <div id="ios-hint">
+      📱 <strong>No iPhone/iPad:</strong> toque no ícone de compartilhamento
+      (<strong>⬆</strong>) do Safari e selecione <strong>"Adicionar à Tela de Início"</strong>.
+    </div>
+    <div id="already-msg">✅ StudyQuest já está instalado!</div>
+  </div>
+
+  <script>
+    let _deferredPrompt = null;
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                      || window.navigator.standalone === true;
+
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      _deferredPrompt = e;
+    });
+
+    window.addEventListener('appinstalled', () => {
+      _deferredPrompt = null;
+      document.getElementById('btn-install').style.display = 'none';
+      document.getElementById('already-msg').style.display = 'block';
+    });
+
+    async function handleInstall() {
+      if (isStandalone) {
+        document.getElementById('btn-install').style.display = 'none';
+        document.getElementById('already-msg').style.display = 'block';
+        return;
+      }
+      if (_deferredPrompt) {
+        _deferredPrompt.prompt();
+        const { outcome } = await _deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          document.getElementById('btn-install').textContent = '✅ Instalado!';
+          document.getElementById('btn-install').disabled = true;
+        }
+        _deferredPrompt = null;
+      } else if (isIOS) {
+        document.getElementById('ios-hint').style.display = 'block';
+        document.getElementById('btn-install').textContent = 'Veja as instruções abaixo ↓';
+      } else {
+        // Navegador não suporta — leva direto para o app
+        window.location.href = './';
+      }
+    }
+
+    // Se já instalado e abrindo dentro do PWA, redireciona para o app
+    if (isStandalone) {
+      window.location.replace('./');
+    }
+  </script>
+</body>
+</html>
