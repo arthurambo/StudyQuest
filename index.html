@@ -288,6 +288,7 @@
           <a class="nav-item nav-item-child" data-page="missions">🎯 Missões</a>
           <a class="nav-item nav-item-child" data-page="shop">🛒 Loja</a>
           <a class="nav-item nav-item-child" data-page="achievements">🏆 Conquistas</a>
+          <a class="nav-item nav-item-child" data-page="inventory">🎒 Inventário</a>
         </div>
       </div>
 
@@ -616,6 +617,14 @@
           <button class="btn-primary" onclick="handleShopRedeemSubmit()" style="width:100%;margin-top:0.75rem">🎁 Resgatar</button>
         </div>
       </div>
+    </div>
+
+    <!-- ===== INVENTÁRIO ===== -->
+    <div id="page-inventory" class="page">
+      <div class="page-header">
+        <h1>🎒 Inventário</h1>
+      </div>
+      <div id="inventory-content"></div>
     </div>
 
     <!-- ===== ESTATÍSTICAS ===== -->
@@ -2062,6 +2071,90 @@
       <button class="btn-secondary" data-close="modal-child-without-account">Cancelar</button>
       <button class="btn-primary" onclick="addChildWithoutAccount()">➕ Adicionar</button>
     </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: VER CAIXA ===== -->
+<div class="modal-overlay" id="modal-box-preview">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <h2 id="box-preview-name" style="margin:0;font-size:1.1rem">Caixa</h2>
+      <button class="modal-close-x" data-close="modal-box-preview">✕</button>
+    </div>
+    <div style="text-align:center;font-size:3rem;margin:.5rem 0" id="box-preview-icon">📦</div>
+    <p id="box-preview-desc" style="color:var(--text-muted);text-align:center;margin:0 0 .5rem;font-size:.88rem"></p>
+    <div class="box-cost-row">💰 <strong id="box-preview-cost">0</strong> moedas</div>
+    <div class="box-section-label">📊 Chances de Raridade</div>
+    <div id="box-preview-rates"></div>
+    <div class="box-section-label" style="margin-top:1rem">🎁 Itens Possíveis</div>
+    <div id="box-preview-items" class="box-preview-grid"></div>
+    <div class="modal-btns" style="margin-top:1.25rem">
+      <button class="btn-secondary" data-close="modal-box-preview">Cancelar</button>
+      <button class="btn-primary" id="box-preview-buy-btn">💰 Comprar e Abrir</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: RESULTADO DA CAIXA ===== -->
+<div class="modal-overlay" id="modal-box-result">
+  <div class="modal modal-lootbox" style="text-align:center">
+    <div id="box-result-icon" style="font-size:3.5rem;margin-bottom:.5rem">🎁</div>
+    <h2 style="margin:.25rem 0" id="box-result-name">Item</h2>
+    <div id="box-result-rarity" style="font-weight:700;font-size:1rem;margin-bottom:.5rem"></div>
+    <div id="box-result-duplicate" style="display:none;color:var(--text-muted);font-size:.83rem;margin-bottom:.75rem"></div>
+    <div style="display:flex;gap:.5rem;justify-content:center;margin-top:1rem">
+      <button class="btn-secondary" data-close="modal-box-result">Fechar</button>
+      <button class="btn-primary" onclick="closeModal('modal-box-result');navigateTo('inventory')">Ver Inventário</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: OPÇÕES DE DUPLICATA ===== -->
+<div class="modal-overlay" id="modal-duplicate-options">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-header">
+      <h2 style="margin:0">Duplicata</h2>
+      <button class="modal-close-x" data-close="modal-duplicate-options">✕</button>
+    </div>
+    <div style="text-align:center;margin:.75rem 0 1rem">
+      <span id="dup-item-icon" style="font-size:2.5rem"></span>
+      <div id="dup-item-name" style="font-weight:700;margin:.3rem 0 .15rem"></div>
+      <div id="dup-item-rarity" style="font-size:.85rem;font-weight:600"></div>
+      <div id="dup-item-qty" style="color:var(--text-muted);font-size:.78rem;margin-top:.2rem"></div>
+    </div>
+    <div class="dup-options">
+      <button class="dup-option-btn" id="dup-sell-btn">
+        <span>💰</span>
+        <div><strong>Vender</strong>
+          <div style="font-size:.78rem;color:var(--text-muted)">Receber <span id="dup-sell-price">0</span> moedas</div>
+        </div>
+      </button>
+      <button class="dup-option-btn" id="dup-gift-btn">
+        <span>🎁</span>
+        <div><strong>Presentear</strong>
+          <div style="font-size:.78rem;color:var(--text-muted)">Enviar para um amigo</div>
+        </div>
+      </button>
+      <button class="dup-option-btn" data-close="modal-duplicate-options">
+        <span>🗂️</span>
+        <div><strong>Guardar</strong>
+          <div style="font-size:.78rem;color:var(--text-muted)">Manter no inventário</div>
+        </div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: PRESENTEAR COSMÉTICO ===== -->
+<div class="modal-overlay" id="modal-gift-cosmetic">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <h2 style="margin:0">Presentear Amigo</h2>
+      <button class="modal-close-x" data-close="modal-gift-cosmetic">✕</button>
+    </div>
+    <p style="color:var(--text-muted);font-size:.84rem;margin:.5rem 0 1rem">Selecione um amigo para enviar o cosmético:</p>
+    <div id="gift-cosmetic-friends-list"></div>
+    <button class="btn-secondary" data-close="modal-gift-cosmetic" style="width:100%;margin-top:.75rem">Cancelar</button>
   </div>
 </div>
 

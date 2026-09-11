@@ -164,21 +164,69 @@ const SHOP_ITEMS = [
   { id: 'lootbox', name: 'Caixa Misteriosa', icon: '🎁', desc: 'Recompensa surpresa aleatória!', cost: 35, type: 'lootbox', charges: 1 },
 ];
 
-// ── Cosméticos ────────────────────────────────────────────────
-const COSMETIC_FRAMES = [
-  { id: 'frame_silver',  name: 'Moldura Prata',     icon: '⬜', cost: 100, desc: 'Um toque elegante de prata.' },
-  { id: 'frame_gold',    name: 'Moldura Ouro',      icon: '🟡', cost: 250, desc: 'Brilho de campeão.' },
-  { id: 'frame_diamond', name: 'Moldura Diamante',  icon: '💎', cost: 500, desc: 'Para os verdadeiros estudiosos.' },
-  { id: 'frame_fire',    name: 'Moldura de Fogo',   icon: '🔥', cost: 350, desc: 'Arde com determinação.' },
-  { id: 'frame_rainbow', name: 'Moldura Arco-íris', icon: '🌈', cost: 700, desc: 'Raro e deslumbrante.' },
+// ── Cosméticos — catálogo unificado ──────────────────────────
+const COSMETICS_CATALOG = [
+  // Molduras
+  { id: 'frame_silver',    name: 'Moldura Prata',              icon: '⬜', type: 'frame', rarity: 'comum',    desc: 'Um toque elegante de prata.' },
+  { id: 'frame_wood',      name: 'Moldura Madeira',            icon: '🪵', type: 'frame', rarity: 'comum',    desc: 'Natural e resistente.' },
+  { id: 'frame_bronze',    name: 'Moldura Bronze',             icon: '🥉', type: 'frame', rarity: 'comum',    desc: 'O começo de algo grande.' },
+  { id: 'frame_gold',      name: 'Moldura Ouro',               icon: '🟡', type: 'frame', rarity: 'raro',     desc: 'Brilho de campeão.' },
+  { id: 'frame_rainbow',   name: 'Moldura Arco-íris',          icon: '🌈', type: 'frame', rarity: 'raro',     desc: 'Raro e deslumbrante.' },
+  { id: 'frame_neon',      name: 'Moldura Neon',               icon: '💡', type: 'frame', rarity: 'raro',     desc: 'Brilha no escuro.' },
+  { id: 'frame_poison',    name: 'Moldura Veneno',             icon: '☠️', type: 'frame', rarity: 'raro',     desc: 'Perigosa e fascinante.' },
+  { id: 'frame_diamond',   name: 'Moldura Diamante',           icon: '💎', type: 'frame', rarity: 'epico',    desc: 'Para os verdadeiros estudiosos.' },
+  { id: 'frame_fire',      name: 'Moldura de Fogo',            icon: '🔥', type: 'frame', rarity: 'epico',    desc: 'Arde com determinação.' },
+  { id: 'frame_dragon',    name: 'Moldura Dragão',             icon: '🐉', type: 'frame', rarity: 'epico',    desc: 'O poder do dragão te protege.' },
+  { id: 'frame_cyberpunk', name: 'Moldura Cyberpunk',          icon: '🤖', type: 'frame', rarity: 'epico',    desc: 'Do futuro para o presente.' },
+  { id: 'frame_infinity',  name: 'Sol do Infinito',            icon: '☀️', type: 'frame', rarity: 'lendario', desc: 'Poder absoluto. Raríssimo.' },
+  // Banners
+  { id: 'banner_purple',   name: 'Banner Roxo',                icon: '🟣', type: 'banner', rarity: 'comum',    desc: 'Clássico StudyQuest.' },
+  { id: 'banner_forest',   name: 'Banner Floresta',            icon: '🌿', type: 'banner', rarity: 'comum',    desc: 'Natural e revigorante.' },
+  { id: 'banner_sunset',   name: 'Banner Pôr do Sol',          icon: '🌅', type: 'banner', rarity: 'comum',    desc: 'O fim do dia traz recompensas.' },
+  { id: 'banner_urban',    name: 'Banner Noite Urbana',        icon: '🌃', type: 'banner', rarity: 'comum',    desc: 'A cidade nunca dorme.' },
+  { id: 'banner_fire',     name: 'Banner Chamas',              icon: '🔥', type: 'banner', rarity: 'raro',     desc: 'Intensidade total.' },
+  { id: 'banner_ocean',    name: 'Banner Oceano',              icon: '🌊', type: 'banner', rarity: 'raro',     desc: 'Calmo e profundo.' },
+  { id: 'banner_library',  name: 'Banner Biblioteca Mística',  icon: '📚', type: 'banner', rarity: 'raro',     desc: 'Saber é poder.' },
+  { id: 'banner_volcano',  name: 'Banner Vulcão',              icon: '🌋', type: 'banner', rarity: 'raro',     desc: 'Força inexorável.' },
+  { id: 'banner_galaxy',   name: 'Banner Galáxia',             icon: '🌌', type: 'banner', rarity: 'epico',    desc: 'Infinito e misterioso.' },
+  { id: 'banner_nebula',   name: 'Banner Nebulosa',            icon: '🌠', type: 'banner', rarity: 'epico',    desc: 'Nascimento de estrelas.' },
+  { id: 'banner_castle',   name: 'Banner Castelo das Nuvens',  icon: '🏰', type: 'banner', rarity: 'epico',    desc: 'Majestoso e imponente.' },
+  { id: 'banner_aurora',   name: 'Banner Aurora Boreal',       icon: '🌌', type: 'banner', rarity: 'lendario', desc: 'O espetáculo da natureza.' },
 ];
-const COSMETIC_BANNERS = [
-  { id: 'banner_purple', name: 'Banner Roxo',    icon: '🟣', cost:  80, desc: 'Clássico StudyQuest.' },
-  { id: 'banner_fire',   name: 'Banner Chamas',  icon: '🔥', cost: 120, desc: 'Intensidade total.' },
-  { id: 'banner_ocean',  name: 'Banner Oceano',  icon: '🌊', cost: 120, desc: 'Calmo e profundo.' },
-  { id: 'banner_forest', name: 'Banner Floresta',icon: '🌿', cost: 100, desc: 'Natural e revigorante.' },
-  { id: 'banner_galaxy', name: 'Banner Galáxia', icon: '🌌', cost: 200, desc: 'Infinito e misterioso.' },
+
+// Mantidos para compatibilidade com código legado que referencia estas constantes
+const COSMETIC_FRAMES  = COSMETICS_CATALOG.filter(c => c.type === 'frame');
+const COSMETIC_BANNERS = COSMETICS_CATALOG.filter(c => c.type === 'banner');
+
+// ── Caixas de Cosméticos ──────────────────────────────────────
+const LOOT_BOXES = [
+  { id: 'box_frame_comum',   name: 'Caixas de Molduras', subtitle: 'Comum',  icon: '📦', rarity: 'comum',    type: 'frame',  cost: 150, desc: 'Contém molduras comuns com chance de raras.',
+    dropRates: { comum: 80, raro: 18, epico: 2 },
+    pool: { comum: ['frame_silver','frame_wood','frame_bronze'], raro: ['frame_gold','frame_rainbow','frame_neon','frame_poison'], epico: ['frame_diamond','frame_fire'] } },
+  { id: 'box_frame_raro',    name: 'Caixas de Molduras', subtitle: 'Rara',   icon: '💜', rarity: 'raro',     type: 'frame',  cost: 350, desc: 'Garantia de moldura rara ou melhor.',
+    dropRates: { raro: 75, epico: 22, lendario: 3 },
+    pool: { raro: ['frame_gold','frame_rainbow','frame_neon','frame_poison'], epico: ['frame_diamond','frame_fire','frame_dragon','frame_cyberpunk'], lendario: ['frame_infinity'] } },
+  { id: 'box_frame_epico',   name: 'Caixas de Molduras', subtitle: 'Épica',  icon: '🔮', rarity: 'epico',    type: 'frame',  cost: 600, desc: 'Garantia de moldura épica com chance lendária.',
+    dropRates: { epico: 80, lendario: 20 },
+    pool: { epico: ['frame_diamond','frame_fire','frame_dragon','frame_cyberpunk'], lendario: ['frame_infinity'] } },
+  { id: 'box_banner_comum',  name: 'Caixas de Banners',  subtitle: 'Comum',  icon: '📦', rarity: 'comum',    type: 'banner', cost: 120, desc: 'Contém banners comuns com chance de raros.',
+    dropRates: { comum: 80, raro: 18, epico: 2 },
+    pool: { comum: ['banner_purple','banner_forest','banner_sunset','banner_urban'], raro: ['banner_fire','banner_ocean','banner_library','banner_volcano'], epico: ['banner_galaxy','banner_nebula'] } },
+  { id: 'box_banner_raro',   name: 'Caixas de Banners',  subtitle: 'Rara',   icon: '💜', rarity: 'raro',     type: 'banner', cost: 300, desc: 'Garantia de banner raro ou melhor.',
+    dropRates: { raro: 75, epico: 22, lendario: 3 },
+    pool: { raro: ['banner_fire','banner_ocean','banner_library','banner_volcano'], epico: ['banner_galaxy','banner_nebula','banner_castle'], lendario: ['banner_aurora'] } },
+  { id: 'box_banner_epico',  name: 'Caixas de Banners',  subtitle: 'Épica',  icon: '🔮', rarity: 'epico',    type: 'banner', cost: 550, desc: 'Garantia de banner épico com chance lendário.',
+    dropRates: { epico: 80, lendario: 20 },
+    pool: { epico: ['banner_galaxy','banner_nebula','banner_castle'], lendario: ['banner_aurora'] } },
 ];
+
+const RARITY_CONFIG = {
+  comum:    { label: 'Comum',    color: '#9ca3af', bg: 'rgba(156,163,175,.15)', star: '⭐' },
+  raro:     { label: 'Raro',     color: '#3b82f6', bg: 'rgba(59,130,246,.15)',  star: '💫' },
+  epico:    { label: 'Épico',    color: '#a855f7', bg: 'rgba(168,85,247,.15)',  star: '✨' },
+  lendario: { label: 'Lendário', color: '#f59e0b', bg: 'rgba(245,158,11,.15)', star: '🌟' },
+};
+const RARITY_SELL_PRICE = { comum: 10, raro: 35, epico: 90, lendario: 200 };
 
 // ── IA — custos por modo ─────────────────────────────────────
 const IA_COSTS = { chat_normal: 1, explicar: 5, resumo: 5, quiz: 5, prova: 10 };
@@ -434,7 +482,7 @@ let state = {
   studyItems: [],
   totalStudied: 0,
   favoriteSubject: '',
-  cosmetics: { ownedFrames: [], ownedBanners: [], equippedFrame: null, equippedBanner: null },
+  cosmetics: { ownedFrames: [], ownedBanners: [], equippedFrame: null, equippedBanner: null, inventory: {} },
   childrenWithoutAccounts: [],     // [{id, name}] — filhos sem conta própria
   childrenTasksLocal: [],          // [{id, childId, title, ...}] — tarefas locais para crianças sem conta
   receivedParentalTasks: [],       // [{id, parent_id, title, xp_reward, due_date, ...}] — tarefas recebidas de responsáveis (cache local do filho)
@@ -1104,7 +1152,7 @@ function initNavigation() {
 // Páginas válidas para roteamento por URL
 const _SPA_PAGES = new Set([
   'dashboard','tasks','study','subjects','missions','achievements',
-  'shop','grades','stats','exams','calendar','settings',
+  'shop','inventory','grades','stats','exams','calendar','settings',
   'profile','friends','groups','ai','admin','familia',
 ]);
 
@@ -1159,6 +1207,7 @@ function navigateTo(page) {
   if (page === 'ai')      renderAIPage();
   if (page === 'admin')   renderAdminPage();
   if (page === 'familia') renderFamiliaPage();
+  if (page === 'inventory') renderInventory();
   if (authUserId) updateNotifBell();
 }
 
@@ -1176,7 +1225,7 @@ function closeSidebar() {
 // Mapa: página → id do grupo
 const _NAV_GROUP_MAP = {
   tasks:'escola', exams:'escola', grades:'escola', study:'escola', ai:'escola',
-  missions:'hub', shop:'hub', achievements:'hub',
+  missions:'hub', shop:'hub', achievements:'hub', inventory:'hub',
   friends:'conexoes', groups:'conexoes', familia:'conexoes',
   subjects:'organizacao', stats:'organizacao', calendar:'organizacao',
 };
@@ -6706,80 +6755,303 @@ async function syncPublicProfile() {
 }
 
 // ============================================================
-// COSMÉTICOS — armazenados em state.cosmetics (sem tabela extra)
+// COSMÉTICOS — Catálogo, Caixas, Inventário
 // ============================================================
 
-function buyCosmetic(type, id) {
-  if (!authUserId) return showNotification('Faça login para comprar cosméticos.', 'warning');
-  const list = type === 'frame' ? COSMETIC_FRAMES : COSMETIC_BANNERS;
-  const item = list.find(i => i.id === id);
-  if (!item) return;
+function _cosmeticById(id) {
+  return COSMETICS_CATALOG.find(c => c.id === id) || null;
+}
 
-  const owned = type === 'frame' ? state.cosmetics.ownedFrames : state.cosmetics.ownedBanners;
-  if (owned.includes(id)) return showNotification('Você já possui este item!', 'info');
-  if (state.coins < item.cost) {
-    showNotification('Moedas insuficientes! Assista anúncios para ganhar mais. 📺', 'warning');
+function _inventoryCount(id) {
+  return (state.cosmetics.inventory || {})[id] || 0;
+}
+
+function _migrateCosmeticsToInventory() {
+  if (!state.cosmetics.inventory) state.cosmetics.inventory = {};
+  const inv = state.cosmetics.inventory;
+  (state.cosmetics.ownedFrames  || []).forEach(id => { if (!inv[id]) inv[id] = 1; });
+  (state.cosmetics.ownedBanners || []).forEach(id => { if (!inv[id]) inv[id] = 1; });
+}
+
+// ── Loja: aba Cosméticos (exibe caixas) ──────────────────────
+
+function renderCosmeticsShop() {
+  const container = document.getElementById('cosmetics-shop');
+  if (!container) return;
+  _migrateCosmeticsToInventory();
+
+  function boxesHtml(boxes) {
+    return boxes.map(box => {
+      const cfg = RARITY_CONFIG[box.rarity];
+      return `<div class="shop-item box-card" style="border-color:${cfg.color};background:${cfg.bg}">
+        <div class="box-rarity-badge" style="color:${cfg.color}">${cfg.star} ${cfg.label}</div>
+        <div class="shop-icon">${box.icon}</div>
+        <div class="shop-name">${box.subtitle}</div>
+        <div class="shop-desc">${box.desc}</div>
+        <div class="box-price">💰 ${box.cost} moedas</div>
+        <button class="shop-buy-btn" onclick="openBoxModal('${box.id}')">👁️ Ver</button>
+      </div>`;
+    }).join('');
+  }
+
+  const frames  = LOOT_BOXES.filter(b => b.type === 'frame');
+  const banners = LOOT_BOXES.filter(b => b.type === 'banner');
+  container.innerHTML = `
+    <div class="cosmetics-section">
+      <div class="shop-section-title">🖼️ Caixas de Molduras</div>
+      <div class="shop-grid">${boxesHtml(frames)}</div>
+    </div>
+    <div class="cosmetics-section">
+      <div class="shop-section-title">🎨 Caixas de Banners</div>
+      <div class="shop-grid">${boxesHtml(banners)}</div>
+    </div>`;
+}
+
+// ── Modal "Ver Caixa" ─────────────────────────────────────────
+
+function openBoxModal(boxId) {
+  const box = LOOT_BOXES.find(b => b.id === boxId);
+  if (!box) return;
+  const cfg = RARITY_CONFIG[box.rarity];
+
+  document.getElementById('box-preview-name').textContent  = box.name + ' — ' + box.subtitle;
+  document.getElementById('box-preview-icon').textContent  = box.icon;
+  document.getElementById('box-preview-cost').textContent  = box.cost;
+  document.getElementById('box-preview-desc').textContent  = box.desc;
+  document.getElementById('box-preview-name').style.color  = cfg.color;
+
+  document.getElementById('box-preview-rates').innerHTML = Object.entries(box.dropRates).map(([r, pct]) => {
+    const rc = RARITY_CONFIG[r];
+    return `<div class="drop-rate-row">
+      <span class="drop-rate-label" style="color:${rc.color}">${rc.star} ${rc.label}</span>
+      <span class="drop-rate-pct">${pct}%</span>
+    </div>`;
+  }).join('');
+
+  const allItems = Object.values(box.pool).flat().map(_cosmeticById).filter(Boolean);
+  document.getElementById('box-preview-items').innerHTML = allItems.map(item => {
+    const ic = RARITY_CONFIG[item.rarity];
+    return `<div class="box-preview-item" style="border-color:${ic.color};background:${ic.bg}">
+      <div class="box-item-icon">${item.icon}</div>
+      <div class="box-item-name">${item.name}</div>
+      <div class="box-item-rarity" style="color:${ic.color}">${ic.star} ${ic.label}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('box-preview-buy-btn').onclick = () => {
+    closeModal('modal-box-preview');
+    openBox(boxId);
+  };
+  openModal('modal-box-preview');
+}
+
+// ── Sorteio e abertura de caixa ───────────────────────────────
+
+function openBox(boxId) {
+  const box = LOOT_BOXES.find(b => b.id === boxId);
+  if (!box) return;
+  if (!authUserId) return showNotification('Faça login para abrir caixas.', 'warning');
+  if (state.coins < box.cost) {
+    showNotification(`Moedas insuficientes! Você precisa de ${box.cost} moedas.`, 'warning');
     setTimeout(() => renderShop('redeem'), 400);
     return;
   }
 
-  state.coins -= item.cost;
-  owned.push(id);
+  state.coins -= box.cost;
+
+  // Sorteio ponderado
+  const roll = Math.random() * 100;
+  let cumulative = 0;
+  let drawnRarity = Object.keys(box.dropRates)[0];
+  for (const [rarity, pct] of Object.entries(box.dropRates)) {
+    cumulative += pct;
+    if (roll < cumulative) { drawnRarity = rarity; break; }
+  }
+
+  const pool = box.pool[drawnRarity] || [];
+  if (!pool.length) return;
+  const wonId   = pool[Math.floor(Math.random() * pool.length)];
+  const wonItem = _cosmeticById(wonId);
+  if (!wonItem) return;
+
+  if (!state.cosmetics.inventory) state.cosmetics.inventory = {};
+  const prev = state.cosmetics.inventory[wonId] || 0;
+  state.cosmetics.inventory[wonId] = prev + 1;
+
+  // Sincroniza arrays legados (primeira cópia)
+  if (prev === 0) {
+    if (wonItem.type === 'frame'  && !state.cosmetics.ownedFrames.includes(wonId))  state.cosmetics.ownedFrames.push(wonId);
+    if (wonItem.type === 'banner' && !state.cosmetics.ownedBanners.includes(wonId)) state.cosmetics.ownedBanners.push(wonId);
+  }
+
   saveState();
-  showNotification(`✅ ${item.icon} "${item.name}" comprado!`, 'success');
-  renderCosmeticsShop();
   updateDashboard();
+  _showBoxOpenResult(wonItem, prev > 0);
 }
 
-function equipCosmetic(type, id) {
-  if (type === 'frame') {
+function _showBoxOpenResult(item, isDuplicate) {
+  const cfg = RARITY_CONFIG[item.rarity];
+  document.getElementById('box-result-icon').textContent   = item.icon;
+  document.getElementById('box-result-name').textContent   = item.name;
+  document.getElementById('box-result-rarity').textContent = cfg.star + ' ' + cfg.label;
+  document.getElementById('box-result-rarity').style.color = cfg.color;
+  const dupEl = document.getElementById('box-result-duplicate');
+  dupEl.style.display   = isDuplicate ? 'block' : 'none';
+  dupEl.textContent     = isDuplicate ? '🔄 Item duplicado — gerencie no Inventário.' : '';
+  openModal('modal-box-result');
+}
+
+// ── Inventário ────────────────────────────────────────────────
+
+function renderInventory() {
+  const container = document.getElementById('inventory-content');
+  if (!container) return;
+  _migrateCosmeticsToInventory();
+
+  const inv      = state.cosmetics.inventory || {};
+  const ownedIds = Object.keys(inv).filter(id => inv[id] > 0);
+
+  if (!ownedIds.length) {
+    container.innerHTML = `<div class="inventory-empty">
+      <div style="font-size:3rem">🎒</div>
+      <h3>Inventário vazio</h3>
+      <p>Abra caixas na <a onclick="navigateTo('shop')" style="color:var(--accent);cursor:pointer">Loja</a> para obter cosméticos!</p>
+    </div>`;
+    return;
+  }
+
+  const frames  = ownedIds.filter(id => { const c = _cosmeticById(id); return c && c.type === 'frame'; });
+  const banners = ownedIds.filter(id => { const c = _cosmeticById(id); return c && c.type === 'banner'; });
+
+  function renderSection(ids, title) {
+    if (!ids.length) return '';
+    const items = ids.map(id => {
+      const item = _cosmeticById(id);
+      if (!item) return '';
+      const qty        = inv[id];
+      const cfg        = RARITY_CONFIG[item.rarity];
+      const isEquipped = item.type === 'frame'
+        ? state.cosmetics.equippedFrame  === id
+        : state.cosmetics.equippedBanner === id;
+      return `<div class="inventory-item ${isEquipped ? 'equipped' : ''}" style="border-color:${cfg.color};background:${cfg.bg}">
+        ${isEquipped ? '<div class="inv-equipped-badge">✅ Equipado</div>' : ''}
+        ${qty > 1 ? `<div class="inv-qty-badge">×${qty}</div>` : ''}
+        <span class="inv-item-icon">${item.icon}</span>
+        <div class="inv-item-name">${item.name}</div>
+        <div class="inv-item-rarity" style="color:${cfg.color}">${cfg.star} ${cfg.label}</div>
+        <div class="inv-item-actions">
+          <button class="btn-sm ${isEquipped ? 'btn-sm-accent' : 'btn-sm-primary'}" onclick="equipCosmeticFromInventory('${id}')">
+            ${isEquipped ? '➖ Desequipar' : '🎨 Equipar'}
+          </button>
+          ${qty > 1 ? `<button class="btn-sm btn-sm-secondary" onclick="showDuplicateOptions('${id}')">🔄 Duplicata</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="inv-section">
+      <div class="inv-section-title">${title}</div>
+      <div class="inv-grid">${items}</div>
+    </div>`;
+  }
+
+  container.innerHTML = renderSection(frames, '🖼️ Molduras') + renderSection(banners, '🎨 Banners');
+}
+
+function equipCosmeticFromInventory(id) {
+  const item = _cosmeticById(id);
+  if (!item || _inventoryCount(id) === 0) return;
+  if (item.type === 'frame') {
     state.cosmetics.equippedFrame  = state.cosmetics.equippedFrame  === id ? null : id;
   } else {
     state.cosmetics.equippedBanner = state.cosmetics.equippedBanner === id ? null : id;
   }
   saveState();
   showNotification('🎨 Visual atualizado!', 'success');
-  renderCosmeticsShop();
+  renderInventory();
   renderProfilePage();
 }
 
-function renderCosmeticsShop() {
-  const container = document.getElementById('cosmetics-shop');
-  if (!container) return;
-  const c = state.cosmetics;
+// Mantida para compatibilidade com código legado
+function equipCosmetic(type, id) {
+  equipCosmeticFromInventory(id);
+}
 
-  function itemsHtml(items, type, owned, equipped) {
-    return items.map(item => {
-      const isOwned    = owned.includes(item.id);
-      const isEquipped = equipped === item.id;
-      // Prévia visual para banners
-      const preview = type === 'banner'
-        ? `<div class="cosmetic-banner-preview ${item.id}"></div>`
-        : `<span class="shop-icon">${item.icon}</span>`;
-      return `<div class="shop-item cosmetic-item">
-        ${preview}
-        <div class="shop-name">${item.name}</div>
-        <div class="shop-desc">${item.desc}</div>
-        ${isOwned
-          ? `<button class="shop-buy-btn ${isEquipped ? 'btn-equipped' : ''}" onclick="equipCosmetic('${type}','${item.id}')">
-              ${isEquipped ? '✅ Equipado' : '🎨 Equipar'}
-             </button>`
-          : `<button class="shop-buy-btn" onclick="buyCosmetic('${type}','${item.id}')">
-              💰 ${item.cost} moedas
-             </button>`}
-      </div>`;
-    }).join('');
+// ── Duplicatas: Vender / Presentear ──────────────────────────
+
+function showDuplicateOptions(cosmeticId) {
+  const item  = _cosmeticById(cosmeticId);
+  if (!item) return;
+  const qty   = _inventoryCount(cosmeticId);
+  const cfg   = RARITY_CONFIG[item.rarity];
+  const price = RARITY_SELL_PRICE[item.rarity];
+
+  document.getElementById('dup-item-icon').textContent   = item.icon;
+  document.getElementById('dup-item-name').textContent   = item.name;
+  document.getElementById('dup-item-rarity').textContent = cfg.star + ' ' + cfg.label;
+  document.getElementById('dup-item-rarity').style.color = cfg.color;
+  document.getElementById('dup-item-qty').textContent    = `Você tem ${qty}x (${qty - 1} duplicata${qty - 1 > 1 ? 's' : ''})`;
+  document.getElementById('dup-sell-price').textContent  = price;
+  document.getElementById('dup-sell-btn').onclick  = () => sellDuplicate(cosmeticId);
+  document.getElementById('dup-gift-btn').onclick  = () => openGiftCosmeticModal(cosmeticId);
+  openModal('modal-duplicate-options');
+}
+
+function sellDuplicate(cosmeticId) {
+  const item  = _cosmeticById(cosmeticId);
+  if (!item) return;
+  if (_inventoryCount(cosmeticId) < 2) return showNotification('Sem duplicatas para vender.', 'warning');
+  const price = RARITY_SELL_PRICE[item.rarity];
+  state.cosmetics.inventory[cosmeticId]--;
+  addCoins(price);
+  saveState();
+  showNotification(`💰 "${item.name}" vendido por ${price} moedas!`, 'success');
+  closeModal('modal-duplicate-options');
+  renderInventory();
+  updateDashboard();
+}
+
+function openGiftCosmeticModal(cosmeticId) {
+  window._giftingCosmeticId = cosmeticId;
+  closeModal('modal-duplicate-options');
+  // Popula lista de amigos
+  const friends = state.friends || [];
+  const listEl  = document.getElementById('gift-cosmetic-friends-list');
+  if (!friends.length) {
+    listEl.innerHTML = '<p style="color:var(--text-muted);text-align:center;font-size:.85rem">Nenhum amigo encontrado.</p>';
+  } else {
+    listEl.innerHTML = friends.map(f => `
+      <div class="friend-gift-row" onclick="sendCosmeticGift('${f.id}')">
+        <span style="font-size:1.5rem">${f.avatar || '🧙'}</span>
+        <div>
+          <div style="font-weight:700;font-size:.9rem">${f.name || f.displayName || 'Amigo'}</div>
+          <div style="font-size:.75rem;color:var(--text-muted)">Nível ${f.level || 1}</div>
+        </div>
+        <span style="margin-left:auto;font-size:.8rem;color:var(--accent)">Presentear →</span>
+      </div>`).join('');
   }
+  openModal('modal-gift-cosmetic');
+}
 
-  container.innerHTML = `
-    <div class="cosmetics-section">
-      <div class="shop-section-title">🖼️ Molduras de Perfil</div>
-      <div class="shop-grid">${itemsHtml(COSMETIC_FRAMES, 'frame', c.ownedFrames, c.equippedFrame)}</div>
-    </div>
-    <div class="cosmetics-section">
-      <div class="shop-section-title">🎨 Banners de Perfil</div>
-      <div class="shop-grid">${itemsHtml(COSMETIC_BANNERS, 'banner', c.ownedBanners, c.equippedBanner)}</div>
-    </div>`;
+async function sendCosmeticGift(toUserId) {
+  const cosmeticId = window._giftingCosmeticId;
+  if (!cosmeticId) return;
+  const item = _cosmeticById(cosmeticId);
+  if (!item || _inventoryCount(cosmeticId) < 2) return showNotification('Sem duplicatas para presentear.', 'warning');
+  state.cosmetics.inventory[cosmeticId]--;
+  saveState();
+  if (sb && authUserId) {
+    try {
+      await sb.from('cosmetic_gifts').insert({ from_id: authUserId, to_id: toUserId, cosmetic_id: cosmeticId, created_at: new Date().toISOString() });
+    } catch(e) { /* Supabase pode não ter essa tabela ainda */ }
+  }
+  showNotification(`🎁 "${item.name}" enviado com sucesso!`, 'success');
+  closeModal('modal-gift-cosmetic');
+  renderInventory();
+}
+
+// Mantida para compat — agora sem efeito direto (compra via caixas)
+function buyCosmetic(type, id) {
+  showNotification('Cosméticos agora são obtidos via Caixas! 🎁', 'info');
+  navigateTo('shop');
 }
 
 // ============================================================
