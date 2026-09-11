@@ -320,27 +320,73 @@ const ACHIEVEMENTS_DEF = [
   { id: 'fifty_study',    name: 'Estudante Modelo',  icon: '🏅', desc: 'Estude 50 conteúdos',         condition: s => (s.totalStudied||0) >= 50 },
 ];
 
-// Missões diárias — valid(state) retorna false se a missão for impossível
+// ── Missões diárias ─────────────────────────────────────────
+// valid(state) retorna false → missão não aparece (slot flexível)
+// dynamicGoal: true → goal e reward ficam em state.dailyMissions[id].goal (calculado no reset)
 const DAILY_MISSIONS_DEF = [
-  { id: 'dm_3tasks',   name: 'Completar 3 tarefas',             icon: '✅', goal: 3,  reward: 30, key: 'tasksToday',
-    valid: s => s.tasks.filter(t => !t.done).length >= 1 },
-  { id: 'dm_2subjects',name: 'Estudar 2 matérias diferentes',   icon: '📚', goal: 2,  reward: 25, key: 'subjectsToday',
-    valid: s => s.subjects.length >= 2 },
-  { id: 'dm_50xp',     name: 'Ganhar 50 XP',                    icon: '⚡', goal: 50, reward: 20, key: 'xpToday' },
-  { id: 'dm_1exam',    name: 'Registrar 1 prova',               icon: '📝', goal: 1,  reward: 35, key: 'examsToday' },
-  { id: 'dm_pomodoro', name: 'Completar 1 sessão Pomodoro',     icon: '⏱️', goal: 1,  reward: 20, key: 'pomodorosToday' },
-  { id: 'dm_2study',   name: 'Estudar 2 conteúdos',             icon: '📘', goal: 2,  reward: 25, key: 'studiedToday',
-    valid: s => (s.studyItems || []).filter(i => !i.done).length >= 1 },
+  { id: 'dm_xp',
+    icon: '⚡', name: 'Ganhar XP do dia',
+    goal: 50, reward: 50, key: 'xpToday',
+    dynamicGoal: true,   // goal = reward = calculado em _computeDailyXpGoal()
+    valid: () => true },
+
+  { id: 'dm_study_exam',
+    icon: '📘', name: 'Estudar para a prova',
+    goal: 1, reward: 50, key: 'studyExamSubjectToday',
+    // Apenas se houver prova nos próximos 7 dias com matéria vinculada
+    valid: s => {
+      const today = todayStr(); const in7 = dayStr(7);
+      return s.exams.some(e => e.status !== 'done' && e.date && e.date >= today && e.date <= in7 && e.subjectId);
+    }},
+
+  { id: 'dm_daily_min1',
+    icon: '📃', name: 'Completar ao menos 1 tarefa diária',
+    goal: 1, reward: 30, key: 'dailyTasksToday',
+    valid: s => (s.dailyTasks || []).some(t => t.createdDate === todayStr()) },
+
+  { id: 'dm_daily_all',
+    icon: '🏆', name: 'Complete todas as tarefas diárias',
+    goal: 3, reward: 100, key: 'dailyTasksToday',
+    dynamicGoal: true,   // goal = total de tarefas diárias do dia (≥ 3)
+    valid: s => (s.dailyTasks || []).filter(t => t.createdDate === todayStr()).length >= 3 },
+
+  { id: 'dm_task_due_today',
+    icon: '✅', name: 'Complete a tarefa pendente para hoje',
+    goal: 1, reward: 35, key: 'tasksDueToday',
+    valid: s => {
+      const today = todayStr();
+      return s.tasks.some(t => !t.done && !t.archived && t.dueDate === today);
+    }},
+
+  { id: 'dm_streak_protect',
+    icon: '🛡️', name: 'Proteja sua sequência hoje',
+    goal: 1, reward: 25, key: 'streakProtectToday',
+    valid: () => true },
 ];
 
-// valid(state, currentProgress) — missão semanal só some se progresso=0 e impossível
+// ── Missões semanais ─────────────────────────────────────────
+// valid(state, currentProgress) — some quando sem dados E progresso = 0
+// dynamicGoal: true → goal vem de state.weeklyMissions[id].goal (calculado no reset semanal)
 const WEEKLY_MISSIONS_DEF = [
-  { id: 'wm_10tasks', name: 'Completar 10 tarefas esta semana', icon: '🔥', goal: 10, reward: 100, key: 'tasksThisWeek',
-    valid: (s, p) => s.tasks.filter(t => !t.done).length >= 1 || (p || 0) > 0 },
-  { id: 'wm_5days',   name: 'Estudar 5 dias seguidos',          icon: '📅', goal: 5,  reward: 80,  key: 'daysThisWeek' },
-  { id: 'wm_3exams',  name: 'Registrar 3 provas',               icon: '📝', goal: 3,  reward: 90,  key: 'examsThisWeek' },
-  { id: 'wm_5study',  name: 'Estudar 5 conteúdos esta semana',  icon: '📘', goal: 5,  reward: 75,  key: 'studiedThisWeek',
-    valid: (s, p) => (s.studyItems || []).filter(i => !i.done).length >= 1 || (p || 0) > 0 },
+  { id: 'wm_5days',
+    icon: '📅', name: 'Estudar 5 dias seguidos',
+    goal: 5, reward: 100, key: 'daysThisWeek',
+    valid: () => true },
+
+  { id: 'wm_daily_5days',
+    icon: '📃', name: 'Tarefa diária em 5 dias da semana (0/5)',
+    goal: 5, reward: 100, key: 'dailyDaysThisWeek',
+    valid: s => (s.dailyTasks || []).length >= 1 },
+
+  { id: 'wm_week_tasks',
+    icon: '✅', name: 'Complete as tarefas desta semana',
+    goal: 1, reward: 20, key: 'tasksThisWeek',
+    dynamicGoal: true,   // goal = nº tarefas com prazo nesta semana; reward = goal × 20
+    valid: (s, p) => {
+      const start = _getWeekStart(); const end = _getWeekEnd();
+      return s.tasks.some(t => !t.done && !t.archived && t.dueDate >= start && t.dueDate <= end)
+        || (p || 0) > 0;
+    }},
 ];
 
 // ============================================================
@@ -1561,6 +1607,17 @@ function toggleDailyTask(id) {
   // Conta como dia de estudo → mantém streak e missões semanais
   markStudyToday();
 
+  // Missão semanal: tarefa diária realizada hoje (wm_daily_5days)
+  if (!state.weeklyDailyTaskDays) state.weeklyDailyTaskDays = [];
+  const _dtToday = todayStr();
+  if (!state.weeklyDailyTaskDays.includes(_dtToday)) {
+    state.weeklyDailyTaskDays.push(_dtToday);
+    updateWeeklyMissionProgress('dailyDaysThisWeek', 1);
+  }
+
+  // Missão diária: ao menos 1 tarefa diária (dm_daily_min1) e barra de todas (dm_daily_all)
+  updateMissionProgress('dailyTasksToday', 1);
+
   // Registra no ranking dos grupos com source específico da tarefa
   const taskSource = `task_${task.type || 'general'}`;
   logGroupXP(20, taskSource).catch(() => {});
@@ -1763,6 +1820,12 @@ function toggleTask(id) {
   if (task.difficulty === 'hard') updateMissionProgress('hardTasksToday', 1);
   if (task.subjectId) updateSubjectsStudiedToday(task.subjectId);
   updateWeeklyMissionProgress('tasksThisWeek', 1);
+
+  // Gatilhos por tipo de prazo (missões spec)
+  const _tToday = todayStr();
+  if (task.dueDate === _tToday) updateMissionProgress('tasksDueToday', 1);
+  if (task.dueDate && task.dueDate > _tToday) updateMissionProgress('futurePendingTask', 1);
+  if (task.dueDate && task.dueDate < _tToday) updateMissionProgress('overdueTasksToday', 1);
 
   // Auto-arquivar se data já passou
   autoArchiveTasks();
@@ -2178,9 +2241,10 @@ function markStudyToday() {
   if (state.studyDays && !state.studyDays.includes(today)) {
     state.studyDays.push(today);
     updateStreak();
+    updateWeeklyMissionProgress('daysThisWeek', 1);
   }
-
-  updateWeeklyMissionProgress('daysThisWeek', 1);
+  // Proteção de Streak: 1ª ação de estudo válida do dia conclui a missão
+  updateMissionProgress('streakProtectToday', 1);
 }
 
 function updateStreak() {
@@ -2241,17 +2305,35 @@ function initDailyMissions() {
   DAILY_MISSIONS_DEF.forEach(m => {
     state.dailyMissions[m.id] = { progress: 0, completed: false };
   });
+  // Metas dinâmicas: calculadas agora com a carga atual
+  state.dailyMissions['dm_xp'].goal = _computeDailyXpGoal();
+  // dm_daily_all.goal é atualizado em generateDynamicMissions() após gerar tarefas diárias
+
   if (!state.weeklyMissions) state.weeklyMissions = {};
   WEEKLY_MISSIONS_DEF.forEach(m => {
-    if (!state.weeklyMissions[m.id]) state.weeklyMissions[m.id] = { progress: 0, completed: false };
+    if (!state.weeklyMissions[m.id]) {
+      const entry = { progress: 0, completed: false };
+      if (m.id === 'wm_week_tasks') {
+        const start = _getWeekStart(); const end = _getWeekEnd();
+        entry.goal = Math.max(1, state.tasks.filter(t => !t.done && !t.archived && t.dueDate >= start && t.dueDate <= end).length);
+      }
+      state.weeklyMissions[m.id] = entry;
+    }
   });
+  if (!state.weeklyDailyTaskDays) state.weeklyDailyTaskDays = [];
   if (!state.dynamicMissions) state.dynamicMissions = [];
 }
 
 function initWeeklyMissions() {
   state.weeklyMissions = {};
+  state.weeklyDailyTaskDays = [];
   WEEKLY_MISSIONS_DEF.forEach(m => {
-    state.weeklyMissions[m.id] = { progress: 0, completed: false };
+    const entry = { progress: 0, completed: false };
+    if (m.id === 'wm_week_tasks') {
+      const start = _getWeekStart(); const end = _getWeekEnd();
+      entry.goal = Math.max(1, state.tasks.filter(t => !t.done && !t.archived && t.dueDate >= start && t.dueDate <= end).length);
+    }
+    state.weeklyMissions[m.id] = entry;
   });
 }
 
@@ -2261,11 +2343,14 @@ function checkDailyReset() {
   // ── Reset diário ────────────────────────────────────────────────
   if (state.lastResetDate !== today) {
     state.dailyXp = 0;
-    // Reinicia apenas missões diárias, preserva semanais e dinâmicas
     state.dailyMissions = {};
     DAILY_MISSIONS_DEF.forEach(m => {
       state.dailyMissions[m.id] = { progress: 0, completed: false };
     });
+    // Metas dinâmicas do dia
+    state.dailyMissions['dm_xp'].goal = _computeDailyXpGoal();
+    // dm_daily_all.goal será preenchido em generateDynamicMissions() após criar tarefas diárias
+
     state.lastResetDate = today;
     const yesterday = dayStr(-1);
     if (state.lastStudyDate && state.lastStudyDate !== yesterday && state.lastStudyDate !== today) {
@@ -2280,67 +2365,103 @@ function checkDailyReset() {
   const currentWeekKey = _isoWeekKey();
   if (state.lastWeeklyResetKey !== currentWeekKey) {
     const isFirstEver = state.lastWeeklyResetKey === null;
-    state.weeklyMissions = {};
+    state.weeklyMissions   = {};
+    state.weeklyDailyTaskDays = [];
     WEEKLY_MISSIONS_DEF.forEach(m => {
-      state.weeklyMissions[m.id] = { progress: 0, completed: false };
+      const entry = { progress: 0, completed: false };
+      if (m.id === 'wm_week_tasks') {
+        const start = _getWeekStart(); const end = _getWeekEnd();
+        entry.goal = Math.max(1, state.tasks.filter(t => !t.done && !t.archived && t.dueDate && t.dueDate >= start && t.dueDate <= end).length);
+      }
+      state.weeklyMissions[m.id] = entry;
     });
     state.lastWeeklyResetKey = currentWeekKey;
     saveState();
     if (!isFirstEver) {
-      // Só notifica se for troca real de semana, não primeira inicialização
       showNotification('📅 Nova semana! Missões semanais renovadas!', 'info');
     }
   }
 }
 
-// Gera missões dinâmicas baseadas no estado atual
+// Gera/atualiza missões dinâmicas baseadas no estado atual
 function generateDynamicMissions() {
   if (!state.dynamicMissions) state.dynamicMissions = [];
   const today = todayStr();
 
-  // Remove concluídas e missões de revisão legadas
-  state.dynamicMissions = state.dynamicMissions.filter(m =>
-    !m.completed && m.type !== 'revision'
-  );
+  // Remove concluídas
+  state.dynamicMissions = state.dynamicMissions.filter(m => !m.completed);
 
-  const pendingTasks  = state.tasks.filter(t => !t.done);
-  const overdueTasks  = state.tasks.filter(t => !t.done && t.dueDate && t.dueDate < today);
-  const todayTasks    = state.tasks.filter(t => !t.done && t.dueDate === today);
-  const hardTasks     = pendingTasks.filter(t => t.difficulty === 'hard');
-  const pendingExams  = state.exams.filter(e => e.status === 'pending');
   const pendingStudy  = (state.studyItems || []).filter(i => !i.done);
+  const pastDueExams  = state.exams.filter(e => e.status !== 'done' && e.date && e.date < today);
+  const futurePending = state.tasks.filter(t => !t.done && !t.archived && t.dueDate && t.dueDate > today);
+  const overdueTasks  = state.tasks.filter(t => !t.done && !t.archived && t.dueDate && t.dueDate < today);
+  const hardTasks     = state.tasks.filter(t => !t.done && !t.archived && t.difficulty === 'hard');
+  const lowSubj       = _getLowestGradeSubject();
+  const dailyTasks    = state.dailyTasks || [];
+  const dailyDone     = dailyTasks.filter(t => t.done && t.createdDate === today).length;
+  const dailyTotal    = dailyTasks.filter(t => t.createdDate === today).length;
   const existingIds   = state.dynamicMissions.map(m => m.id);
 
-  // Tarefas com prazo HOJE — prioridade máxima
-  if (todayTasks.length >= 1 && !existingIds.includes('dm_dyn_today')) {
-    const g = Math.min(todayTasks.length, 3);
+  // Sincroniza meta dinâmica de dm_daily_all (depende das tarefas diárias geradas)
+  if (dailyTotal >= 3 && state.dailyMissions?.['dm_daily_all']) {
+    const rec = state.dailyMissions['dm_daily_all'];
+    if (!rec.goal || rec.goal < dailyTotal) rec.goal = dailyTotal;
+    if (!rec.completed) rec.progress = Math.min(rec.goal, dailyDone);
+  }
+
+  // ── Dinâmicas (spec) ─────────────────────────────────────
+
+  // 📘 Estudar conteúdos pendentes (estudado = false)
+  if (pendingStudy.length >= 1 && !existingIds.includes('dm_dyn_study')) {
+    const g = Math.min(5, pendingStudy.length);
     state.dynamicMissions.push({
-      id: 'dm_dyn_today', icon: '🔔',
-      name: g === 1 ? 'Entregar a tarefa que vence hoje' : `Entregar ${g} tarefas que vencem hoje`,
-      goal: g, progress: 0, reward: 35, key: 'tasksToday', completed: false, type: 'auto',
+      id: 'dm_dyn_study', icon: '📘',
+      name: g === 1 ? 'Estudar o conteúdo pendente' : `Estudar ${g} conteúdos pendentes`,
+      goal: g, progress: 0, reward: 50, key: 'studiedToday', completed: false, type: 'auto',
     });
   }
 
-  // Tarefas atrasadas
+  // 📝 Lançar nota de prova com data vencida e ainda sem nota
+  if (pastDueExams.length >= 1 && !existingIds.includes('dm_dyn_grade_exam')) {
+    state.dynamicMissions.push({
+      id: 'dm_dyn_grade_exam', icon: '📝',
+      name: 'Lançar nota de 1 prova pendente',
+      goal: 1, progress: 0, reward: 25, key: 'examsToday', completed: false, type: 'auto',
+    });
+  }
+
+  // ⏱️ Sessão Pomodoro na matéria com menor nota (abaixo da média)
+  if (lowSubj && !existingIds.includes('dm_dyn_pomo_weak')) {
+    state.dynamicMissions.push({
+      id: 'dm_dyn_pomo_weak', icon: '⏱️',
+      name: `Sessão Pomodoro em ${lowSubj.name}`,
+      goal: 1, progress: 0, reward: 100,
+      key: 'pomodorosToday',   // qualquer Pomodoro conta; orientação é foco nessa matéria
+      subjectId: lowSubj.id,
+      completed: false, type: 'auto',
+    });
+  }
+
+  // ✅ Completar ao menos 1 tarefa pendente com prazo FUTURO (não hoje)
+  if (futurePending.length >= 1 && !existingIds.includes('dm_dyn_future')) {
+    state.dynamicMissions.push({
+      id: 'dm_dyn_future', icon: '✅',
+      name: 'Complete pelo menos 1 tarefa pendente',
+      goal: 1, progress: 0, reward: 50, key: 'futurePendingTask', completed: false, type: 'auto',
+    });
+  }
+
+  // 🧹 Complete TODAS as tarefas atrasadas
   if (overdueTasks.length >= 1 && !existingIds.includes('dm_dyn_overdue')) {
+    const g = overdueTasks.length;
     state.dynamicMissions.push({
-      id: 'dm_dyn_overdue', icon: '⚠️',
-      name: 'Concluir 1 tarefa atrasada',
-      goal: 1, progress: 0, reward: 40, key: 'tasksToday', completed: false, type: 'auto',
+      id: 'dm_dyn_overdue', icon: '🧹',
+      name: g === 1 ? 'Complete a tarefa atrasada' : `Complete as ${g} tarefas atrasadas`,
+      goal: g, progress: 0, reward: 15, key: 'overdueTasksToday', completed: false, type: 'auto',
     });
   }
 
-  // Tarefas pendentes — adapta o objetivo ao total disponível
-  if (pendingTasks.length >= 1 && !existingIds.includes('dm_dyn_tasks')) {
-    const g = Math.min(3, pendingTasks.length);
-    state.dynamicMissions.push({
-      id: 'dm_dyn_tasks', icon: '✅',
-      name: g === 1 ? 'Concluir a tarefa pendente' : `Concluir ${g} tarefas pendentes`,
-      goal: g, progress: 0, reward: 10 * g, key: 'tasksToday', completed: false, type: 'auto',
-    });
-  }
-
-  // Tarefa difícil — bônus especial
+  // ⚡ Tarefa difícil — bônus especial (mantido como bônus extra)
   if (hardTasks.length >= 1 && !existingIds.includes('dm_dyn_hard')) {
     state.dynamicMissions.push({
       id: 'dm_dyn_hard', icon: '⚡',
@@ -2349,41 +2470,9 @@ function generateDynamicMissions() {
     });
   }
 
-  // Conteúdos de estudo — adapta ao total disponível
-  if (pendingStudy.length >= 1 && !existingIds.includes('dm_dyn_study')) {
-    const g = Math.min(3, pendingStudy.length);
-    state.dynamicMissions.push({
-      id: 'dm_dyn_study', icon: '📘',
-      name: g === 1 ? 'Estudar o conteúdo pendente' : `Estudar ${g} conteúdos pendentes`,
-      goal: g, progress: 0, reward: 15 * g, key: 'studiedToday', completed: false, type: 'auto',
-    });
-  }
-
-  // Prova com nota pendente
-  if (pendingExams.length >= 1 && !existingIds.includes('dm_dyn_exam')) {
-    state.dynamicMissions.push({
-      id: 'dm_dyn_exam', icon: '📝',
-      name: 'Lançar nota de 1 prova pendente',
-      goal: 1, progress: 0, reward: 35, key: 'examsToday', completed: false, type: 'auto',
-    });
-  }
-
-  // Missões de tarefas diárias
-  const dailyTasks   = state.dailyTasks || [];
-  const dailyDone    = dailyTasks.filter(t => t.done && t.createdDate === today).length;
-  const dailyTotal   = dailyTasks.filter(t => t.createdDate === today).length;
-  const hasFeynman   = dailyTasks.some(t => t.done && t.type === 'feynman' && t.createdDate === today);
-  const hasRevisao   = dailyTasks.some(t => t.done && t.type === 'revisao' && t.createdDate === today);
-
-  if (dailyTotal >= 1 && !existingIds.includes('daily_1')) {
-    state.dynamicMissions.push({ id: 'daily_1', icon: '⚡', name: 'Tarefa do Dia', goal: 1, progress: Math.min(dailyDone, 1), reward: 30, key: 'dailyTasksToday', completed: dailyDone >= 1, type: 'auto' });
-  }
-  if (dailyTotal >= 2 && !existingIds.includes('daily_2')) {
-    state.dynamicMissions.push({ id: 'daily_2', icon: '🎯', name: 'Aluno Dedicado', goal: 2, progress: Math.min(dailyDone, 2), reward: 60, key: 'dailyTasksToday', completed: dailyDone >= 2, type: 'auto' });
-  }
-  if (dailyTotal >= 3 && !existingIds.includes('daily_all')) {
-    state.dynamicMissions.push({ id: 'daily_all', icon: '🏆', name: 'Dia Perfeito!', goal: dailyTotal, progress: Math.min(dailyDone, dailyTotal), reward: 100, key: 'dailyTasksToday', completed: dailyDone >= dailyTotal, type: 'auto' });
-  }
+  // ── Tarefas diárias especiais (Feynman / Revisão) ─────────
+  const hasFeynman = dailyTasks.some(t => t.done && t.type === 'feynman' && t.createdDate === today);
+  const hasRevisao = dailyTasks.some(t => t.done && t.type === 'revisao' && t.createdDate === today);
   if (dailyTasks.some(t => t.type === 'feynman' && t.createdDate === today) && !existingIds.includes('daily_feynman')) {
     state.dynamicMissions.push({ id: 'daily_feynman', icon: '🧠', name: 'Método Feynman', goal: 1, progress: hasFeynman ? 1 : 0, reward: 50, key: 'dailyTasksToday', completed: hasFeynman, type: 'auto' });
   }
@@ -2397,18 +2486,19 @@ function generateDynamicMissions() {
 function updateMissionProgress(key, amount) {
   // Missões fixas diárias
   DAILY_MISSIONS_DEF.forEach(m => {
-    if (m.key === key && state.dailyMissions[m.id]) {
-      const mission = state.dailyMissions[m.id];
-      if (!mission.completed) {
-        mission.progress = Math.min(m.goal, (mission.progress || 0) + amount);
-        if (mission.progress >= m.goal) {
-          mission.completed = true;
-          addXp(m.reward);
-          addCoins(Math.floor(m.reward / 2));
-          showNotification('🎯 Missão concluída: ' + m.name + '! +' + m.reward + ' XP', 'success');
-          playSound('achievement');
-        }
-      }
+    if (m.key !== key) return;
+    const mission = state.dailyMissions?.[m.id];
+    if (!mission || mission.completed) return;
+    // Meta efetiva: dinâmica (guardada no state) ou estática (da def)
+    const goal   = (m.dynamicGoal && mission.goal) ? mission.goal : m.goal;
+    const reward = m.dynamicGoal ? goal : m.reward; // dm_xp e dm_daily_all: reward = goal
+    mission.progress = Math.min(goal, (mission.progress || 0) + amount);
+    if (mission.progress >= goal) {
+      mission.completed = true;
+      addXp(reward);
+      addCoins(Math.floor(reward / 2));
+      showNotification('🎯 Missão concluída: ' + _missionDisplayName(m) + '! +' + reward + ' XP', 'success');
+      playSound('achievement');
     }
   });
   // Missões dinâmicas
@@ -2434,6 +2524,10 @@ function updateSubjectsStudiedToday(subjectId) {
   if (!state._subjectsStudiedToday.includes(subjectId)) {
     state._subjectsStudiedToday.push(subjectId);
   }
+  const examInfo = _getUpcomingExamSubject();
+  if (examInfo && examInfo.id === subjectId) {
+    updateMissionProgress('studyExamSubjectToday', 1);
+  }
   DAILY_MISSIONS_DEF.forEach(m => {
     if (m.key === 'subjectsToday' && state.dailyMissions[m.id]) {
       const mission = state.dailyMissions[m.id];
@@ -2453,34 +2547,36 @@ function updateSubjectsStudiedToday(subjectId) {
 function updateWeeklyMissionProgress(key, amount) {
   if (!state.weeklyMissions) state.weeklyMissions = {};
   WEEKLY_MISSIONS_DEF.forEach(m => {
-    if (m.key === key) {
-      if (!state.weeklyMissions[m.id]) state.weeklyMissions[m.id] = { progress: 0, completed: false };
-      const mission = state.weeklyMissions[m.id];
-      if (!mission.completed) {
-        mission.progress = Math.min(m.goal, (mission.progress || 0) + amount);
-        if (mission.progress >= m.goal) {
-          mission.completed = true;
-          addXp(m.reward);
-          addCoins(Math.floor(m.reward / 2));
-          showNotification('🌟 Missão semanal: ' + m.name + '! +' + m.reward + ' XP', 'success');
-        }
-      }
+    if (m.key !== key) return;
+    if (!state.weeklyMissions[m.id]) state.weeklyMissions[m.id] = { progress: 0, completed: false };
+    const mission = state.weeklyMissions[m.id];
+    if (mission.completed) return;
+    const goal   = (m.dynamicGoal && mission.goal) ? mission.goal : m.goal;
+    // wm_week_tasks: recompensa total = goal × 20 XP
+    const reward = m.id === 'wm_week_tasks' ? goal * m.reward : m.reward;
+    mission.progress = Math.min(goal, (mission.progress || 0) + amount);
+    if (mission.progress >= goal) {
+      mission.completed = true;
+      addXp(reward);
+      addCoins(Math.floor(reward / 2));
+      showNotification('🌟 Missão semanal: ' + _missionDisplayName(m) + '! +' + reward + ' XP', 'success');
     }
   });
 }
 
 function checkMissionGoals() {
   DAILY_MISSIONS_DEF.forEach(m => {
-    if (m.key === 'xpToday' && state.dailyMissions[m.id]) {
-      const mission = state.dailyMissions[m.id];
-      if (!mission.completed) {
-        mission.progress = Math.min(m.goal, state.dailyXp);
-        if (mission.progress >= m.goal && !mission.completed) {
-          mission.completed = true;
-          addXp(m.reward);
-          showNotification('🎯 Missão XP concluída! +' + m.reward + ' XP', 'success');
-        }
-      }
+    if (m.key !== 'xpToday') return;
+    const mission = state.dailyMissions?.[m.id];
+    if (!mission || mission.completed) return;
+    const goal   = (m.dynamicGoal && mission.goal) ? mission.goal : m.goal;
+    const reward = m.dynamicGoal ? goal : m.reward;
+    mission.progress = Math.min(goal, state.dailyXp);
+    if (mission.progress >= goal) {
+      mission.completed = true;
+      addXp(reward);
+      addCoins(Math.floor(reward / 2));
+      showNotification('🎯 Missão XP concluída: ' + _missionDisplayName(m) + '! +' + reward + ' XP', 'success');
     }
   });
   // Dinâmicas de XP
@@ -2515,15 +2611,17 @@ function renderDailyMissions() {
     html += '<div class="mission-empty">📋 Adicione tarefas, matérias ou conteúdos para desbloquear missões!</div>';
   }
   html += validDaily.map(m => {
-    const data = state.dailyMissions[m.id] || { progress: 0, completed: false };
-    const pct = Math.min(100, Math.round((data.progress / m.goal) * 100));
+    const data          = state.dailyMissions[m.id] || { progress: 0, completed: false };
+    const effectiveGoal = (m.dynamicGoal && data.goal) ? data.goal : m.goal;
+    const effectiveRwd  = (m.dynamicGoal && data.goal) ? data.goal : m.reward;
+    const pct = Math.min(100, Math.round(((data.progress || 0) / effectiveGoal) * 100));
     return '<div class="mission-item ' + (data.completed ? 'completed' : '') + '">' +
       '<div class="mission-header">' +
-      '<span class="mission-name">' + m.icon + ' ' + m.name + '</span>' +
-      '<span class="mission-reward">+' + m.reward + ' XP</span>' +
+      '<span class="mission-name">' + m.icon + ' ' + _missionDisplayName(m) + '</span>' +
+      '<span class="mission-reward">+' + effectiveRwd + ' XP</span>' +
       '</div>' +
       '<div class="mission-bar-track"><div class="mission-bar-fill" style="width:' + pct + '%"></div></div>' +
-      '<div class="mission-progress-text">' + (data.completed ? '✅ Concluída!' : data.progress + ' / ' + m.goal) + '</div>' +
+      '<div class="mission-progress-text">' + (data.completed ? '✅ Concluída!' : (data.progress || 0) + ' / ' + effectiveGoal) + '</div>' +
       '</div>';
   }).join('');
 
@@ -2555,15 +2653,19 @@ function renderWeeklyMissions() {
     return m.valid(state, state.weeklyMissions[m.id]?.progress);
   });
   container.innerHTML = validWeekly.map(m => {
-    const data = state.weeklyMissions[m.id] || { progress: 0, completed: false };
-    const pct = Math.min(100, Math.round((data.progress / m.goal) * 100));
+    const data          = state.weeklyMissions[m.id] || { progress: 0, completed: false };
+    const effectiveGoal = (m.dynamicGoal && data.goal) ? data.goal : m.goal;
+    const effectiveRwd  = m.id === 'wm_week_tasks'
+      ? effectiveGoal * m.reward
+      : ((m.dynamicGoal && data.goal) ? data.goal : m.reward);
+    const pct = Math.min(100, Math.round(((data.progress || 0) / effectiveGoal) * 100));
     return '<div class="mission-item ' + (data.completed ? 'completed' : '') + '">' +
       '<div class="mission-header">' +
-      '<span class="mission-name">' + m.icon + ' ' + m.name + '</span>' +
-      '<span class="mission-reward">+' + m.reward + ' XP</span>' +
+      '<span class="mission-name">' + m.icon + ' ' + _missionDisplayName(m) + '</span>' +
+      '<span class="mission-reward">+' + effectiveRwd + ' XP</span>' +
       '</div>' +
       '<div class="mission-bar-track"><div class="mission-bar-fill" style="width:' + pct + '%"></div></div>' +
-      '<div class="mission-progress-text">' + (data.completed ? '✅ Concluída!' : data.progress + ' / ' + m.goal) + '</div>' +
+      '<div class="mission-progress-text">' + (data.completed ? '✅ Concluída!' : (data.progress || 0) + ' / ' + effectiveGoal) + '</div>' +
       '</div>';
   }).join('');
 }
@@ -2573,8 +2675,10 @@ function renderMissionsPreview() {
   // Show up to 2 valid daily missions + first dynamic mission
   let missions = [];
   DAILY_MISSIONS_DEF.filter(m => !m.valid || m.valid(state)).slice(0, 2).forEach(m => {
-    const data = state.dailyMissions && state.dailyMissions[m.id] || { progress: 0, completed: false };
-    missions.push({ name: m.icon + ' ' + m.name, progress: data.progress, goal: m.goal, reward: m.reward, completed: data.completed });
+    const data          = state.dailyMissions && state.dailyMissions[m.id] || { progress: 0, completed: false };
+    const effectiveGoal = (m.dynamicGoal && data.goal) ? data.goal : m.goal;
+    const effectiveRwd  = (m.dynamicGoal && data.goal) ? data.goal : m.reward;
+    missions.push({ name: m.icon + ' ' + _missionDisplayName(m), progress: data.progress || 0, goal: effectiveGoal, reward: effectiveRwd, completed: data.completed });
   });
   const firstDyn = state.dynamicMissions && state.dynamicMissions.find(m => !m.completed);
   if (firstDyn) {
@@ -3538,6 +3642,71 @@ function dayStr(offset) {
   const d = new Date();
   d.setDate(d.getDate() + offset);
   return d.toISOString().slice(0, 10);
+}
+
+// Segunda-feira da semana atual (ISO)
+function _getWeekStart() {
+  const d = new Date();
+  const diff = d.getDay() === 0 ? -6 : 1 - d.getDay();
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+// Domingo da semana atual (ISO)
+function _getWeekEnd() {
+  const d = new Date();
+  const diff = d.getDay() === 0 ? 0 : 7 - d.getDay();
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+// Meta de XP diária calculada dinamicamente (base + carga pendente)
+function _computeDailyXpGoal() {
+  const today        = todayStr();
+  const pendingTasks = state.tasks.filter(t => !t.done && !t.archived).length;
+  const pendingStudy = (state.studyItems || []).filter(i => !i.done).length;
+  const dailyCount   = (state.dailyTasks || []).filter(t => t.createdDate === today && !t.done).length;
+  return Math.max(30, Math.min(300, 30 + pendingTasks * 10 + pendingStudy * 5 + dailyCount * 8));
+}
+
+// Retorna {name, id, examDate} da matéria com prova mais próxima (7 dias)
+function _getUpcomingExamSubject() {
+  const today = todayStr(); const in7 = dayStr(7);
+  const exam = state.exams
+    .filter(e => e.status !== 'done' && e.date && e.date >= today && e.date <= in7 && e.subjectId)
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
+  if (!exam) return null;
+  const subj = (state.subjects || []).find(s => s.id === exam.subjectId);
+  return subj ? { name: subj.name, id: subj.id, examDate: exam.date } : null;
+}
+
+// Retorna a matéria com menor média abaixo da média escolar
+function _getLowestGradeSubject() {
+  const avg   = getSchoolAverage();
+  const below = (state.subjects || []).filter(s => s.grades && s.grades.length > 0 && s.avgGrade < avg);
+  if (!below.length) return null;
+  return below.sort((a, b) => a.avgGrade - b.avgGrade)[0];
+}
+
+// Nome de exibição da missão (substitui {{goal}} e nomes dinâmicos)
+function _missionDisplayName(m) {
+  if (m.id === 'dm_xp') {
+    const goal = (state.dailyMissions?.['dm_xp']?.goal) || m.goal;
+    return `Ganhar ${goal} XP`;
+  }
+  if (m.id === 'dm_study_exam') {
+    const info = _getUpcomingExamSubject();
+    return info ? `Estudar para ${info.name}` : m.name;
+  }
+  if (m.id === 'dm_daily_all') {
+    const goal = (state.dailyMissions?.['dm_daily_all']?.goal) || m.goal;
+    return `Complete todas as ${goal} tarefas diárias`;
+  }
+  if (m.id === 'wm_week_tasks') {
+    const goal = (state.weeklyMissions?.['wm_week_tasks']?.goal) || m.goal;
+    return `Complete as ${goal} tarefas desta semana`;
+  }
+  return m.name;
 }
 
 function populateSubjectSelect(selectId) {
@@ -4784,6 +4953,7 @@ function toggleStudyItem(id) {
     addXp(xp);
     addCoins(coins);
     markStudyToday();
+    if (item.subjectId) updateSubjectsStudiedToday(item.subjectId);
     updateMissionProgress('studiedToday', 1);
     updateWeeklyMissionProgress('studiedThisWeek', 1);
     showXpPopup(xp, xpBoost);
