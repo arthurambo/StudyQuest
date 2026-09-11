@@ -322,12 +322,13 @@ const ACHIEVEMENTS_DEF = [
 
 // ── Missões diárias ─────────────────────────────────────────
 // valid(state) retorna false → missão não aparece (slot flexível)
-// dynamicGoal: true → goal e reward ficam em state.dailyMissions[id].goal (calculado no reset)
+// dynamicGoal: true → goal vem de state.dailyMissions[id].goal (calculado no reset)
+// dynamicReward: true → reward também é igual ao goal dinâmico (só dm_xp usa isso)
 const DAILY_MISSIONS_DEF = [
   { id: 'dm_xp',
     icon: '⚡', name: 'Ganhar XP do dia',
     goal: 50, reward: 50, key: 'xpToday',
-    dynamicGoal: true,   // goal = reward = calculado em _computeDailyXpGoal()
+    dynamicGoal: true, dynamicReward: true,  // goal = reward = _computeDailyXpGoal()
     valid: () => true },
 
   { id: 'dm_study_exam',
@@ -347,7 +348,7 @@ const DAILY_MISSIONS_DEF = [
   { id: 'dm_daily_all',
     icon: '🏆', name: 'Complete todas as tarefas diárias',
     goal: 3, reward: 100, key: 'dailyTasksToday',
-    dynamicGoal: true,   // goal = total de tarefas diárias do dia (≥ 3)
+    dynamicGoal: true,   // goal = total de tarefas diárias do dia (≥ 3); reward é sempre 100
     valid: s => (s.dailyTasks || []).filter(t => t.createdDate === todayStr()).length >= 3 },
 
   { id: 'dm_task_due_today',
@@ -374,7 +375,7 @@ const WEEKLY_MISSIONS_DEF = [
     valid: () => true },
 
   { id: 'wm_daily_5days',
-    icon: '📃', name: 'Tarefa diária em 5 dias da semana (0/5)',
+    icon: '📃', name: 'Tarefa diária em 5 dias da semana',
     goal: 5, reward: 100, key: 'dailyDaysThisWeek',
     valid: s => (s.dailyTasks || []).length >= 1 },
 
@@ -2515,7 +2516,7 @@ function updateMissionProgress(key, amount) {
     if (!mission || mission.completed) return;
     // Meta efetiva: dinâmica (guardada no state) ou estática (da def)
     const goal   = (m.dynamicGoal && mission.goal) ? mission.goal : m.goal;
-    const reward = m.dynamicGoal ? goal : m.reward; // dm_xp e dm_daily_all: reward = goal
+    const reward = m.dynamicReward ? goal : m.reward;
     mission.progress = Math.min(goal, (mission.progress || 0) + amount);
     if (mission.progress >= goal) {
       mission.completed = true;
@@ -2594,7 +2595,7 @@ function checkMissionGoals() {
     const mission = state.dailyMissions?.[m.id];
     if (!mission || mission.completed) return;
     const goal   = (m.dynamicGoal && mission.goal) ? mission.goal : m.goal;
-    const reward = m.dynamicGoal ? goal : m.reward;
+    const reward = m.dynamicReward ? goal : m.reward;
     mission.progress = Math.min(goal, state.dailyXp);
     if (mission.progress >= goal) {
       mission.completed = true;
@@ -2641,7 +2642,7 @@ function renderDailyMissions() {
   html += visibleDaily.map(m => {
     const data          = state.dailyMissions[m.id] || { progress: 0, completed: false };
     const effectiveGoal = (m.dynamicGoal && data.goal) ? data.goal : m.goal;
-    const effectiveRwd  = (m.dynamicGoal && data.goal) ? data.goal : m.reward;
+    const effectiveRwd  = (m.dynamicReward && data.goal) ? data.goal : m.reward;
     const pct = Math.min(100, Math.round(((data.progress || 0) / effectiveGoal) * 100));
     return '<div class="mission-item ' + (data.completed ? 'completed' : '') + '">' +
       '<div class="mission-header">' +
@@ -2706,7 +2707,7 @@ function renderMissionsPreview() {
   DAILY_MISSIONS_DEF.filter(m => !m.valid || m.valid(state)).slice(0, 2).forEach(m => {
     const data          = state.dailyMissions && state.dailyMissions[m.id] || { progress: 0, completed: false };
     const effectiveGoal = (m.dynamicGoal && data.goal) ? data.goal : m.goal;
-    const effectiveRwd  = (m.dynamicGoal && data.goal) ? data.goal : m.reward;
+    const effectiveRwd  = (m.dynamicReward && data.goal) ? data.goal : m.reward;
     missions.push({ name: m.icon + ' ' + _missionDisplayName(m), progress: data.progress || 0, goal: effectiveGoal, reward: effectiveRwd, completed: data.completed });
   });
   const firstDyn = state.dynamicMissions && state.dynamicMissions.find(m => !m.completed);
