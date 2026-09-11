@@ -5967,7 +5967,7 @@ async function launchApp() {
     }, 2000);
 
     // Patch notes — mostra uma vez por versão
-    const _PATCH_KEY = 'sq_patch_prova_update_v1';
+    const _PATCH_KEY = 'sq_patch_loja_inventario_v1';
     if (!localStorage.getItem(_PATCH_KEY)) {
       setTimeout(() => { openModal('modal-patch-notes'); }, 1200);
       localStorage.setItem(_PATCH_KEY, '1');
@@ -7009,12 +7009,13 @@ function sellDuplicate(cosmeticId) {
   updateDashboard();
 }
 
-function openGiftCosmeticModal(cosmeticId) {
+async function openGiftCosmeticModal(cosmeticId) {
   window._giftingCosmeticId = cosmeticId;
   closeModal('modal-duplicate-options');
-  // Popula lista de amigos
-  const friends = state.friends || [];
-  const listEl  = document.getElementById('gift-cosmetic-friends-list');
+  const listEl = document.getElementById('gift-cosmetic-friends-list');
+  listEl.innerHTML = '<p style="color:var(--text-muted);text-align:center;font-size:.85rem">Carregando amigos...</p>';
+  openModal('modal-gift-cosmetic');
+  const friends = await listFriendsWithData();
   if (!friends.length) {
     listEl.innerHTML = '<p style="color:var(--text-muted);text-align:center;font-size:.85rem">Nenhum amigo encontrado.</p>';
   } else {
@@ -7022,13 +7023,12 @@ function openGiftCosmeticModal(cosmeticId) {
       <div class="friend-gift-row" onclick="sendCosmeticGift('${f.id}')">
         <span style="font-size:1.5rem">${f.avatar || '🧙'}</span>
         <div>
-          <div style="font-weight:700;font-size:.9rem">${f.name || f.displayName || 'Amigo'}</div>
+          <div style="font-weight:700;font-size:.9rem">${escHtml(f.name || f.displayName || 'Amigo')}</div>
           <div style="font-size:.75rem;color:var(--text-muted)">Nível ${f.level || 1}</div>
         </div>
         <span style="margin-left:auto;font-size:.8rem;color:var(--accent)">Presentear →</span>
       </div>`).join('');
   }
-  openModal('modal-gift-cosmetic');
 }
 
 async function sendCosmeticGift(toUserId) {
@@ -7036,16 +7036,53 @@ async function sendCosmeticGift(toUserId) {
   if (!cosmeticId) return;
   const item = _cosmeticById(cosmeticId);
   if (!item || _inventoryCount(cosmeticId) < 2) return showNotification('Sem duplicatas para presentear.', 'warning');
-  state.cosmetics.inventory[cosmeticId]--;
-  saveState();
-  if (sb && authUserId) {
-    try {
-      await sb.from('cosmetic_gifts').insert({ from_id: authUserId, to_id: toUserId, cosmetic_id: cosmeticId, created_at: new Date().toISOString() });
-    } catch(e) { /* Supabase pode não ter essa tabela ainda */ }
-  }
-  showNotification(`🎁 "${item.name}" enviado com sucesso!`, 'success');
-  closeModal('modal-gift-cosmetic');
-  renderInventory();
+  if (!sb || !authUserId) return showNotification('Precisa estar logado para presentear.', 'warning');
+  try {
+    const { error } = await sb.from('cosmetic_gifts').insert({
+      from_id: authUserId, to_id: toUserId,
+      cosmetic_id: cosmeticId, status: 'pending',
+      created_at: new Date().toISOString(),
+    });
+    if (error) { console.error('[CosmeticGift] Erro ao enviar:', error.message); return showNotification('Erro ao enviar presente.', 'error'); }
+    state.cosmetics.inventory[cosmeticId]--;
+    saveState();
+    showNotification(`🎁 "${item.name}" enviado com sucesso!`, 'success');
+    closeModal('modal-gift-cosmetic');
+    renderInventory();
+  } catch(e) { showNotification('Erro ao enviar presente.', 'error'); }
+}
+
+async function listMyCosmeticGifts() {
+  if (!sb || !authUserId) return [];
+  try {
+    const { data: rows } = await sb.from('cosmetic_gifts')
+      .select('id, from_id, cosmetic_id, status, created_at')
+      .eq('to_id', authUserId).eq('status', 'pending').order('created_at', { ascending: false });
+    if (!rows?.length) return [];
+    const ids = [...new Set(rows.map(r => r.from_id))];
+    const { data: users } = await sb.from('users').select('id, name, data').in('id', ids);
+    const uMap = {}; (users || []).forEach(u => { uMap[u.id] = _parseUserRow(u); });
+    return rows.map(r => ({ ...r, sender: uMap[r.from_id] || { name: 'Alguém', avatar: '🧙' }, item: _cosmeticById(r.cosmetic_id) })).filter(r => r.item);
+  } catch (e) { return []; }
+}
+
+async function acceptCosmeticGift(giftId, cosmeticId) {
+  if (!sb || !authUserId) return false;
+  try {
+    const { error } = await sb.from('cosmetic_gifts').update({ status: 'accepted' }).eq('id', giftId);
+    if (error) return false;
+    if (!state.cosmetics.inventory) state.cosmetics.inventory = {};
+    state.cosmetics.inventory[cosmeticId] = (state.cosmetics.inventory[cosmeticId] || 0) + 1;
+    const item = _cosmeticById(cosmeticId);
+    saveState();
+    showNotification(`🎁 Você recebeu "${item?.name || cosmeticId}"!`, 'success');
+    return true;
+  } catch (e) { return false; }
+}
+
+async function declineCosmeticGift(giftId) {
+  if (!sb || !authUserId) return;
+  try { await sb.from('cosmetic_gifts').update({ status: 'declined' }).eq('id', giftId); } catch (e) {}
 }
 
 // Mantida para compat — agora sem efeito direto (compra via caixas)
@@ -7153,13 +7190,14 @@ async function loadNotifCount() {
 
   if (!sb || !authUserId) return localUnread + surprisePending;
   try {
-    const [{ count: reqCount }, { count: motivCount }, { count: giftCount }, { count: inviteCount }] = await Promise.all([
+    const [{ count: reqCount }, { count: motivCount }, { count: giftCount }, { count: inviteCount }, { count: cosmeticGiftCount }] = await Promise.all([
       sb.from('friend_requests').select('*', { count: 'exact', head: true }).eq('to_id', authUserId).eq('status', 'pending'),
       sb.from('motivations').select('*', { count: 'exact', head: true }).eq('to_id', authUserId).eq('read', false),
       sb.from('gifts').select('*', { count: 'exact', head: true }).eq('to_id', authUserId).eq('status', 'pending'),
       sb.from('group_invites').select('*', { count: 'exact', head: true }).eq('to_id', authUserId).eq('status', 'pending'),
+      sb.from('cosmetic_gifts').select('*', { count: 'exact', head: true }).eq('to_id', authUserId).eq('status', 'pending'),
     ]);
-    return (reqCount || 0) + (motivCount || 0) + (giftCount || 0) + (inviteCount || 0) + localUnread + surprisePending;
+    return (reqCount || 0) + (motivCount || 0) + (giftCount || 0) + (inviteCount || 0) + (cosmeticGiftCount || 0) + localUnread + surprisePending;
   } catch (e) { return localUnread + surprisePending; }
 }
 
@@ -7180,8 +7218,8 @@ async function renderNotifPanel() {
   if (!container) return;
   container.innerHTML = '<div class="social-loading">Carregando...</div>';
 
-  const [pendingReqs, motivations, gifts, groupInvites] = await Promise.all([
-    listPendingRequests(), listMyMotivations(), listMyGifts(), listGroupInvites(),
+  const [pendingReqs, motivations, gifts, groupInvites, cosmeticGifts] = await Promise.all([
+    listPendingRequests(), listMyMotivations(), listMyGifts(), listGroupInvites(), listMyCosmeticGifts(),
   ]);
   markMotivationsRead();
 
@@ -7265,6 +7303,22 @@ async function renderNotifPanel() {
     </div>`).join('');
   }
 
+  // ── Presentes cosméticos ────────────────────────────────────
+  if (cosmeticGifts.length) {
+    html += `<div class="notif-section-title">🎨 Cosméticos Presenteados (${cosmeticGifts.length})</div>`;
+    html += cosmeticGifts.map(g => `<div class="notif-card">
+      ${_avatarHtml(g.sender)}
+      <div class="notif-info">
+        <div class="notif-name">${escHtml(g.sender.name)}</div>
+        <div class="notif-sub">${g.item.icon} ${escHtml(g.item.name)}</div>
+      </div>
+      <div class="notif-btns">
+        <button class="btn-accept" onclick="handleAcceptCosmeticGift('${g.id}','${g.cosmetic_id}',this)">🎁 Pegar</button>
+        <button class="btn-reject" onclick="handleDeclineCosmeticGift('${g.id}',this)">✕</button>
+      </div>
+    </div>`).join('');
+  }
+
   // Motivações
   if (motivations.length) {
     html += `<div class="notif-section-title">💪 Motivações (${motivations.length})</div>`;
@@ -7292,6 +7346,21 @@ async function handleAcceptGift(giftId, itemId, btn) {
 async function handleDeclineGift(giftId, btn) {
   if (btn) btn.disabled = true;
   await declineGift(giftId);
+  showNotification('Presente recusado.', 'info');
+  renderNotifPanel();
+  updateNotifBell();
+}
+
+async function handleAcceptCosmeticGift(giftId, cosmeticId, btn) {
+  if (btn) btn.disabled = true;
+  const ok = await acceptCosmeticGift(giftId, cosmeticId);
+  if (ok) { renderNotifPanel(); updateNotifBell(); renderInventory(); }
+  else showNotification('Erro ao aceitar presente.', 'error');
+}
+
+async function handleDeclineCosmeticGift(giftId, btn) {
+  if (btn) btn.disabled = true;
+  await declineCosmeticGift(giftId);
   showNotification('Presente recusado.', 'info');
   renderNotifPanel();
   updateNotifBell();
@@ -8176,7 +8245,7 @@ async function openFriendProfile(userId) {
   const bannerEl = document.getElementById('friend-profile-banner');
   if (bannerEl) {
     // Remove classes de banner anteriores
-    const bannerClasses = ['banner_purple','banner_fire','banner_ocean','banner_forest','banner_galaxy'];
+    const bannerClasses = COSMETICS_CATALOG.filter(c => c.type === 'banner').map(c => c.id);
     bannerEl.classList.remove(...bannerClasses);
     if (user.equippedBanner) bannerEl.classList.add(user.equippedBanner);
   }

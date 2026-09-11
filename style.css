@@ -4277,6 +4277,132 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
 /* Garante que o conteúdo do banner fica acima das estrelas */
 .profile-page-banner.banner_galaxy .profile-page-hero { position: relative; z-index: 1; }
 
+/* ── Frames novos ───────────────────────────────────────────── */
+.friend-avatar.frame_wood      { border: 3px solid #8B4513; box-shadow: 0 0 6px #8B451380; }
+.friend-avatar.frame_bronze    { border: 3px solid #cd7f32; box-shadow: 0 0 6px #cd7f3280; }
+.friend-avatar.frame_neon      { border: 3px solid #39ff14; box-shadow: 0 0 10px #39ff14cc, 0 0 20px #39ff1460; }
+.friend-avatar.frame_poison    { border: 3px solid #7cfc00; box-shadow: 0 0 8px #7cfc0080, 0 0 16px #39ff1440; }
+.friend-avatar.frame_dragon    { border: 3px solid #dc143c; box-shadow: 0 0 10px #dc143c90, 0 0 20px #8b000060; }
+.friend-avatar.frame_cyberpunk { border: 3px solid transparent;
+  background: linear-gradient(var(--bg-primary,#1a1a2e),var(--bg-primary,#1a1a2e)) padding-box,
+              linear-gradient(135deg,#00f5ff,#ff00ff,#ffff00) border-box;
+  box-shadow: 0 0 10px #00f5ff60, 0 0 20px #ff00ff40; }
+.friend-avatar.frame_infinity  { border: 3px solid transparent;
+  background: linear-gradient(var(--bg-primary,#1a1a2e),var(--bg-primary,#1a1a2e)) padding-box,
+              linear-gradient(135deg,#ffd700,#ff8c00,#ff0000,#ff8c00,#ffd700) border-box;
+  box-shadow: 0 0 14px #ffd700aa, 0 0 28px #ff8c0060; }
+
+/* ── Banners novos ──────────────────────────────────────────── */
+/* Pôr do Sol */
+.profile-page-banner.banner_sunset {
+  background:
+    radial-gradient(ellipse at 50% 100%, rgba(255,100,0,.55)  0%, transparent 50%),
+    radial-gradient(ellipse at 30%  80%, rgba(255,60,80,.4)   0%, transparent 45%),
+    radial-gradient(ellipse at 70%  70%, rgba(255,180,0,.35)  0%, transparent 40%),
+    linear-gradient(180deg, #1a0a2e 0%, #3d1555 30%, #8b2252 55%, #d45f1e 80%, #ff9000 100%);
+}
+
+/* Noite Urbana */
+.profile-page-banner.banner_urban {
+  background:
+    radial-gradient(ellipse at 20%  90%, rgba(255,220,0,.3)   0%, transparent 30%),
+    radial-gradient(ellipse at 60%  85%, rgba(0,180,255,.25)  0%, transparent 25%),
+    radial-gradient(ellipse at 80%  80%, rgba(255,100,0,.2)   0%, transparent 25%),
+    linear-gradient(180deg, #020408 0%, #050d18 40%, #0a1428 70%, #0f1e38 100%);
+}
+.profile-page-banner.banner_urban::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 10%  20%, rgba(255,255,150,.8) 100%, transparent),
+    radial-gradient(1px 1px at 25%  15%, rgba(200,200,255,.6) 100%, transparent),
+    radial-gradient(1px 1px at 45%  30%, rgba(255,255,200,.7) 100%, transparent),
+    radial-gradient(1px 1px at 65%  10%, rgba(255,200,150,.6) 100%, transparent),
+    radial-gradient(1px 1px at 80%  25%, rgba(200,255,200,.5) 100%, transparent),
+    radial-gradient(1px 1px at 90%  18%, rgba(255,255,255,.7) 100%, transparent);
+  border-radius: 14px;
+  pointer-events: none;
+}
+.profile-page-banner.banner_urban .profile-page-hero { position: relative; z-index: 1; }
+
+/* Biblioteca Mística */
+.profile-page-banner.banner_library {
+  background:
+    radial-gradient(ellipse at 50%  20%, rgba(180,100,0,.4)   0%, transparent 45%),
+    radial-gradient(ellipse at 20%  60%, rgba(100,40,0,.35)   0%, transparent 40%),
+    radial-gradient(ellipse at 80%  50%, rgba(150,80,20,.3)   0%, transparent 40%),
+    linear-gradient(160deg, #1a0a00 0%, #2d1500 30%, #3d2000 55%, #4a2800 75%, #1a0a00 100%);
+}
+
+/* Vulcão */
+.profile-page-banner.banner_volcano {
+  background:
+    radial-gradient(ellipse at 50% 110%, rgba(255,100,0,.7)   0%, transparent 50%),
+    radial-gradient(ellipse at 30%  80%, rgba(255,40,0,.5)    0%, transparent 40%),
+    radial-gradient(ellipse at 70%  70%, rgba(255,200,0,.4)   0%, transparent 35%),
+    radial-gradient(ellipse at 50%  50%, rgba(150,0,0,.3)     0%, transparent 50%),
+    linear-gradient(180deg, #0a0000 0%, #1a0000 25%, #2d0500 50%, #550000 75%, #800000 100%);
+}
+
+/* Nebulosa */
+.profile-page-banner.banner_nebula {
+  background:
+    radial-gradient(ellipse at 20%  40%, rgba(0,200,255,.4)   0%, transparent 45%),
+    radial-gradient(ellipse at 70%  30%, rgba(200,0,255,.45)  0%, transparent 40%),
+    radial-gradient(ellipse at 45%  70%, rgba(255,100,200,.35) 0%, transparent 40%),
+    radial-gradient(ellipse at 80%  65%, rgba(0,150,255,.3)   0%, transparent 35%),
+    linear-gradient(135deg, #020010 0%, #050025 30%, #0a0030 55%, #150040 75%, #020010 100%);
+}
+.profile-page-banner.banner_nebula::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 15%  20%, #fff 100%, transparent),
+    radial-gradient(1px 1px at 35%  45%, #ccf 100%, transparent),
+    radial-gradient(1px 1px at 55%  15%, #fff 100%, transparent),
+    radial-gradient(1px 1px at 72%  55%, #fcc 100%, transparent),
+    radial-gradient(1px 1px at 88%  30%, #fff 100%, transparent),
+    radial-gradient(2px 2px at 40%  70%, rgba(200,150,255,.8) 100%, transparent),
+    radial-gradient(2px 2px at 65%  82%, rgba(150,200,255,.7) 100%, transparent);
+  border-radius: 14px;
+  pointer-events: none;
+}
+.profile-page-banner.banner_nebula .profile-page-hero { position: relative; z-index: 1; }
+
+/* Castelo das Nuvens */
+.profile-page-banner.banner_castle {
+  background:
+    radial-gradient(ellipse at 50%   0%, rgba(255,255,255,.3) 0%, transparent 50%),
+    radial-gradient(ellipse at 20%  50%, rgba(200,220,255,.25) 0%, transparent 45%),
+    radial-gradient(ellipse at 80%  40%, rgba(180,200,255,.2) 0%, transparent 40%),
+    linear-gradient(180deg, #c8d8ff 0%, #a0b8f0 20%, #7090d0 45%, #4060a0 70%, #203080 100%);
+}
+
+/* Aurora Boreal */
+.profile-page-banner.banner_aurora {
+  background:
+    radial-gradient(ellipse at 25%  30%, rgba(0,255,150,.5)   0%, transparent 50%),
+    radial-gradient(ellipse at 60%  20%, rgba(0,200,255,.45)  0%, transparent 45%),
+    radial-gradient(ellipse at 80%  40%, rgba(100,0,255,.35)  0%, transparent 40%),
+    radial-gradient(ellipse at 10%  60%, rgba(0,255,200,.3)   0%, transparent 35%),
+    linear-gradient(160deg, #000a0a 0%, #001520 25%, #002030 50%, #001a25 75%, #000a10 100%);
+}
+.profile-page-banner.banner_aurora::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 12%  25%, rgba(200,255,220,.8) 100%, transparent),
+    radial-gradient(1px 1px at 28%  40%, rgba(255,255,255,.7) 100%, transparent),
+    radial-gradient(1px 1px at 50%  18%, rgba(150,255,230,.8) 100%, transparent),
+    radial-gradient(1px 1px at 68%  35%, rgba(200,220,255,.6) 100%, transparent),
+    radial-gradient(1px 1px at 82%  22%, rgba(255,255,255,.7) 100%, transparent),
+    radial-gradient(2px 2px at 38%  60%, rgba(0,255,180,.6)   100%, transparent),
+    radial-gradient(2px 2px at 72%  70%, rgba(100,200,255,.5) 100%, transparent);
+  border-radius: 14px;
+  pointer-events: none;
+}
+.profile-page-banner.banner_aurora .profile-page-hero { position: relative; z-index: 1; }
+
 /* ── Cosméticos na loja ─────────────────────────────────────── */
 .shop-tabs { display:flex; gap:.5rem; margin-bottom:1rem; }
 .shop-tab-btn {
