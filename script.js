@@ -2344,6 +2344,7 @@ function checkDailyReset() {
   if (state.lastResetDate !== today) {
     state.dailyXp = 0;
     state.dailyMissions = {};
+    state.dynamicMissions = [];
     DAILY_MISSIONS_DEF.forEach(m => {
       state.dailyMissions[m.id] = { progress: 0, completed: false };
     });
@@ -2410,8 +2411,9 @@ function generateDynamicMissions() {
   if (!state.dynamicMissions) state.dynamicMissions = [];
   const today = todayStr();
 
-  // Remove concluídas
-  state.dynamicMissions = state.dynamicMissions.filter(m => !m.completed);
+  // Mantém concluídas visíveis até o reset diário — remove apenas as não-concluídas
+  // que serão re-avaliadas (mantém as concluídas no state)
+  state.dynamicMissions = state.dynamicMissions.filter(m => m.completed);
 
   const pendingStudy  = (state.studyItems || []).filter(i => !i.done);
   const pastDueExams  = state.exams.filter(e => e.status !== 'done' && e.date && e.date < today);
@@ -2627,12 +2629,16 @@ function renderDailyMissions() {
 
   let html = '';
 
-  // Missões fixas — filtra apenas as possíveis no estado atual
-  const validDaily = DAILY_MISSIONS_DEF.filter(m => !m.valid || m.valid(state));
-  if (validDaily.length === 0) {
+  // Missões fixas — missões concluídas sempre aparecem; as não-concluídas passam pelo valid()
+  const visibleDaily = DAILY_MISSIONS_DEF.filter(m => {
+    const data = state.dailyMissions?.[m.id];
+    if (data?.completed) return true;
+    return !m.valid || m.valid(state);
+  });
+  if (visibleDaily.length === 0) {
     html += '<div class="mission-empty">📋 Adicione tarefas, matérias ou conteúdos para desbloquear missões!</div>';
   }
-  html += validDaily.map(m => {
+  html += visibleDaily.map(m => {
     const data          = state.dailyMissions[m.id] || { progress: 0, completed: false };
     const effectiveGoal = (m.dynamicGoal && data.goal) ? data.goal : m.goal;
     const effectiveRwd  = (m.dynamicGoal && data.goal) ? data.goal : m.reward;
@@ -2647,19 +2653,20 @@ function renderDailyMissions() {
       '</div>';
   }).join('');
 
-  // Missões dinâmicas ativas
-  const activeDynamic = (state.dynamicMissions || []).filter(m => !m.completed);
-  if (activeDynamic.length) {
+  // Missões dinâmicas — todas (ativas e concluídas) ficam até o reset
+  const allDynamic = (state.dynamicMissions || []);
+  const activeDynamic = allDynamic.filter(m => !m.completed);
+  if (allDynamic.length) {
     html += '<div class="task-section-header" style="margin:1rem 0 0.5rem">⭐ Missões Dinâmicas <span class="task-section-badge">' + activeDynamic.length + '</span></div>';
-    html += activeDynamic.map(m => {
+    html += allDynamic.map(m => {
       const pct = Math.min(100, Math.round(((m.progress||0) / m.goal) * 100));
-      return '<div class="mission-item dynamic">' +
+      return '<div class="mission-item dynamic ' + (m.completed ? 'completed' : '') + '">' +
         '<div class="mission-header">' +
         '<span class="mission-name">' + m.icon + ' ' + m.name + '</span>' +
         '<span class="mission-reward">+' + m.reward + ' XP</span>' +
         '</div>' +
         '<div class="mission-bar-track"><div class="mission-bar-fill" style="width:' + pct + '%"></div></div>' +
-        '<div class="mission-progress-text">' + (m.progress||0) + ' / ' + m.goal + '</div>' +
+        '<div class="mission-progress-text">' + (m.completed ? '✅ Concluída!' : (m.progress||0) + ' / ' + m.goal) + '</div>' +
         '</div>';
     }).join('');
   }
