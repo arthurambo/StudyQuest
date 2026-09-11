@@ -2361,6 +2361,28 @@ function checkDailyReset() {
     showNotification('🌅 Novo dia! Missões diárias renovadas!', 'info');
   }
 
+  // ── Migração: garante que todos os IDs atuais existam no state ──────────────
+  if (!state.dailyMissions) state.dailyMissions = {};
+  DAILY_MISSIONS_DEF.forEach(m => {
+    if (!state.dailyMissions[m.id]) {
+      state.dailyMissions[m.id] = { progress: 0, completed: false };
+    }
+  });
+  if (!state.dailyMissions['dm_xp'].goal) {
+    state.dailyMissions['dm_xp'].goal = _computeDailyXpGoal();
+  }
+  if (!state.weeklyMissions) state.weeklyMissions = {};
+  WEEKLY_MISSIONS_DEF.forEach(m => {
+    if (!state.weeklyMissions[m.id]) {
+      const entry = { progress: 0, completed: false };
+      if (m.id === 'wm_week_tasks') {
+        const start = _getWeekStart(); const end = _getWeekEnd();
+        entry.goal = Math.max(1, state.tasks.filter(t => !t.done && !t.archived && t.dueDate && t.dueDate >= start && t.dueDate <= end).length);
+      }
+      state.weeklyMissions[m.id] = entry;
+    }
+  });
+
   // ── Reset semanal (segunda-feira de cada semana) ────────────────
   const currentWeekKey = _isoWeekKey();
   if (state.lastWeeklyResetKey !== currentWeekKey) {
