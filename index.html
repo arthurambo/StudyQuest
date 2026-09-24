@@ -387,6 +387,30 @@
         <p class="page-subtitle" id="dash-feedback">Continue sua jornada épica!</p>
       </div>
 
+      <!-- BANNER INSTALAR PWA -->
+      <div id="pwa-install-banner" style="display:none">
+        <div class="push-prompt-content">
+          <span class="push-prompt-icon">📲</span>
+          <div class="push-prompt-text">
+            <strong>Instale o StudyQuest!</strong>
+            <span>Acesse mais rápido e funciona offline, igual a um app de verdade.</span>
+          </div>
+          <button class="push-prompt-btn" onclick="triggerPWAInstall()">Instalar</button>
+        </div>
+      </div>
+
+      <!-- BANNER NOTIFICAÇÕES PUSH -->
+      <div id="push-prompt-banner" style="display:none">
+        <div class="push-prompt-content">
+          <span class="push-prompt-icon">🔔</span>
+          <div class="push-prompt-text">
+            <strong>Ative as notificações!</strong>
+            <span>Receba lembretes de streak e cronograma direto no celular, mesmo com o app fechado.</span>
+          </div>
+          <button class="push-prompt-btn" onclick="activatePushFromBanner()">Ativar</button>
+        </div>
+      </div>
+
       <!-- STATS CARDS -->
       <div class="stats-grid">
         <div class="stat-card xp-card">

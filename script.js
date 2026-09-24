@@ -75,15 +75,26 @@ window.addEventListener('appinstalled', () => {
   showNotification('✅ StudyQuest instalado! Procure o ícone na tela inicial.', 'success');
 });
 
+const _isLocalEnv = location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.protocol === 'file:';
+
 function _showInstallButtons() {
   const topbar   = document.getElementById('install-btn-topbar');
   const section  = document.getElementById('pwa-install-section');
   const login    = document.getElementById('install-btn-login');
   const register = document.getElementById('install-btn-register');
+  const banner   = document.getElementById('pwa-install-banner');
   if (topbar)    topbar.style.display   = '';
   if (section)   section.style.display  = '';
   if (login)     login.style.display    = '';
   if (register)  register.style.display = '';
+  if (banner)    banner.style.display   = '';
+}
+
+/** Em local, força o banner PWA visível para teste (sem precisar do beforeinstallprompt) */
+function _updatePwaInstallBanner() {
+  if (!_isLocalEnv) return;
+  const banner = document.getElementById('pwa-install-banner');
+  if (banner && !_pwaInstallPrompt) banner.style.display = '';
 }
 
 function _hideInstallButtons() {
@@ -91,10 +102,12 @@ function _hideInstallButtons() {
   const section  = document.getElementById('pwa-install-section');
   const login    = document.getElementById('install-btn-login');
   const register = document.getElementById('install-btn-register');
+  const banner   = document.getElementById('pwa-install-banner');
   if (topbar)    topbar.style.display   = 'none';
   if (section)   section.style.display  = 'none';
   if (login)     login.style.display    = 'none';
   if (register)  register.style.display = 'none';
+  if (banner)    banner.style.display   = 'none';
 }
 
 async function triggerPWAInstall() {
@@ -3827,6 +3840,10 @@ function updateDashboard() {
 
   // Feedback inteligente
   updateFeedback();
+
+  // Banners de instalação PWA e notificações push
+  _updatePwaInstallBanner();
+  _updatePushPromptBanner();
 
   // Missões preview
   renderMissionsPreview();
@@ -8758,7 +8775,7 @@ async function handleSendGift() {
  * Chave pública VAPID (gerada uma vez — nunca mudar sem reger a Edge Function também).
  * A chave PRIVADA fica SOMENTE nas variáveis de ambiente da Edge Function no Supabase.
  */
-const VAPID_PUBLIC_KEY = 'BEdUNLPAv-abfKlkcoxCDY0KKrZXTbvQ1J49sZY2EGbcBbqsKp8i50_g9BQbTbE_dy_GaIL6J1av9m-14x9VaTc';
+const VAPID_PUBLIC_KEY = 'BN_HGMtHxwMGjjMSTaaYhJq8F9FdCktyHnEvu3-EyFZ83FYF19IGd2DGo4h97Nr2hY0mvya5Sxm6DffArSckY0w';
 
 /** Converte base64url → Uint8Array (necessário para applicationServerKey) */
 function _urlBase64ToUint8Array(base64String) {
@@ -8880,6 +8897,46 @@ function _pushPrefEnabled(type) {
   const prefs = state.settings?.pushPrefs || {};
   // Se a chave não existe, considera ativado por padrão
   return prefs[type] !== false;
+}
+
+/** Mostra/esconde o banner de cobrança de notificações no dashboard */
+async function _updatePushPromptBanner() {
+  const banner = document.getElementById('push-prompt-banner');
+  if (!banner) return;
+
+  // Não mostra se push não é suportado
+  if (!('PushManager' in window) || !('serviceWorker' in navigator)) { banner.style.display = 'none'; return; }
+
+  // Não mostra se já concedeu permissão e tem subscription ativa
+  if (Notification.permission === 'granted') {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) { banner.style.display = 'none'; return; }
+    } catch {}
+  }
+
+  // Não mostra se bloqueou explicitamente (já tomou decisão)
+  if (Notification.permission === 'denied') { banner.style.display = 'none'; return; }
+
+  // Mostra o banner
+  banner.style.display = '';
+}
+
+async function activatePushFromBanner() {
+  const btn = document.querySelector('.push-prompt-btn');
+  if (btn) { btn.textContent = '...'; btn.disabled = true; }
+  const ok = await initPushNotifications();
+  if (ok) {
+    showNotification('🔔 Notificações ativadas!', 'success');
+    const banner = document.getElementById('push-prompt-banner');
+    if (banner) banner.style.display = 'none';
+  } else {
+    if (btn) { btn.textContent = 'Ativar'; btn.disabled = false; }
+    if (Notification.permission === 'denied') {
+      showNotification('Notificações bloqueadas. Ative nas configurações do navegador.', 'warning');
+    }
+  }
 }
 
 /** Exibe status de permissão no botão de ativação de push */
