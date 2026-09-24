@@ -5121,7 +5121,7 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
   box-sizing: border-box;
 }
 .friend-info { flex: 1; min-width: 0; }
-.friend-name  { font-weight: 800; font-size: .95rem; }
+.friend-name  { font-weight: 800; font-size: .95rem; display: flex; align-items: center; gap: .3rem; flex-wrap: wrap; }
 .friend-level { font-size: .78rem; color: var(--text-muted); font-weight: 600; margin-top: .15rem; }
 .friend-fav   { font-size: .75rem; color: var(--primary-light); margin-top: .1rem; }
 .friend-req-btns { display: flex; gap: .4rem; flex-shrink: 0; }
@@ -5205,7 +5205,7 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
   flex-shrink: 0;
   box-sizing: border-box;
 }
-.friend-profile-name   { font-size: 1.2rem; font-weight: 800; }
+.friend-profile-name   { font-size: 1.2rem; font-weight: 800; display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
 .friend-profile-level  { font-size: .85rem; color: var(--primary-light); font-weight: 700; margin-top: .2rem; }
 .friend-profile-xp     { font-size: .8rem; color: var(--text-muted); font-weight: 600; margin-top: .15rem; }
 

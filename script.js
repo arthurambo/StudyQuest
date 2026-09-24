@@ -8080,6 +8080,7 @@ function _parseUserRow(row) {
     avatarUrl:       d.avatarUrl  || '',
     equippedFrame:   d.cosmetics?.equippedFrame  || null,
     equippedBanner:  d.cosmetics?.equippedBanner || null,
+    equippedTag:     d.cosmetics?.equippedTag    || null,
     favoriteSubject: d.favoriteSubject || '',
     achievements:    d.achievements    || [],
   };
@@ -8361,7 +8362,7 @@ function _friendCard(user) {
   return `<div class="friend-card" onclick="openFriendProfile('${user.id}')">
     ${_avatarHtml(user)}
     <div class="friend-info">
-      <div class="friend-name">${escHtml(user.name)}</div>
+      <div class="friend-name">${escHtml(user.name)}${_tagBadgeHtml(user.equippedTag)}</div>
       ${user.username ? `<div class="friend-username">@${escHtml(user.username)}</div>` : ''}
       <div class="friend-level">⚔️ Nível ${user.level} · ✨ ${user.xp} XP</div>
       ${user.favoriteSubject ? `<div class="friend-fav">❤️ ${escHtml(user.favoriteSubject)}</div>` : ''}
@@ -8652,7 +8653,7 @@ async function openFriendProfile(userId) {
     if (user.equippedBanner) bannerEl.classList.add(user.equippedBanner);
   }
 
-  document.getElementById('friend-profile-name').textContent   = user.name;
+  document.getElementById('friend-profile-name').innerHTML = escHtml(user.name) + _tagBadgeHtml(user.equippedTag);
   document.getElementById('friend-profile-level').textContent  = `⚔️ Nível ${user.level}`;
   document.getElementById('friend-profile-xp').textContent     = `✨ ${user.xp} XP`;
   document.getElementById('friend-profile-fav').textContent    = user.favoriteSubject ? `❤️ Favorita: ${user.favoriteSubject}` : '';
