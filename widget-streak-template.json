@@ -1,0 +1,65 @@
+{
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "type": "AdaptiveCard",
+  "version": "1.5",
+  "backgroundImage": {
+    "url": "./widget-bg.svg",
+    "fillMode": "Cover"
+  },
+  "body": [
+    {
+      "type": "ColumnSet",
+      "spacing": "None",
+      "columns": [
+        {
+          "type": "Column",
+          "width": "auto",
+          "verticalContentAlignment": "Center",
+          "items": [
+            {
+              "type": "Image",
+              "url": "./icon.svg",
+              "width": "56px",
+              "height": "56px",
+              "altText": "StudyQuest"
+            }
+          ]
+        },
+        {
+          "type": "Column",
+          "width": "stretch",
+          "verticalContentAlignment": "Center",
+          "spacing": "Medium",
+          "items": [
+            {
+              "type": "TextBlock",
+              "text": "🔥 ${streak} dias",
+              "weight": "Bolder",
+              "size": "ExtraLarge",
+              "color": "Light",
+              "wrap": false
+            },
+            {
+              "type": "TextBlock",
+              "text": "${message}",
+              "color": "Light",
+              "isSubtle": true,
+              "size": "Small",
+              "spacing": "None",
+              "wrap": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "TextBlock",
+      "text": "StudyQuest",
+      "color": "Light",
+      "isSubtle": true,
+      "size": "ExtraSmall",
+      "horizontalAlignment": "Right",
+      "spacing": "Small"
+    }
+  ]
+}

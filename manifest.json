@@ -25,6 +25,20 @@
     }
   ],
   "screenshots": [],
+  "widgets": [
+    {
+      "name": "Ofensiva StudyQuest",
+      "short_name": "Ofensiva",
+      "description": "Veja sua ofensiva de estudo diária",
+      "tag": "sq-streak",
+      "template": "./widget-streak-template.json",
+      "data": "./widget-data.json",
+      "type": "application/json",
+      "screenshots": [],
+      "icons": [{ "src": "./icon.svg", "sizes": "any" }],
+      "multiple": false
+    }
+  ],
   "shortcuts": [
     {
       "name": "Tarefas",

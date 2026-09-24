@@ -192,11 +192,75 @@ const COSMETICS_CATALOG = [
   { id: 'banner_nebula',   name: 'Banner Nebulosa',            icon: '🌠', type: 'banner', rarity: 'epico',    desc: 'Nascimento de estrelas.' },
   { id: 'banner_castle',   name: 'Banner Castelo das Nuvens',  icon: '🏰', type: 'banner', rarity: 'epico',    desc: 'Majestoso e imponente.' },
   { id: 'banner_aurora',   name: 'Banner Aurora Boreal',       icon: '🌌', type: 'banner', rarity: 'lendario', desc: 'O espetáculo da natureza.' },
+
+  // ── Tags / Títulos ─────────────────────────────────────────────
+  { id: 'tag_cafeinado',        name: 'Cafeinado',                 icon: '☕', type: 'tag', rarity: 'comum',    desc: 'Movido a café e determinação.' },
+  { id: 'tag_inimigo_sono',     name: 'Inimigo do Sono',           icon: '🌙', type: 'tag', rarity: 'comum',    desc: 'Quem precisa dormir?' },
+  { id: 'tag_procrast_curado',  name: 'Procrastinador Curado',     icon: '⏰', type: 'tag', rarity: 'comum',    desc: 'Deixei para depois... mas fiz!' },
+  { id: 'tag_leitor_resumo',    name: 'Leitor de Resumo',          icon: '📄', type: 'tag', rarity: 'comum',    desc: 'Resumo é a alma do negócio.' },
+  { id: 'tag_sobrevivente',     name: 'Sobrevivente da AULA',      icon: '🛡️', type: 'tag', rarity: 'comum',    desc: 'Sobreviveu mais um dia.' },
+  { id: 'tag_calc_humana',      name: 'Calculadora Humana',        icon: '🧮', type: 'tag', rarity: 'raro',     desc: 'Resolve na cabeça antes de digitar.' },
+  { id: 'tag_dev_livros',       name: 'Devorador de Livros',       icon: '📚', type: 'tag', rarity: 'raro',     desc: 'Lê tudo. Esquece nada.' },
+  { id: 'tag_nota_10',          name: 'Nota 10 Garantida',         icon: '🎯', type: 'tag', rarity: 'raro',     desc: 'O professor nem precisa corrigir.' },
+  { id: 'tag_enciclopedia',     name: 'Enciclopédia Ambulante',    icon: '🌐', type: 'tag', rarity: 'raro',     desc: 'Pergunta para mim, eu sei.' },
+  { id: 'tag_vespera',          name: 'Especialista em Véspera',   icon: '🌃', type: 'tag', rarity: 'raro',     desc: 'Na véspera é quando o talento aparece.' },
+  { id: 'tag_mestre_madrugada', name: 'Mestre da Madrugada',       icon: '🌙', type: 'tag', rarity: 'epico',    desc: 'A madrugada é o verdadeiro estúdio.' },
+  { id: 'tag_oraculo',          name: 'Oráculo do Saber',          icon: '🔮', type: 'tag', rarity: 'epico',    desc: 'Sabe antes mesmo de estudar.' },
+  { id: 'tag_lorde_gabarito',   name: 'Lorde do Gabarito',         icon: '👑', type: 'tag', rarity: 'epico',    desc: 'Gabarito? É ele mesmo.' },
+  { id: 'tag_mago_cadernos',    name: 'Mago dos Cadernos',         icon: '✒️', type: 'tag', rarity: 'epico',    desc: 'Faz mágica com caneta e papel.' },
+  { id: 'tag_alquimista',       name: 'Alquimista da Nota',        icon: '⚗️', type: 'tag', rarity: 'epico',    desc: 'Transforma estudo em aprovação.' },
+  { id: 'tag_soberano',         name: 'Soberano do Conhecimento',  icon: '⚜️', type: 'tag', rarity: 'lendario', desc: 'Nada escapa ao seu intelecto.' },
+  { id: 'tag_entidade',         name: 'Entidade dos Estudos',      icon: '👁️', type: 'tag', rarity: 'lendario', desc: 'Além da compreensão humana.' },
+  { id: 'tag_guardiao',         name: 'Guardião do Intelecto',     icon: '🏛️', type: 'tag', rarity: 'lendario', desc: 'Protege o saber com honra.' },
+  { id: 'tag_imortal',          name: 'Imortal do 100%',           icon: '💎', type: 'tag', rarity: 'lendario', desc: 'Eternamente perfeito.' },
+  { id: 'tag_fenomeno',         name: 'Fenômeno das Provas',       icon: '⚡', type: 'tag', rarity: 'lendario', desc: 'Uma raridade da natureza.' },
+
+  // ── Tags Exclusivas de Conquista (nunca entram em caixas) ─────
+  { id: 'etag_iniciante',       name: 'Iniciante',                icon: '🌱', type: 'tag', rarity: 'comum',    exclusive: true, desc: 'Criou a conta no StudyQuest.' },
+  { id: 'etag_calouro',         name: 'Calouro',                  icon: '🎒', type: 'tag', rarity: 'comum',    exclusive: true, desc: 'Alcançou Nível 5.' },
+  { id: 'etag_focado',          name: 'Focado',                   icon: '⏱️', type: 'tag', rarity: 'comum',    exclusive: true, desc: 'Concluiu 5 sessões Pomodoro.' },
+  { id: 'etag_organizado',      name: 'Organizado',               icon: '🗂️', type: 'tag', rarity: 'comum',    exclusive: true, desc: 'Concluiu 10 tarefas.' },
+  { id: 'etag_em_chamas',       name: 'Em Chamas',                icon: '🔥', type: 'tag', rarity: 'raro',     exclusive: true, desc: 'Alcançou 7 dias de ofensiva.' },
+  { id: 'etag_inabalavel',      name: 'Inabalável',               icon: '🏔️', type: 'tag', rarity: 'raro',     exclusive: true, desc: 'Alcançou 30 dias de ofensiva.' },
+  { id: 'etag_veterano',        name: 'Veterano',                 icon: '⚔️', type: 'tag', rarity: 'raro',     exclusive: true, desc: 'Alcançou Nível 25.' },
+  { id: 'etag_generoso',        name: 'Generoso',                 icon: '🎁', type: 'tag', rarity: 'raro',     exclusive: true, desc: 'Presenteou 3 amigos com cosméticos.' },
+  { id: 'etag_rei_pomodoro',    name: 'Rei do Pomodoro',          icon: '🍅', type: 'tag', rarity: 'raro',     exclusive: true, desc: 'Concluiu 50 ciclos de Pomodoro.' },
+  { id: 'etag_pontual',         name: 'Pontual',                  icon: '⏰', type: 'tag', rarity: 'raro',     exclusive: true, desc: 'Concluiu 20 tarefas.' },
+  { id: 'etag_mestre_habito',   name: 'Mestre do Hábito',        icon: '💪', type: 'tag', rarity: 'epico',    exclusive: true, desc: 'Alcançou 100 dias de ofensiva.' },
+  { id: 'etag_arquimago',       name: 'Arquimago',                icon: '🧙', type: 'tag', rarity: 'epico',    exclusive: true, desc: 'Alcançou Nível 50.' },
+  { id: 'etag_destruidor',      name: 'Destruidor de Provas',    icon: '💥', type: 'tag', rarity: 'epico',    exclusive: true, desc: '5 notas acima da média cadastradas.' },
+  { id: 'etag_mestre_prod',     name: 'Mestre da Produtividade', icon: '🚀', type: 'tag', rarity: 'epico',    exclusive: true, desc: 'Concluiu 50 tarefas.' },
+  { id: 'etag_comerciante',     name: 'Comerciante',              icon: '🏪', type: 'tag', rarity: 'epico',    exclusive: true, desc: '5 duplicatas vendidas ou presenteadas.' },
+  { id: 'etag_lenda_estudo',    name: 'Lenda do Estudo',         icon: '👑', type: 'tag', rarity: 'lendario', exclusive: true, desc: 'Alcançou 365 dias de ofensiva.' },
+  { id: 'etag_iluminado',       name: 'Iluminado',                icon: '✨', type: 'tag', rarity: 'lendario', exclusive: true, desc: 'Alcançou Nível 100.' },
 ];
 
 // Mantidos para compatibilidade com código legado que referencia estas constantes
 const COSMETIC_FRAMES  = COSMETICS_CATALOG.filter(c => c.type === 'frame');
 const COSMETIC_BANNERS = COSMETICS_CATALOG.filter(c => c.type === 'banner');
+const COSMETIC_TAGS    = COSMETICS_CATALOG.filter(c => c.type === 'tag');
+const EXCLUSIVE_TAGS   = COSMETIC_TAGS.filter(c => c.exclusive);
+
+// Definições das tags exclusivas: condição de desbloqueio e progresso
+const EXCLUSIVE_TAG_DEFS = [
+  { id: 'etag_iniciante',     condDesc: 'Criar conta no StudyQuest',              condition: s => true,                                                               progress: null },
+  { id: 'etag_calouro',       condDesc: 'Alcançar Nível 5',                        condition: s => (s.level||1) >= 5,                                                  progress: s => ({ curr: Math.min(s.level||1, 5),                         max: 5   }) },
+  { id: 'etag_focado',        condDesc: '5 sessões de Pomodoro concluídas',        condition: s => (s.totalPomodoros||0) >= 5,                                         progress: s => ({ curr: Math.min(s.totalPomodoros||0, 5),                max: 5   }) },
+  { id: 'etag_organizado',    condDesc: '10 tarefas concluídas',                   condition: s => (s.totalTasksDone||0) >= 10,                                        progress: s => ({ curr: Math.min(s.totalTasksDone||0, 10),               max: 10  }) },
+  { id: 'etag_em_chamas',     condDesc: '7 dias de ofensiva',                      condition: s => Math.max(s.streak||0, s.maxStreak||0) >= 7,                         progress: s => ({ curr: Math.min(Math.max(s.streak||0,s.maxStreak||0), 7),   max: 7   }) },
+  { id: 'etag_inabalavel',    condDesc: '30 dias de ofensiva',                     condition: s => Math.max(s.streak||0, s.maxStreak||0) >= 30,                        progress: s => ({ curr: Math.min(Math.max(s.streak||0,s.maxStreak||0), 30),  max: 30  }) },
+  { id: 'etag_veterano',      condDesc: 'Alcançar Nível 25',                       condition: s => (s.level||1) >= 25,                                                 progress: s => ({ curr: Math.min(s.level||1, 25),                        max: 25  }) },
+  { id: 'etag_generoso',      condDesc: 'Presentear 3 amigos com cosméticos',      condition: s => (s.giftsGiven||0) >= 3,                                             progress: s => ({ curr: Math.min(s.giftsGiven||0, 3),                    max: 3   }) },
+  { id: 'etag_rei_pomodoro',  condDesc: '50 ciclos de Pomodoro concluídos',        condition: s => (s.totalPomodoros||0) >= 50,                                        progress: s => ({ curr: Math.min(s.totalPomodoros||0, 50),               max: 50  }) },
+  { id: 'etag_pontual',       condDesc: '20 tarefas concluídas',                   condition: s => (s.totalTasksDone||0) >= 20,                                        progress: s => ({ curr: Math.min(s.totalTasksDone||0, 20),               max: 20  }) },
+  { id: 'etag_mestre_habito', condDesc: '100 dias de ofensiva',                    condition: s => Math.max(s.streak||0, s.maxStreak||0) >= 100,                       progress: s => ({ curr: Math.min(Math.max(s.streak||0,s.maxStreak||0), 100), max: 100 }) },
+  { id: 'etag_arquimago',     condDesc: 'Alcançar Nível 50',                       condition: s => (s.level||1) >= 50,                                                 progress: s => ({ curr: Math.min(s.level||1, 50),                        max: 50  }) },
+  { id: 'etag_destruidor',    condDesc: '5 notas acima da média cadastradas',      condition: s => (s.gradesAboveAvg||0) >= 5,                                         progress: s => ({ curr: Math.min(s.gradesAboveAvg||0, 5),                max: 5   }) },
+  { id: 'etag_mestre_prod',   condDesc: '50 tarefas concluídas',                   condition: s => (s.totalTasksDone||0) >= 50,                                        progress: s => ({ curr: Math.min(s.totalTasksDone||0, 50),               max: 50  }) },
+  { id: 'etag_comerciante',   condDesc: '5 duplicatas vendidas ou presenteadas',   condition: s => (s.tradesCompleted||0) >= 5,                                        progress: s => ({ curr: Math.min(s.tradesCompleted||0, 5),               max: 5   }) },
+  { id: 'etag_lenda_estudo',  condDesc: '365 dias de ofensiva',                    condition: s => Math.max(s.streak||0, s.maxStreak||0) >= 365,                       progress: s => ({ curr: Math.min(Math.max(s.streak||0,s.maxStreak||0), 365), max: 365 }) },
+  { id: 'etag_iluminado',     condDesc: 'Alcançar Nível 100',                      condition: s => (s.level||1) >= 100,                                                progress: s => ({ curr: Math.min(s.level||1, 100),                       max: 100 }) },
+];
 
 // ── Caixas de Cosméticos ──────────────────────────────────────
 const LOOT_BOXES = [
@@ -218,6 +282,25 @@ const LOOT_BOXES = [
   { id: 'box_banner_epico',  name: 'Caixas de Banners',  subtitle: 'Épica',  icon: '🔮', rarity: 'epico',    type: 'banner', cost: 550, desc: 'Garantia de banner épico com chance lendário.',
     dropRates: { epico: 80, lendario: 20 },
     pool: { epico: ['banner_galaxy','banner_nebula','banner_castle'], lendario: ['banner_aurora'] } },
+
+  // ── Caixas de Tags / Títulos ──────────────────────────────────
+  { id: 'box_tag_comum',  name: 'Caixas de Títulos', subtitle: 'Comum',  icon: '🏷️', rarity: 'comum',    type: 'tag', cost: 100,
+    desc: 'Contém títulos comuns com chance de raros.',
+    dropRates: { comum: 80, raro: 18, epico: 2 },
+    pool: { comum: ['tag_cafeinado','tag_inimigo_sono','tag_procrast_curado','tag_leitor_resumo','tag_sobrevivente'],
+            raro:  ['tag_calc_humana','tag_dev_livros','tag_nota_10','tag_enciclopedia','tag_vespera'],
+            epico: ['tag_mestre_madrugada','tag_oraculo'] } },
+  { id: 'box_tag_raro',   name: 'Caixas de Títulos', subtitle: 'Rara',   icon: '💜', rarity: 'raro',     type: 'tag', cost: 250,
+    desc: 'Garantia de título raro ou melhor.',
+    dropRates: { raro: 75, epico: 22, lendario: 3 },
+    pool: { raro:     ['tag_calc_humana','tag_dev_livros','tag_nota_10','tag_enciclopedia','tag_vespera'],
+            epico:    ['tag_mestre_madrugada','tag_oraculo','tag_lorde_gabarito','tag_mago_cadernos','tag_alquimista'],
+            lendario: ['tag_soberano','tag_entidade','tag_guardiao','tag_imortal','tag_fenomeno'] } },
+  { id: 'box_tag_epico',  name: 'Caixas de Títulos', subtitle: 'Épica',  icon: '🔮', rarity: 'epico',    type: 'tag', cost: 450,
+    desc: 'Garantia de título épico com 3% de chance lendário.',
+    dropRates: { epico: 97, lendario: 3 },
+    pool: { epico:    ['tag_mestre_madrugada','tag_oraculo','tag_lorde_gabarito','tag_mago_cadernos','tag_alquimista'],
+            lendario: ['tag_soberano','tag_entidade','tag_guardiao','tag_imortal','tag_fenomeno'] } },
 ];
 
 const RARITY_CONFIG = {
@@ -482,7 +565,7 @@ let state = {
   studyItems: [],
   totalStudied: 0,
   favoriteSubject: '',
-  cosmetics: { ownedFrames: [], ownedBanners: [], equippedFrame: null, equippedBanner: null, inventory: {} },
+  cosmetics: { ownedFrames: [], ownedBanners: [], ownedTags: [], equippedFrame: null, equippedBanner: null, equippedTag: null, inventory: {} },
   childrenWithoutAccounts: [],     // [{id, name}] — filhos sem conta própria
   childrenTasksLocal: [],          // [{id, childId, title, ...}] — tarefas locais para crianças sem conta
   receivedParentalTasks: [],       // [{id, parent_id, title, xp_reward, due_date, ...}] — tarefas recebidas de responsáveis (cache local do filho)
@@ -1885,6 +1968,7 @@ function toggleTask(id) {
   renderTasks();
   updateDashboard();
   checkAchievements();
+  _checkExclusiveTags();
 
   showXpPopup(xpGain, xpBoost);
   playSound('complete');
@@ -2216,6 +2300,7 @@ function addXp(amount, bonusMsg = null) {
 
   updateDashboard();
   checkMissionGoals();
+  _checkExclusiveTags();
   scheduleSyncToSupabase(); // → Supabase: XP + level em 3s (debounced)
 
   // Registra no ranking dos grupos (fire-and-forget, não bloqueia UI)
@@ -2297,31 +2382,66 @@ function markStudyToday() {
   updateMissionProgress('streakProtectToday', 1);
 }
 
+// ── Dias de Descanso ─────────────────────────────────────────
+function _isRestDay(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dow = new Date(y, m - 1, d).getDay(); // 0=Dom, 6=Sáb
+  return dow === 0 || dow === 6 || m === 12 || m === 1;
+}
+
+// Retorna true se TODOS os dias entre from (exclusive) e to (exclusive) forem dias de descanso
+function _allRestDaysBetween(fromDateStr, toDateStr) {
+  const [fy, fm, fd] = fromDateStr.split('-').map(Number);
+  const [ty, tm, td] = toDateStr.split('-').map(Number);
+  const cur = new Date(fy, fm - 1, fd);
+  const end = new Date(ty, tm - 1, td);
+  cur.setDate(cur.getDate() + 1);
+  while (cur < end) {
+    const y = cur.getFullYear(), mo = cur.getMonth() + 1, dy = cur.getDate();
+    const str = `${y}-${String(mo).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;
+    if (!_isRestDay(str)) return false;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return true;
+}
+
+function _sendWidgetUpdate() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.ready.then(reg => {
+    if (!reg.active) return;
+    reg.active.postMessage({
+      type: 'SQ_WIDGET_UPDATE',
+      payload: { streak: state.streak || 0 }
+    });
+  }).catch(() => {});
+}
+
 function updateStreak() {
   const today = todayStr();
   const yesterday = dayStr(-1);
 
-  if (state.lastStudyDate === yesterday || state.lastStudyDate === today) {
-    if (state.lastStudyDate !== today) {
-      state.streak++;
-      if (state.streak > state.maxStreak) {
-        state.maxStreak = state.streak;
-        state.records.maxStreak = state.maxStreak;
-      }
-      // Bônus de streak
-      if (state.streak >= 7) {
-        const bonus = Math.floor(state.streak * 2);
-        addXp(bonus);
-        showNotification(`🔥 Streak de ${state.streak} dias! +${bonus} XP bônus!`, 'success');
-      }
-      // 🔔 Notifica responsáveis em marcos de streak (7, 14, 30, 60...)
-      const streakMilestones = [3, 7, 14, 30, 60, 100];
-      if (streakMilestones.includes(state.streak)) familyNotifyStreak(state.streak);
+  if (state.lastStudyDate === today) {
+    // Já contou hoje
+  } else if (!state.lastStudyDate) {
+    state.streak = 1;
+  } else if (state.lastStudyDate === yesterday || _allRestDaysBetween(state.lastStudyDate, today)) {
+    // Dia consecutivo OU só houve dias de descanso no intervalo
+    state.streak++;
+    if (state.streak > state.maxStreak) {
+      state.maxStreak = state.streak;
+      state.records.maxStreak = state.maxStreak;
     }
-  } else if (state.lastStudyDate !== today) {
-    // Streak quebrado?
+    if (state.streak >= 7) {
+      const bonus = Math.floor(state.streak * 2);
+      addXp(bonus);
+      showNotification(`🔥 Streak de ${state.streak} dias! +${bonus} XP bônus!`, 'success');
+    }
+    const streakMilestones = [3, 7, 14, 30, 60, 100];
+    if (streakMilestones.includes(state.streak)) familyNotifyStreak(state.streak);
+  } else {
+    // Dias normais perdidos — verifica escudo
     const hasShield = consumeBoost('streak_shield');
-    if (!hasShield && state.lastStudyDate && state.lastStudyDate !== yesterday) {
+    if (!hasShield) {
       const oldStreak = state.streak;
       state.streak = 1;
       if (oldStreak > 0) showNotification(`💔 Streak quebrado após ${oldStreak} dias!`, 'error');
@@ -2329,6 +2449,8 @@ function updateStreak() {
   }
 
   state.lastStudyDate = today;
+  _sendWidgetUpdate();
+  _checkExclusiveTags();
 }
 
 function checkStreakIntegrity() {
@@ -2337,12 +2459,15 @@ function checkStreakIntegrity() {
   const yesterday = dayStr(-1);
   const hasShield = state.boosts.some(b => b.type === 'streak_shield');
 
-  if (state.lastStudyDate !== today && state.lastStudyDate !== yesterday && !hasShield) {
-    if (state.streak > 0) {
-      showNotification(`💔 Streak perdido! Você não estudou ontem.`, 'error');
-      state.streak = 0;
-      saveState();
-    }
+  if (state.lastStudyDate === today || state.lastStudyDate === yesterday) return;
+
+  // Verifica se o intervalo perdido é composto só por dias de descanso
+  if (_allRestDaysBetween(state.lastStudyDate, today)) return;
+
+  if (!hasShield && state.streak > 0) {
+    showNotification(`💔 Streak perdido! Você não estudou nos dias necessários.`, 'error');
+    state.streak = 0;
+    saveState();
   }
 }
 
@@ -2781,6 +2906,30 @@ function renderMissionsPreview() {
 // CONQUISTAS
 // ============================================================
 
+function _checkExclusiveTags() {
+  if (!state.cosmetics) return;
+  if (!state.cosmetics.inventory) state.cosmetics.inventory = {};
+  const inv = state.cosmetics.inventory;
+  const newTags = [];
+
+  EXCLUSIVE_TAG_DEFS.forEach(def => {
+    if (inv[def.id]) return;
+    if (!def.condition(state)) return;
+    inv[def.id] = 1;
+    if (!state.cosmetics.ownedTags) state.cosmetics.ownedTags = [];
+    if (!state.cosmetics.ownedTags.includes(def.id)) state.cosmetics.ownedTags.push(def.id);
+    const item = _cosmeticById(def.id);
+    if (item) newTags.push(item);
+  });
+
+  if (!newTags.length) return;
+  saveState();
+  newTags.forEach(tag => {
+    const cfg = RARITY_CONFIG[tag.rarity] || {};
+    showNotification(`🏷️ Título exclusivo desbloqueado: "${tag.name}" ${cfg.star || ''}`, 'success');
+  });
+}
+
 function checkAchievements() {
   let newUnlocks = [];
 
@@ -2833,6 +2982,43 @@ function renderAchievements() {
       <div class="achievement-desc">${unlocked ? ach.desc : '???'}</div>
     </div>`;
   }).join('');
+
+  // ── Catálogo de Títulos Exclusivos ─────────────────────────
+  const tagsEl = document.getElementById('achievements-exclusive-tags');
+  if (!tagsEl) return;
+  const inv = state.cosmetics?.inventory || {};
+  const ownedCount = EXCLUSIVE_TAGS.filter(t => (inv[t.id] || 0) > 0).length;
+  const rows = EXCLUSIVE_TAGS.map(tag => {
+    const owned    = (inv[tag.id] || 0) > 0;
+    const equipped = state.cosmetics?.equippedTag === tag.id;
+    const cfg      = RARITY_CONFIG[tag.rarity];
+    const def      = EXCLUSIVE_TAG_DEFS.find(d => d.id === tag.id);
+    let progressHtml = '';
+    if (!owned && def && def.progress) {
+      const p   = def.progress(state);
+      const pct = Math.min(100, Math.round((p.curr / p.max) * 100));
+      progressHtml = `<div class="tag-excl-progress">
+        <div class="tag-excl-bar"><div class="tag-excl-fill" style="width:${pct}%"></div></div>
+        <span class="tag-excl-frac">${p.curr}/${p.max}</span>
+      </div>`;
+    }
+    return `<div class="tag-catalog-row tag-excl-row ${owned ? 'tag-cat-owned' : 'tag-cat-locked'}">
+      <div class="tag-cat-badge-col">
+        ${owned ? `<span class="tag-badge tag-badge-${tag.rarity}">${tag.icon} ${tag.name}</span>`
+                : `<span class="tag-badge tag-badge-locked">🔒 ${tag.name}</span>`}
+      </div>
+      <div class="tag-cat-info">
+        <div class="tag-cat-rarity" style="color:${cfg.color}">${cfg.star} ${cfg.label}</div>
+        <div class="tag-cat-desc">${tag.desc}</div>
+        ${!owned && def ? `<div class="tag-cat-source">🎯 ${def.condDesc}</div>` : ''}
+        ${progressHtml}
+      </div>
+      <div class="tag-cat-status">${owned ? (equipped ? '✅<br><span style="font-size:.6rem;color:var(--text-muted)">Equipado</span>' : '✅') : '🔒'}</div>
+    </div>`;
+  }).join('');
+  tagsEl.innerHTML = `
+    <div class="profile-section-title" style="margin-top:1.5rem">⭐ Títulos Exclusivos (${ownedCount} / ${EXCLUSIVE_TAGS.length})</div>
+    <div class="tag-catalog-list">${rows}</div>`;
 }
 
 // ============================================================
@@ -2936,23 +3122,25 @@ function updateBoostsBar() {
 
 function triggerLootBox() {
   const rewards = [
-    { text: '+30 XP Grátis!', icon: '⚡', action: () => addXp(30) },
-    { text: '+20 Moedas!', icon: '💰', action: () => addCoins(20) },
-    { text: 'Boost de XP Duplo!', icon: '🔮', action: () => state.boosts.push({ type: 'xp_boost', name: 'XP Duplo', icon: '🔮', charges: 2 }) },
-    { text: '+50 XP Surpresa!', icon: '🌟', action: () => addXp(50) },
-    { text: '+15 Moedas Mágicas!', icon: '✨', action: () => addCoins(15) },
-    { text: 'Escudo de Streak!', icon: '🛡️', action: () => state.boosts.push({ type: 'streak_shield', name: 'Escudo', icon: '🛡️', charges: 1 }) },
+    { text: '+30 XP Grátis!',      icon: '⚡', rarity: 'comum', action: () => addXp(30) },
+    { text: '+20 Moedas!',          icon: '💰', rarity: 'comum', action: () => addCoins(20) },
+    { text: '+15 Moedas Mágicas!',  icon: '✨', rarity: 'comum', action: () => addCoins(15) },
+    { text: '+50 XP Surpresa!',     icon: '🌟', rarity: 'raro',  action: () => addXp(50) },
+    { text: 'Boost de XP Duplo!',   icon: '🔮', rarity: 'epico', action: () => { state.boosts.push({ type: 'xp_boost', name: 'XP Duplo', icon: '🔮', charges: 2 }); updateBoostsBar(); } },
+    { text: 'Escudo de Streak!',    icon: '🛡️', rarity: 'epico', action: () => { state.boosts.push({ type: 'streak_shield', name: 'Escudo', icon: '🛡️', charges: 1 }); updateBoostsBar(); } },
   ];
   const reward = rewards[Math.floor(Math.random() * rewards.length)];
-  reward.action();
+  const cfg = RARITY_CONFIG[reward.rarity];
 
-  document.getElementById('loot-icon').textContent = reward.icon;
-  document.getElementById('loot-reward').textContent = reward.text;
-  document.getElementById('loot-text').textContent = 'Você recebeu uma recompensa mágica!';
-  openModal('modal-lootbox');
-  playSound('levelup');
-  saveState();
-  updateBoostsBar();
+  _lbRevealData = {
+    icon: reward.icon,
+    name: reward.text,
+    rarityLabel: cfg.star + ' ' + cfg.label,
+    rarityColor: cfg.color,
+    isDuplicate: false, showInventory: false,
+    onReveal: () => { reward.action(); saveState(); },
+  };
+  _startBoxAnimation(reward.rarity);
 }
 
 function showStudyTip() {
@@ -3039,6 +3227,7 @@ function _completePomodoroPhase() {
     showNotification('⏱️ Sessão de foco completa! +15 XP 🎉', 'success');
     playSound('complete');
     checkAchievements();
+    _checkExclusiveTags();
     // 🔔 Notifica responsáveis a cada 3 Pomodoros para não ser spam
     if (state.totalPomodoros % 3 === 0) familyNotifyPomodoro(state.totalPomodoros);
 
@@ -3410,6 +3599,7 @@ function renderCalendar() {
     const isToday   = dateStr === today;
     const studied   = state.studyDays && state.studyDays.includes(dateStr);
     const hasXp     = state.xpHistory[dateStr] > 0;
+    const isRest    = _isRestDay(dateStr);
 
     // ── Coleta bolinhas do dia ───────────────────────────────────
     const dotEntries = []; // { type: 'task'|'exam'|'study' }
@@ -3437,7 +3627,7 @@ function renderCalendar() {
       : '';
 
     html += `
-    <div class="cal-day ${isToday ? 'today' : ''} ${studied ? 'studied' : ''} ${hasXp ? 'has-activity' : ''}"
+    <div class="cal-day ${isToday ? 'today' : ''} ${studied ? 'studied' : ''} ${hasXp ? 'has-activity' : ''} ${isRest && !studied ? 'rest-day' : ''}"
          onclick="showCalDay('${dateStr}', this)">
       <span class="cal-day-num">${d}</span>
       ${dotsHtml}
@@ -3502,19 +3692,30 @@ function showCalDay(dateStr, el) {
     <div><span class="cal-detail-name">📚 Dia de estudo</span>${xp ? `<span class="cal-detail-xp"> +${xp} XP</span>` : ''}</div>
   </div>` : '';
 
+  const isRest  = _isRestDay(dateStr);
   const isEmpty = !dayTasks.length && !dayExams.length && !studied && !ptasksDone.length;
+
+  const restBanner = isRest ? `
+    <div class="cal-rest-banner">
+      <span class="cal-rest-icon">😴</span>
+      <div>
+        <div class="cal-rest-title">Dia de Descanso</div>
+        <div class="cal-rest-desc">São os dias onde não precisa estudar (não vai afetar a sua ofensiva).</div>
+      </div>
+    </div>` : '';
 
   document.getElementById('cal-day-detail').innerHTML = `
     <div class="cal-detail-header">
       <span class="cal-detail-date">${formatted}</span>
       ${xp ? `<span class="cal-detail-xp-badge">⚡ ${xp} XP</span>` : ''}
     </div>
-    <div class="cal-detail-legend">
+    ${restBanner}
+    ${!isRest || !isEmpty ? `<div class="cal-detail-legend">
       <span><span class="cal-dot cal-dot-task"></span> Tarefas</span>
       <span><span class="cal-dot cal-dot-exam"></span> Provas</span>
       <span><span class="cal-dot cal-dot-study"></span> Estudo</span>
-    </div>
-    ${isEmpty ? '<p class="cal-detail-empty">Nenhum evento neste dia.</p>' : ''}
+    </div>` : ''}
+    ${isEmpty && !isRest ? '<p class="cal-detail-empty">Nenhum evento neste dia.</p>' : ''}
     ${taskRows}${ptaskRows}${examRows}${studyRow}
   `;
 }
@@ -4670,8 +4871,15 @@ function saveGradeEntry(subjectId, typeId, index, value, inputEl) {
   if (!state.gradeEntries[subjectId]) state.gradeEntries[subjectId] = {};
   if (!state.gradeEntries[subjectId][typeId]) state.gradeEntries[subjectId][typeId] = [];
   const val = (value === '' || value === null || value === undefined) ? null : parseFloat(value);
+  const prev = state.gradeEntries[subjectId][typeId][index];
   state.gradeEntries[subjectId][typeId][index] = val;
   if (inputEl) colorGradeInput(inputEl);
+
+  // Track grades above school average for exclusive tag
+  const avg = (state.settings && state.settings.schoolAverage != null) ? Number(state.settings.schoolAverage) : 7;
+  if (val !== null && !isNaN(val) && val >= avg && (prev === null || prev === undefined)) {
+    state.gradesAboveAvg = (state.gradesAboveAvg || 0) + 1;
+  }
 
   // Update subtotal
   const types = (state.gradeTypes && state.gradeTypes[subjectId]) || [];
@@ -4687,6 +4895,9 @@ function saveGradeEntry(subjectId, typeId, index, value, inputEl) {
   }
   saveState();
   calcFinalGrade(subjectId);
+  if (val !== null && !isNaN(val) && val >= ((state.settings && state.settings.schoolAverage != null) ? Number(state.settings.schoolAverage) : 7)) {
+    _checkExclusiveTags();
+  }
 }
 
 function calcTypeSubtotal(type, saved) {
@@ -5965,6 +6176,8 @@ async function launchApp() {
       updateNotifBell();
       runSmartPushChecks().catch(() => {}); // streak risk + cronograma
     }, 2000);
+    setTimeout(_sendWidgetUpdate, 3000);
+    setTimeout(_checkExclusiveTags, 1500); // verifica tags desbloqueadas no carregamento
 
     // Patch notes — mostra uma vez por versão
     const _PATCH_KEY = 'sq_patch_loja_inventario_v1';
@@ -6771,6 +6984,8 @@ function _migrateCosmeticsToInventory() {
   const inv = state.cosmetics.inventory;
   (state.cosmetics.ownedFrames  || []).forEach(id => { if (!inv[id]) inv[id] = 1; });
   (state.cosmetics.ownedBanners || []).forEach(id => { if (!inv[id]) inv[id] = 1; });
+  (state.cosmetics.ownedTags    || []).forEach(id => { if (!inv[id]) inv[id] = 1; });
+  if (state.cosmetics.equippedTag === undefined) state.cosmetics.equippedTag = null;
 }
 
 // ── Loja: aba Cosméticos (exibe caixas) ──────────────────────
@@ -6796,6 +7011,7 @@ function renderCosmeticsShop() {
 
   const frames  = LOOT_BOXES.filter(b => b.type === 'frame');
   const banners = LOOT_BOXES.filter(b => b.type === 'banner');
+  const tagBoxes = LOOT_BOXES.filter(b => b.type === 'tag');
   container.innerHTML = `
     <div class="cosmetics-section">
       <div class="shop-section-title">🖼️ Caixas de Molduras</div>
@@ -6804,6 +7020,10 @@ function renderCosmeticsShop() {
     <div class="cosmetics-section">
       <div class="shop-section-title">🎨 Caixas de Banners</div>
       <div class="shop-grid">${boxesHtml(banners)}</div>
+    </div>
+    <div class="cosmetics-section">
+      <div class="shop-section-title">🏷️ Caixas de Títulos</div>
+      <div class="shop-grid">${boxesHtml(tagBoxes)}</div>
     </div>`;
 }
 
@@ -6882,23 +7102,168 @@ function openBox(boxId) {
   if (prev === 0) {
     if (wonItem.type === 'frame'  && !state.cosmetics.ownedFrames.includes(wonId))  state.cosmetics.ownedFrames.push(wonId);
     if (wonItem.type === 'banner' && !state.cosmetics.ownedBanners.includes(wonId)) state.cosmetics.ownedBanners.push(wonId);
+    if (wonItem.type === 'tag') {
+      if (!state.cosmetics.ownedTags) state.cosmetics.ownedTags = [];
+      if (!state.cosmetics.ownedTags.includes(wonId)) state.cosmetics.ownedTags.push(wonId);
+    }
   }
 
   saveState();
   updateDashboard();
-  _showBoxOpenResult(wonItem, prev > 0);
+  _showBoxOpenResult(wonItem, prev > 0, box.rarity);
 }
 
-function _showBoxOpenResult(item, isDuplicate) {
-  const cfg = RARITY_CONFIG[item.rarity];
-  document.getElementById('box-result-icon').textContent   = item.icon;
-  document.getElementById('box-result-name').textContent   = item.name;
-  document.getElementById('box-result-rarity').textContent = cfg.star + ' ' + cfg.label;
-  document.getElementById('box-result-rarity').style.color = cfg.color;
-  const dupEl = document.getElementById('box-result-duplicate');
-  dupEl.style.display   = isDuplicate ? 'block' : 'none';
-  dupEl.textContent     = isDuplicate ? '🔄 Item duplicado — gerencie no Inventário.' : '';
+let _lbTaps       = 0;
+let _lbRevealData = null; // { icon, name, rarityLabel, rarityStar, rarityColor, isDuplicate, showInventory, onReveal }
+
+function _startBoxAnimation(boxRarity) {
+  _lbTaps = 0;
+  const box = document.getElementById('lootbox-box');
+  box.className = 'lb-box rarity-' + boxRarity;
+  box.classList.remove('lb-shake-1','lb-shake-2','lb-shake-3','opening');
+  document.getElementById('box-open-phase').hidden   = false;
+  document.getElementById('box-reveal-phase').hidden = true;
+  ['ldot-1','ldot-2','ldot-3'].forEach(id => document.getElementById(id).classList.remove('filled'));
+  document.getElementById('lb-hint-text').textContent = 'Toque na caixa para abrir!';
   openModal('modal-box-result');
+}
+
+function _showBoxOpenResult(item, isDuplicate, boxRarity = 'comum') {
+  const cfg = RARITY_CONFIG[item.rarity];
+  _lbRevealData = {
+    icon: item.icon, name: item.name,
+    rarityLabel: cfg.star + ' ' + cfg.label, rarityColor: cfg.color,
+    isDuplicate, showInventory: true, onReveal: null,
+  };
+  _startBoxAnimation(boxRarity);
+}
+
+function _openSurpriseBoxAnim(gift) {
+  const rarity    = gift.value >= 150 ? 'epico' : gift.value >= 75 ? 'raro' : 'comum';
+  const cfg       = RARITY_CONFIG[rarity];
+  const typeLabel = gift.type === 'xp' ? 'XP' : 'moedas';
+  _lbRevealData = {
+    icon: gift.icon,
+    name: gift.name,
+    rarityLabel: `+${gift.value} ${typeLabel}`,
+    rarityColor: cfg.color,
+    isDuplicate: false, showInventory: false,
+    onReveal: () => {
+      if (gift.type === 'xp')    addXp(gift.value);
+      if (gift.type === 'coins') addCoins(gift.value);
+      state.surpriseGifts = (state.surpriseGifts || []).filter(g => g.uid !== gift.uid);
+      saveState();
+      updateNotifBell();
+      updateDashboard();
+    },
+  };
+  _startBoxAnimation(rarity);
+}
+
+function _lbAudioCtx() {
+  if (!window._lbAC) window._lbAC = new (window.AudioContext || window.webkitAudioContext)();
+  return window._lbAC;
+}
+
+function _playTapSound(tapN) {
+  try {
+    const ac  = _lbAudioCtx();
+    const osc = ac.createOscillator();
+    const g   = ac.createGain();
+    osc.connect(g); g.connect(ac.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(300 + tapN * 80, ac.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(500 + tapN * 100, ac.currentTime + .06);
+    g.gain.setValueAtTime(.18, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001, ac.currentTime + .12);
+    osc.start(ac.currentTime);
+    osc.stop(ac.currentTime + .13);
+  } catch(e) {}
+}
+
+function _playOpenSound() {
+  try {
+    const ac = _lbAudioCtx();
+    const t  = ac.currentTime;
+
+    // Whoosh ascendente
+    const osc = ac.createOscillator();
+    const g   = ac.createGain();
+    osc.connect(g); g.connect(ac.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(200, t);
+    osc.frequency.exponentialRampToValueAtTime(1200, t + .35);
+    g.gain.setValueAtTime(.0001, t);
+    g.gain.linearRampToValueAtTime(.22, t + .1);
+    g.gain.exponentialRampToValueAtTime(.001, t + .4);
+    osc.start(t); osc.stop(t + .4);
+
+    // Brilho — acorde de vitória (3 notas)
+    [[523, .35], [659, .42], [784, .49]].forEach(([freq, delay]) => {
+      const o2 = ac.createOscillator();
+      const g2 = ac.createGain();
+      o2.connect(g2); g2.connect(ac.destination);
+      o2.type = 'triangle';
+      o2.frequency.value = freq;
+      g2.gain.setValueAtTime(.0001, t + delay);
+      g2.gain.linearRampToValueAtTime(.15, t + delay + .04);
+      g2.gain.exponentialRampToValueAtTime(.001, t + delay + .5);
+      o2.start(t + delay); o2.stop(t + delay + .55);
+    });
+  } catch(e) {}
+}
+
+function tapLootbox() {
+  if (_lbTaps >= 3) return;
+  _lbTaps++;
+
+  const box    = document.getElementById('lootbox-box');
+  const hintEl = document.getElementById('lb-hint-text');
+
+  // Som de toque
+  _playTapSound(_lbTaps);
+
+  // Preenche dot
+  document.getElementById('ldot-' + _lbTaps).classList.add('filled');
+
+  // Tremida progressiva
+  box.classList.remove('lb-shake-1','lb-shake-2','lb-shake-3');
+  void box.offsetWidth;
+  box.classList.add('lb-shake-' + _lbTaps);
+
+  if (_lbTaps === 1) hintEl.textContent = 'Mais duas vezes...';
+  if (_lbTaps === 2) hintEl.textContent = 'Mais uma vez!';
+  if (_lbTaps === 3) {
+    hintEl.textContent = '';
+    setTimeout(() => {
+      box.classList.add('opening');
+      _playOpenSound();
+      setTimeout(_revealLootboxResult, 450);
+    }, 320);
+  }
+}
+
+function _revealLootboxResult() {
+  const d = _lbRevealData;
+  document.getElementById('box-open-phase').hidden   = true;
+  document.getElementById('box-reveal-phase').hidden = false;
+
+  document.getElementById('box-result-icon').textContent    = d.icon;
+  document.getElementById('box-result-name').textContent    = d.name;
+  document.getElementById('box-result-rarity').textContent  = d.rarityLabel;
+  document.getElementById('box-result-rarity').style.color  = d.rarityColor;
+  document.getElementById('lb-inventory-btn').hidden        = !d.showInventory;
+
+  const dupEl = document.getElementById('box-result-duplicate');
+  dupEl.style.display = d.isDuplicate ? 'block' : 'none';
+  dupEl.textContent   = d.isDuplicate ? '🔄 Item duplicado — gerencie no Inventário.' : '';
+
+  const burst = document.getElementById('lb-burst');
+  burst.classList.remove('active');
+  void burst.offsetWidth;
+  burst.classList.add('active');
+
+  if (d.onReveal) d.onReveal();
 }
 
 // ── Inventário ────────────────────────────────────────────────
@@ -6922,6 +7287,14 @@ function renderInventory() {
 
   const frames  = ownedIds.filter(id => { const c = _cosmeticById(id); return c && c.type === 'frame'; });
   const banners = ownedIds.filter(id => { const c = _cosmeticById(id); return c && c.type === 'banner'; });
+  const tags    = ownedIds.filter(id => { const c = _cosmeticById(id); return c && c.type === 'tag'; });
+
+  function _isEquipped(item, id) {
+    if (item.type === 'frame')  return state.cosmetics.equippedFrame  === id;
+    if (item.type === 'banner') return state.cosmetics.equippedBanner === id;
+    if (item.type === 'tag')    return state.cosmetics.equippedTag    === id;
+    return false;
+  }
 
   function renderSection(ids, title) {
     if (!ids.length) return '';
@@ -6930,9 +7303,8 @@ function renderInventory() {
       if (!item) return '';
       const qty        = inv[id];
       const cfg        = RARITY_CONFIG[item.rarity];
-      const isEquipped = item.type === 'frame'
-        ? state.cosmetics.equippedFrame  === id
-        : state.cosmetics.equippedBanner === id;
+      const isEquipped = _isEquipped(item, id);
+      const equipIcon  = item.type === 'tag' ? '🏷️' : '🎨';
       return `<div class="inventory-item ${isEquipped ? 'equipped' : ''}" style="border-color:${cfg.color};background:${cfg.bg}">
         ${isEquipped ? '<div class="inv-equipped-badge">✅ Equipado</div>' : ''}
         ${qty > 1 ? `<div class="inv-qty-badge">×${qty}</div>` : ''}
@@ -6941,7 +7313,7 @@ function renderInventory() {
         <div class="inv-item-rarity" style="color:${cfg.color}">${cfg.star} ${cfg.label}</div>
         <div class="inv-item-actions">
           <button class="btn-sm ${isEquipped ? 'btn-sm-accent' : 'btn-sm-primary'}" onclick="equipCosmeticFromInventory('${id}')">
-            ${isEquipped ? '➖ Desequipar' : '🎨 Equipar'}
+            ${isEquipped ? '➖ Desequipar' : `${equipIcon} Equipar`}
           </button>
           ${qty > 1 ? `<button class="btn-sm btn-sm-secondary" onclick="showDuplicateOptions('${id}')">🔄 Duplicata</button>` : ''}
         </div>
@@ -6953,7 +7325,9 @@ function renderInventory() {
     </div>`;
   }
 
-  container.innerHTML = renderSection(frames, '🖼️ Molduras') + renderSection(banners, '🎨 Banners');
+  container.innerHTML = renderSection(frames, '🖼️ Molduras')
+    + renderSection(banners, '🎨 Banners')
+    + renderSection(tags, '🏷️ Títulos');
 }
 
 function equipCosmeticFromInventory(id) {
@@ -6961,11 +7335,13 @@ function equipCosmeticFromInventory(id) {
   if (!item || _inventoryCount(id) === 0) return;
   if (item.type === 'frame') {
     state.cosmetics.equippedFrame  = state.cosmetics.equippedFrame  === id ? null : id;
-  } else {
+  } else if (item.type === 'banner') {
     state.cosmetics.equippedBanner = state.cosmetics.equippedBanner === id ? null : id;
+  } else if (item.type === 'tag') {
+    state.cosmetics.equippedTag    = state.cosmetics.equippedTag    === id ? null : id;
   }
   saveState();
-  showNotification('🎨 Visual atualizado!', 'success');
+  showNotification(item.type === 'tag' ? '🏷️ Título atualizado!' : '🎨 Visual atualizado!', 'success');
   renderInventory();
   renderProfilePage();
 }
@@ -6973,6 +7349,13 @@ function equipCosmeticFromInventory(id) {
 // Mantida para compatibilidade com código legado
 function equipCosmetic(type, id) {
   equipCosmeticFromInventory(id);
+}
+
+function _tagBadgeHtml(tagId) {
+  if (!tagId) return '';
+  const item = _cosmeticById(tagId);
+  if (!item) return '';
+  return `<span class="tag-badge tag-badge-${item.rarity}">${item.icon} ${item.name}</span>`;
 }
 
 // ── Duplicatas: Vender / Presentear ──────────────────────────
@@ -7002,11 +7385,13 @@ function sellDuplicate(cosmeticId) {
   const price = RARITY_SELL_PRICE[item.rarity];
   state.cosmetics.inventory[cosmeticId]--;
   addCoins(price);
+  state.tradesCompleted = (state.tradesCompleted || 0) + 1;
   saveState();
   showNotification(`💰 "${item.name}" vendido por ${price} moedas!`, 'success');
   closeModal('modal-duplicate-options');
   renderInventory();
   updateDashboard();
+  _checkExclusiveTags();
 }
 
 async function openGiftCosmeticModal(cosmeticId) {
@@ -7045,10 +7430,13 @@ async function sendCosmeticGift(toUserId) {
     });
     if (error) { console.error('[CosmeticGift] Erro ao enviar:', error.message); return showNotification('Erro ao enviar presente.', 'error'); }
     state.cosmetics.inventory[cosmeticId]--;
+    state.giftsGiven = (state.giftsGiven || 0) + 1;
+    state.tradesCompleted = (state.tradesCompleted || 0) + 1;
     saveState();
     showNotification(`🎁 "${item.name}" enviado com sucesso!`, 'success');
     closeModal('modal-gift-cosmetic');
     renderInventory();
+    _checkExclusiveTags();
   } catch(e) { showNotification('Erro ao enviar presente.', 'error'); }
 }
 
@@ -7452,15 +7840,8 @@ function claimSurpriseGift(uid, btn) {
   if (btn) btn.disabled = true;
   const gift = (state.surpriseGifts || []).find(g => g.uid === uid);
   if (!gift) return;
-
-  if (gift.type === 'xp')    addXp(gift.value);
-  if (gift.type === 'coins') addCoins(gift.value);
-
-  state.surpriseGifts = (state.surpriseGifts || []).filter(g => g.uid !== uid);
-  saveState();
-  showNotification(`✅ ${gift.icon} ${gift.name} resgatado! +${gift.value} ${gift.type === 'xp' ? 'XP' : 'moedas'}`, 'success');
-  renderNotifPanel();
-  updateNotifBell();
+  closeModal('modal-notif-panel');
+  _openSurpriseBoxAnim(gift);
 }
 
 // ── Verificação de desempenho ao logar ───────────────────────
@@ -7633,7 +8014,10 @@ function renderProfilePage() {
       <div class="profile-page-hero">
         ${_avatarHtml(myUser, 'profile-page-avatar-wrap')}
         <div class="profile-page-info">
-          <h2>${escHtml(state.name || 'Herói')}</h2>
+          <div class="profile-page-name-row">
+            <h2>${escHtml(state.name || 'Herói')}</h2>
+            ${_tagBadgeHtml(state.cosmetics?.equippedTag)}
+          </div>
           <div class="profile-page-level">⚔️ Nível ${state.level}</div>
           <div class="xp-bar-wrap"><div class="xp-bar-fill" style="width:${xpPct}%"></div></div>
           <div class="profile-page-xptext">${state.xp} / ${xpNext} XP para o próximo nível</div>
@@ -7654,6 +8038,7 @@ function renderProfilePage() {
     ${subjCards ? `<div class="subject-info-row">${subjCards}</div>` : ''}
     <div class="profile-section-title">🏅 Conquistas (${(state.achievements || []).length} / ${ACHIEVEMENTS_DEF.length})</div>
     <div class="profile-ach-grid">${achs || '<div class="profile-ach-empty">Nenhuma conquista ainda. Continue jogando!</div>'}</div>
+
     <button class="btn-primary" style="margin-top:1.5rem" onclick="openEditProfile()">✏️ Editar Perfil</button>
   `;
 }
@@ -10780,12 +11165,23 @@ async function renderAdminPage(tab) {
       </div>`;
     }).join('');
 
+    _adminActiveFilter = null;
+
     const statCard = (icon, label, val, sub = '') => `
       <div class="admin-stat-card">
         <div class="admin-stat-icon">${icon}</div>
         <div class="admin-stat-val">${val}</div>
         <div class="admin-stat-label">${label}</div>
         ${sub ? `<div class="admin-stat-sub">${sub}</div>` : ''}
+      </div>`;
+
+    const activeStatCard = (icon, label, val, sub, period) => `
+      <div class="admin-stat-card admin-stat-clickable" data-period="${period}" onclick="_adminToggleActiveUsers('${period}')">
+        <div class="admin-stat-icon">${icon}</div>
+        <div class="admin-stat-val">${val}</div>
+        <div class="admin-stat-label">${label}</div>
+        ${sub ? `<div class="admin-stat-sub">${sub}</div>` : ''}
+        <div class="admin-stat-click-hint">clique para ver ▾</div>
       </div>`;
 
     content.innerHTML = `
@@ -10800,12 +11196,13 @@ async function renderAdminPage(tab) {
 
       <div class="admin-section-title" style="margin-top:1.5rem">🟢 Usuários Ativos (por último acesso)</div>
       <div class="admin-stat-grid">
-        ${statCard('⚡', 'Ativos hoje', activeToday, 'acessaram hoje')}
-        ${statCard('🔥', 'Ativos esta semana', activeWeek)}
-        ${statCard('✅', 'Ativos este mês', activeMonth)}
-        ${statCard('🌟', 'Ativos este ano', activeYear)}
+        ${activeStatCard('⚡', 'Ativos hoje', activeToday, 'acessaram hoje', 'today')}
+        ${activeStatCard('🔥', 'Ativos esta semana', activeWeek, '', 'week')}
+        ${activeStatCard('✅', 'Ativos este mês', activeMonth, '', 'month')}
+        ${activeStatCard('🌟', 'Ativos este ano', activeYear, '', 'year')}
         ${statCard('📈', 'Inativos', inactiveMonth, 'sem acesso este mês')}
       </div>
+      <div id="admin-active-users-list"></div>
 
       <div class="admin-section-title" style="margin-top:1.5rem">📅 Novos Usuários — Últimos 30 dias</div>
       <div class="admin-chart-wrap">
@@ -11288,6 +11685,65 @@ async function adminCheckSwStatus() {
   } catch(e) {
     result.textContent = `❌ Erro: ${e.message}`;
     result.style.color = '#f87171';
+  }
+}
+
+let _adminActiveFilter = null;
+
+async function _adminToggleActiveUsers(period) {
+  const container = document.getElementById('admin-active-users-list');
+  if (!container) return;
+
+  document.querySelectorAll('.admin-stat-card[data-period]').forEach(c =>
+    c.classList.toggle('admin-stat-active', c.dataset.period === period && _adminActiveFilter !== period));
+
+  if (_adminActiveFilter === period) {
+    _adminActiveFilter = null;
+    container.innerHTML = '';
+    return;
+  }
+  _adminActiveFilter = period;
+  container.innerHTML = '<p style="text-align:center;padding:1rem;color:var(--text-muted)">Carregando...</p>';
+
+  const now = new Date();
+  let since;
+  if (period === 'today') {
+    since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  } else if (period === 'week') {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    d.setUTCDate(d.getUTCDate() - d.getUTCDay());
+    since = d;
+  } else if (period === 'month') {
+    since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  } else {
+    since = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+  }
+
+  try {
+    const { data } = await sb.from('users')
+      .select('id, name, level, xp, updated_at')
+      .gte('updated_at', since.toISOString())
+      .order('updated_at', { ascending: false });
+
+    const users = data || [];
+    const labels = { today: 'hoje', week: 'esta semana', month: 'este mês', year: 'este ano' };
+    if (!users.length) {
+      container.innerHTML = '<div class="social-empty">Nenhum usuário ativo neste período.</div>';
+      return;
+    }
+    container.innerHTML = `
+      <div class="admin-section-title" style="margin-top:1rem">👥 Ativos ${labels[period]} (${users.length})</div>
+      <div class="admin-active-list">
+        ${users.map(u => {
+          const ts = u.updated_at ? new Date(u.updated_at).toLocaleString('pt-BR') : '—';
+          return `<div class="admin-active-row">
+            <div class="admin-active-name">${escHtml(u.name || 'Sem nome')}</div>
+            <div class="admin-active-meta">Nv ${u.level || 1} · ${u.xp || 0} XP · ${ts}</div>
+          </div>`;
+        }).join('')}
+      </div>`;
+  } catch(e) {
+    container.innerHTML = '<div class="social-empty">Erro ao carregar usuários.</div>';
   }
 }
 

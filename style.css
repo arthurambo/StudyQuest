@@ -1495,6 +1495,8 @@ canvas { max-width: 100%; border-radius: 8px; }
 .cal-day.has-activity { background: rgba(124,58,237,0.08); }
 .cal-day.studied { background: rgba(16,185,129,0.1); border-color: rgba(16,185,129,0.2); }
 .cal-day.other-month { opacity: 0.3; pointer-events: none; }
+.cal-day.rest-day { background: rgba(239,68,68,.08); border-color: rgba(239,68,68,.18); color: #ef4444; }
+.cal-day.rest-day:hover { border-color: rgba(239,68,68,.4); }
 
 /* Número do dia */
 .cal-day-num { line-height: 1; }
@@ -1623,6 +1625,21 @@ canvas { max-width: 100%; border-radius: 8px; }
   padding: 1rem 0;
   margin: 0;
 }
+
+/* Dia de Descanso */
+.cal-rest-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: .65rem;
+  background: rgba(239,68,68,.1);
+  border: 1px solid rgba(239,68,68,.25);
+  border-radius: var(--radius-sm);
+  padding: .65rem .8rem;
+  margin-bottom: .75rem;
+}
+.cal-rest-icon { font-size: 1.5rem; line-height: 1; flex-shrink: 0; }
+.cal-rest-title { font-weight: 700; font-size: .88rem; color: #ef4444; margin-bottom: .15rem; }
+.cal-rest-desc  { font-size: .78rem; color: var(--text-muted); line-height: 1.4; }
 
 /* === MODAIS === */
 .modal-overlay {
@@ -1979,6 +1996,196 @@ input[type="range"] {
 
 .modal-lootbox { text-align: center; }
 .loot-icon { font-size: 4rem; animation: shake 0.4s ease; display: block; }
+
+/* ── Lootbox Opening Animation ──────────────────────────────── */
+.modal-lootbox-open {
+  text-align: center;
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+.lb-hint {
+  font-size: .9rem;
+  color: var(--text-muted);
+  margin: 0 0 1rem;
+  animation: lbPulse 1.4s ease-in-out infinite;
+}
+@keyframes lbPulse {
+  0%,100% { opacity: .6; }
+  50%      { opacity: 1; }
+}
+.lb-tap-dots {
+  display: flex;
+  justify-content: center;
+  gap: .55rem;
+  margin-bottom: 1.4rem;
+}
+.lb-dot {
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  background: var(--border-color, #333);
+  transition: background .15s, transform .15s;
+}
+.lb-dot.filled {
+  background: var(--accent, #7c3aed);
+  transform: scale(1.3);
+  box-shadow: 0 0 6px var(--accent, #7c3aed);
+}
+
+/* Box structure */
+.lb-box {
+  width: 110px;
+  margin: 0 auto;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  position: relative;
+}
+.lb-lid {
+  height: 34px;
+  border-radius: 7px 7px 2px 2px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: bottom center;
+  transition: transform .35s ease, opacity .35s ease;
+  z-index: 2;
+}
+.lb-body {
+  height: 72px;
+  border-radius: 2px 2px 10px 10px;
+  position: relative;
+  overflow: hidden;
+}
+.lb-ribbon-h {
+  position: absolute;
+  top: 50%; left: 0; right: 0;
+  height: 9px;
+  transform: translateY(-50%);
+  background: rgba(255,255,255,.22);
+  pointer-events: none;
+}
+.lb-ribbon-v {
+  position: absolute;
+  left: 50%; top: 0; bottom: 0;
+  width: 9px;
+  transform: translateX(-50%);
+  background: rgba(255,255,255,.22);
+  pointer-events: none;
+}
+.lb-bow {
+  font-size: 1.1rem;
+  color: rgba(255,255,255,.9);
+  text-shadow: 0 1px 4px rgba(0,0,0,.4);
+  z-index: 1;
+  position: relative;
+}
+
+/* Rarity colors */
+.lb-box.rarity-comum .lb-lid  { background: #a0522d; }
+.lb-box.rarity-comum .lb-body { background: #7b3a1f; }
+.lb-box.rarity-raro  .lb-lid  { background: #2563eb; box-shadow: 0 0 14px rgba(59,130,246,.55); }
+.lb-box.rarity-raro  .lb-body { background: #1e3a8a; }
+.lb-box.rarity-epico .lb-lid  { background: #7c3aed; box-shadow: 0 0 18px rgba(168,85,247,.7); }
+.lb-box.rarity-epico .lb-body { background: #4c1d95; }
+
+/* Tap haptic scale */
+.lb-box:active { transform: scale(.93); }
+
+/* Shake animations */
+.lb-box.lb-shake-1 { animation: lbShake1 .28s ease; }
+.lb-box.lb-shake-2 { animation: lbShake2 .32s ease; }
+.lb-box.lb-shake-3 { animation: lbShake3 .38s ease; }
+@keyframes lbShake1 {
+  0%,100% { transform: rotate(0deg); }
+  30%     { transform: rotate(-5deg) scale(1.04); }
+  70%     { transform: rotate(5deg)  scale(1.04); }
+}
+@keyframes lbShake2 {
+  0%,100% { transform: rotate(0deg) scale(1); }
+  20%     { transform: rotate(-7deg) scale(1.06); }
+  50%     { transform: rotate(7deg)  scale(1.06); }
+  80%     { transform: rotate(-5deg) scale(1.04); }
+}
+@keyframes lbShake3 {
+  0%,100% { transform: rotate(0deg) scale(1); }
+  15%     { transform: rotate(-10deg) scale(1.09); }
+  35%     { transform: rotate(10deg)  scale(1.09); }
+  55%     { transform: rotate(-8deg)  scale(1.07); }
+  75%     { transform: rotate(8deg)   scale(1.07); }
+  90%     { transform: rotate(-4deg)  scale(1.04); }
+}
+
+/* Lid open */
+.lb-box.opening .lb-lid {
+  animation: lbLidOpen .45s cubic-bezier(.4,0,.2,1) forwards;
+}
+@keyframes lbLidOpen {
+  0%   { transform: rotate(0deg)   translateY(0); opacity: 1; }
+  60%  { transform: rotate(-50deg) translateY(-30px); opacity: .8; }
+  100% { transform: rotate(-75deg) translateY(-70px); opacity: 0; }
+}
+/* Body drops slightly */
+.lb-box.opening .lb-body {
+  animation: lbBodyDrop .45s ease forwards;
+}
+@keyframes lbBodyDrop {
+  0%   { transform: translateY(0); }
+  100% { transform: translateY(6px); opacity: 0; }
+}
+
+/* Result reveal */
+#box-reveal-phase { width: 100%; position: relative; }
+
+.lb-burst {
+  position: absolute;
+  inset: -20px;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 50%;
+}
+.lb-burst.active::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  animation: burstFlash .4s ease-out forwards;
+}
+@keyframes burstFlash {
+  0%   { box-shadow: 0 0 0 0 rgba(255,255,255,.0); background: rgba(255,255,255,.6); }
+  100% { box-shadow: 0 0 80px 60px rgba(255,255,255,.0); background: transparent; }
+}
+
+.lb-result-icon {
+  font-size: 4rem;
+  display: block;
+  margin-bottom: .4rem;
+  animation: lbResultPop .5s cubic-bezier(.175,.885,.32,1.275) both;
+}
+.lb-result-name {
+  font-size: 1.4rem;
+  font-weight: 800;
+  margin: .2rem 0;
+  animation: lbFadeUp .35s ease .1s both;
+}
+.lb-result-rarity {
+  font-weight: 700;
+  font-size: 1rem;
+  margin-bottom: .6rem;
+  animation: lbFadeUp .35s ease .18s both;
+}
+@keyframes lbResultPop {
+  0%   { transform: scale(0) rotate(-15deg); opacity: 0; }
+  100% { transform: scale(1) rotate(0deg);   opacity: 1; }
+}
+@keyframes lbFadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 @keyframes shake {
   0%,100% { transform: rotate(0); }
   25% { transform: rotate(-10deg); }
@@ -3977,8 +4184,8 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
   display: flex;
   align-items: center;
   gap: 1.25rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  background: rgba(0,0,0,.2);
+  border: 1px solid rgba(255,255,255,.08);
   border-radius: var(--radius);
   padding: 1.25rem 1.5rem;
   margin-bottom: 1rem;
@@ -4004,11 +4211,65 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
   border: 2px solid rgba(124,58,237,0.35);
   box-sizing: border-box;
 }
+.profile-page-name-row {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin-bottom: .2rem;
+}
+.profile-page-name-row h2 {
+  font-size: 1.4rem;
+  font-weight: 800;
+  margin: 0;
+}
 .profile-page-info h2 {
   font-size: 1.4rem;
   font-weight: 800;
   margin: 0 0 .2rem;
 }
+
+/* ── Tag / Título Badges ──────────────────────────────────────── */
+.tag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  font-size: .7rem;
+  font-weight: 700;
+  padding: .18rem .5rem;
+  border-radius: 20px;
+  border: 1px solid;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+.tag-badge-comum {
+  background: rgba(100,100,110,.28);
+  border-color: rgba(156,163,175,.4);
+  color: #d1d5db;
+}
+.tag-badge-raro {
+  background: rgba(59,130,246,.18);
+  border-color: rgba(59,130,246,.5);
+  color: #93c5fd;
+}
+.tag-badge-epico {
+  background: rgba(245,158,11,.18);
+  border-color: rgba(245,158,11,.55);
+  color: #fcd34d;
+  box-shadow: 0 0 6px rgba(245,158,11,.25);
+}
+.tag-badge-lendario {
+  background: linear-gradient(90deg, rgba(168,85,247,.22), rgba(245,158,11,.22));
+  border-color: rgba(245,158,11,.65);
+  color: #fde68a;
+  animation: tagGlow 2s ease-in-out infinite alternate;
+}
+@keyframes tagGlow {
+  from { box-shadow: 0 0 6px rgba(245,158,11,.4), 0 0 12px rgba(168,85,247,.2); }
+  to   { box-shadow: 0 0 14px rgba(245,158,11,.7), 0 0 28px rgba(168,85,247,.4); }
+}
+
 .profile-page-level {
   font-size: .9rem;
   font-weight: 700;
@@ -4129,6 +4390,75 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
   color: var(--text-muted);
   font-size: .88rem;
 }
+
+/* ── Catálogo de Títulos no Perfil ───────────────────────────── */
+.tag-catalog-list {
+  display: flex;
+  flex-direction: column;
+  gap: .45rem;
+}
+.tag-catalog-row {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: .55rem .75rem;
+  transition: border-color .2s;
+}
+.tag-cat-owned { border-color: rgba(168,85,247,.25); }
+.tag-cat-locked { opacity: .55; }
+.tag-cat-badge-col { flex-shrink: 0; min-width: 120px; }
+.tag-cat-info { flex: 1; min-width: 0; }
+.tag-cat-rarity { font-size: .72rem; font-weight: 700; }
+.tag-cat-desc   { font-size: .75rem; color: var(--text-muted); margin-top: .1rem; }
+.tag-cat-source { font-size: .68rem; color: var(--text-muted); margin-top: .15rem; opacity: .8; }
+.tag-cat-status { flex-shrink: 0; font-size: 1.1rem; text-align: center; line-height: 1.2; }
+.tag-badge-locked {
+  background: rgba(255,255,255,.05);
+  border-color: rgba(255,255,255,.12);
+  color: var(--text-muted);
+}
+
+/* ── Tag catalog subtitle / sections ─── */
+.tag-cat-subtitle {
+  font-size: .75rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: .75rem 0 .35rem;
+  padding-left: .1rem;
+}
+
+/* ── Exclusive tag rows ─────────────── */
+.tag-excl-row { border-left: 2px solid rgba(245,158,11,.35); }
+.tag-excl-progress {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  margin-top: .3rem;
+}
+.tag-excl-bar {
+  flex: 1;
+  height: 5px;
+  background: rgba(255,255,255,.1);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.tag-excl-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  border-radius: 99px;
+  transition: width .4s ease;
+}
+.tag-excl-frac {
+  font-size: .6rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .social-auth-hint {
   background: rgba(124,58,237,.1);
   border: 1px solid rgba(124,58,237,.25);
@@ -5311,6 +5641,52 @@ input[type="date"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px r
   font-size: .72rem;
   color: var(--text-muted);
   text-align: center;
+}
+
+/* Clickable stat cards (Usuários Ativos) */
+.admin-stat-clickable {
+  cursor: pointer;
+  transition: border-color .2s, background .2s, transform .1s;
+  position: relative;
+}
+.admin-stat-clickable:hover {
+  border-color: rgba(168,85,247,.5);
+  background: rgba(168,85,247,.08);
+  transform: translateY(-2px);
+}
+.admin-stat-clickable.admin-stat-active {
+  border-color: rgba(168,85,247,.7);
+  background: rgba(168,85,247,.12);
+}
+.admin-stat-click-hint {
+  font-size: .6rem;
+  color: var(--text-muted);
+  margin-top: .3rem;
+  opacity: .7;
+}
+
+/* Active users list */
+.admin-active-list {
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+  margin-top: .5rem;
+}
+.admin-active-row {
+  background: var(--bg-card, rgba(255,255,255,.04));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: .55rem .85rem;
+}
+.admin-active-name {
+  font-weight: 700;
+  font-size: .88rem;
+  color: var(--text-primary);
+}
+.admin-active-meta {
+  font-size: .73rem;
+  color: var(--text-muted);
+  margin-top: .1rem;
 }
 
 /* ── Loja: card de resgate inline ────────────────────────────── */

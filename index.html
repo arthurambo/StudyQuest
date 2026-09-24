@@ -592,6 +592,7 @@
         <span id="achievements-count" class="badge-count">0 / 0</span>
       </div>
       <div id="achievements-list" class="achievements-grid"></div>
+      <div id="achievements-exclusive-tags"></div>
     </div>
 
     <!-- ===== LOJA ===== -->
@@ -1138,19 +1139,19 @@
   <nav class="bottom-nav" id="bottom-nav">
     <button class="bottom-nav-item active" data-page="dashboard">
       <span class="bn-icon">🏠</span>
-      <span class="bn-label">Início</span>
+      <span class="bn-label">Dashboard</span>
     </button>
-    <button class="bottom-nav-item" data-page="grades">
-      <span class="bn-icon">🎓</span>
-      <span class="bn-label">Notas</span>
+    <button class="bottom-nav-item" data-page="missions">
+      <span class="bn-icon">⚔️</span>
+      <span class="bn-label">Missões</span>
     </button>
-    <button class="bottom-nav-item" data-page="friends">
-      <span class="bn-icon">👥</span>
-      <span class="bn-label">Amigos</span>
+    <button class="bottom-nav-item" data-page="tasks">
+      <span class="bn-icon">✅</span>
+      <span class="bn-label">Tarefas</span>
     </button>
-    <button class="bottom-nav-item" data-page="groups">
-      <span class="bn-icon">🏰</span>
-      <span class="bn-label">Grupos</span>
+    <button class="bottom-nav-item" data-page="study">
+      <span class="bn-icon">📘</span>
+      <span class="bn-label">Estudos</span>
     </button>
     <button class="bottom-nav-item" id="bottom-nav-more">
       <span class="bn-icon">☰</span>
@@ -2102,17 +2103,43 @@
   </div>
 </div>
 
-<!-- ===== MODAL: RESULTADO DA CAIXA ===== -->
+<!-- ===== MODAL: ABERTURA DE CAIXA (ANIMAÇÃO) ===== -->
 <div class="modal-overlay" id="modal-box-result">
-  <div class="modal modal-lootbox" style="text-align:center">
-    <div id="box-result-icon" style="font-size:3.5rem;margin-bottom:.5rem">🎁</div>
-    <h2 style="margin:.25rem 0" id="box-result-name">Item</h2>
-    <div id="box-result-rarity" style="font-weight:700;font-size:1rem;margin-bottom:.5rem"></div>
-    <div id="box-result-duplicate" style="display:none;color:var(--text-muted);font-size:.83rem;margin-bottom:.75rem"></div>
-    <div style="display:flex;gap:.5rem;justify-content:center;margin-top:1rem">
-      <button class="btn-secondary" data-close="modal-box-result">Fechar</button>
-      <button class="btn-primary" onclick="closeModal('modal-box-result');navigateTo('inventory')">Ver Inventário</button>
+  <div class="modal modal-lootbox-open">
+
+    <!-- FASE 1: Toques para abrir -->
+    <div id="box-open-phase">
+      <p class="lb-hint" id="lb-hint-text">Toque na caixa para abrir!</p>
+      <div class="lb-tap-dots">
+        <span class="lb-dot" id="ldot-1"></span>
+        <span class="lb-dot" id="ldot-2"></span>
+        <span class="lb-dot" id="ldot-3"></span>
+      </div>
+      <div id="lootbox-box" class="lb-box" onclick="tapLootbox()">
+        <div class="lb-lid">
+          <div class="lb-ribbon-h"></div>
+          <div class="lb-bow">✦</div>
+        </div>
+        <div class="lb-body">
+          <div class="lb-ribbon-h"></div>
+          <div class="lb-ribbon-v"></div>
+        </div>
+      </div>
     </div>
+
+    <!-- FASE 2: Item revelado -->
+    <div id="box-reveal-phase" hidden>
+      <div class="lb-burst" id="lb-burst"></div>
+      <div id="box-result-icon" class="lb-result-icon">🎁</div>
+      <h2 class="lb-result-name" id="box-result-name">Item</h2>
+      <div class="lb-result-rarity" id="box-result-rarity"></div>
+      <div id="box-result-duplicate" style="display:none;color:var(--text-muted);font-size:.83rem;margin-bottom:.5rem"></div>
+      <div style="display:flex;gap:.5rem;justify-content:center;margin-top:1rem">
+        <button class="btn-secondary" data-close="modal-box-result">Fechar</button>
+        <button class="btn-primary" id="lb-inventory-btn" onclick="closeModal('modal-box-result');navigateTo('inventory')">Ver Inventário</button>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -2170,5 +2197,10 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="script.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
+</script>
 </body>
 </html>
